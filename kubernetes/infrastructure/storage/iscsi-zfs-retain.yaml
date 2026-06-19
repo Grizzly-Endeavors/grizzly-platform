@@ -1,0 +1,25 @@
+# iSCSI ZFS StorageClass with reclaimPolicy=Retain, for stateful workloads
+# whose data must survive PVC deletion (e.g. Actual Budget — see ADR-026).
+#
+# Deliberately Flux-managed and NOT part of the democratic-csi Helm release
+# (unlike the default `iscsi-zfs` / `nfs-mergerfs` classes, which the
+# k8s-democratic-csi role renders). Adding a class through that role would
+# require a full `setup-k8s-storage.yml` run — R730xd iSCSI target reconfig,
+# democratic-csi SSH key rotation, a roll of the CSI driver across all nodes
+# — which is disproportionate blast radius for an additive StorageClass.
+# Managing it here lets Flux reconcile it declaratively on its own.
+#
+# Same provisioner and parameters as `iscsi-zfs`; the per-class CSI secret
+# parameters are omitted intentionally — the democratic-csi default classes'
+# equivalents are empty (DATA=0) passthroughs, and the driver takes its real
+# config from the controller, not these Secrets.
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: iscsi-zfs-retain
+provisioner: org.democratic-csi.iscsi
+reclaimPolicy: Retain
+allowVolumeExpansion: true
+volumeBindingMode: Immediate
+parameters:
+  fsType: ext4

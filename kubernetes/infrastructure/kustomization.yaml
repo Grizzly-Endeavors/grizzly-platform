@@ -9,3 +9,4 @@ resources:
   - ingress-nginx
   - registry
   - external-secrets
+  - storage
