@@ -67,10 +67,12 @@ spec:
           resources:
             requests:
               cpu: 50m
-              memory: 128Mi
+              memory: 256Mi
             limits:
-              cpu: 500m
-              memory: 512Mi
+              cpu: "1"
+              # 512Mi OOMKills zot while pushing large multi-GB images (e.g. the
+              # grizzly-gate image); give it headroom for blob handling.
+              memory: 2Gi
       volumes:
         - name: config
           configMap:
