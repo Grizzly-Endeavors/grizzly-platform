@@ -56,10 +56,15 @@ everything by hand. Neither scales.
    bottlenecked box. The gate runs against the source tree and the built image
    that CI hands it.
 
-3. **Rules are data.** The harness (a small Rust binary) executes a declarative
-   `gate.toml`: detectors (`Cargo.toml` → `cargo fmt`/`clippy -D warnings`/
-   `deny`/`test`; `pyproject.toml` → `ruff`/`mypy`/`pytest`; …) and scanners
-   (gitleaks, an offline-pinned Semgrep ruleset, Trivy for image SBOM/CVEs). It
+3. **Rules are data, and the config is the gate's.** The harness (a small Rust
+   binary) executes a declarative `config/` tree — one self-describing dir per
+   tool under `languages/` (`Cargo.toml` → `cargo fmt`/`clippy -D warnings`/
+   `deny`/`test`; `pyproject.toml` → `ruff`/`mypy`/`pytest`; …) and `util/`
+   (gitleaks, an offline-pinned Semgrep ruleset, Trivy for image SBOM/CVEs).
+   Each dir carries a `manifest.toml` (what to run) next to the tool's own
+   native config; the manifest forces that gate-owned config onto the tool (via
+   `--config`/`--config-file`/`CLIPPY_CONF_DIR`/…), so a repo's own config
+   **cannot weaken the checks** — the gate is the reviewer, not the repo. It
    fails closed: zero checks run ⇒ fail.
 
 4. **A pass produces a signature, and the signature is the only proof that
@@ -85,7 +90,7 @@ jobs:
     uses: grizzly-endeavors/grizzly-platform/.github/workflows/gate.yaml@master
     with:
       image: <registry>/myapp@${{ needs.build.outputs.digest }}
-      gate_version: v0.1.0            # pin the gate
+      gate_version: v0.2.0            # pin the gate
   deploy:
     needs: gate                       # only runs if the gate signed it
     ...
