@@ -1,8 +1,8 @@
 # Managed by Ansible — r730xd-prometheus role
-# Kyverno admission controller metrics, exposed via NodePort 30888
+# Kyverno admission controller metrics, exposed via NodePort 30890
 # (kubernetes/infrastructure/kyverno/metrics-service.yaml).
 - targets:
-    - "{{ hostvars[groups['k8s_control_plane'][0]]['ansible_host'] }}:30888"
+    - "{{ hostvars[groups['k8s_control_plane'][0]]['ansible_host'] }}:30890"
   labels:
     env: "grizzly-platform"
     instance: "kyverno-admission"
