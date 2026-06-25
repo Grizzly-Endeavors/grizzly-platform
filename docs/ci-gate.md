@@ -7,7 +7,7 @@ without a human reviewing every change, because **the gate is the reviewer**.
 This is the design overview. For the *why* see
 [ADR-028](decisions/028-centralized-ci-gate.md) and
 [ADR-027](decisions/027-registry-zot.md); to *operate* it see
-[the runbook](runbooks/ci-gate.md).
+[the runbook](runbooks/ci-gate.md); for exactly *what failure modes and vulnerability classes it prevents* (per tool, plus the gaps it doesn't) see [the coverage & threat model](ci-gate-coverage.md).
 
 ## The problem
 
@@ -43,7 +43,7 @@ everything by hand. Neither scales.
         verify the gate signature ─► admit / refuse
 ```
 
-### Five principles
+### Six principles
 
 1. **The gate is a versioned artifact, not a service.** It's a container image
    holding the orchestration harness, the per-language adapters, and the pinned
@@ -77,9 +77,52 @@ everything by hand. Neither scales.
    longer a property of a CI log you have to trust — it's a cryptographic fact
    the cluster checks for itself.
 
+6. **The repo declares its map; the gate verifies it.** Principle 3 stops a repo
+   *weakening* the rules; this stops a repo *escaping their scope*. A green gate
+   must mean every line was checked, not just the code at the root. So every
+   gated repo ships a required `gate-config.json` honestly mapping its projects,
+   and the harness independently walks the tree and **fails closed** on any
+   undeclared code (a `.py` no project covers) or unsupported language (one the
+   gate has no adapter for). The walk is hostile by construction — it ignores the
+   repo's `.gitignore`, doesn't follow symlinks, and has no repo-controlled
+   exclusions — because hiding code from the gate is exactly the evasion it
+   closes. See [ADR-029](decisions/029-gate-config-honest-map.md).
+
+## Declaring the repo: `gate-config.json`
+
+Every gated repo ships this file at its root. It declares *where* each project
+lives and *what language* it is — nothing that can relax a check:
+
+```json
+{
+  "version": 1,
+  "projects": [
+    { "language": "rust",   "path": "." },
+    { "language": "python", "path": "services/api" },
+    { "language": "node",   "path": "web", "tsconfig": "tsconfig.json" }
+  ]
+}
+```
+
+- `language` — a known adapter: `rust`, `python`, `node`, `ansible`, `yaml`.
+- `path` — the project directory, relative and in-tree (`.` is the root). The
+  adapter's marker (`Cargo.toml`, `pyproject.toml`, `package.json`, `ansible/`,
+  `.yamllint`) must exist there, or it's a declared-but-empty lie and fails.
+- `tsconfig` — node only, optional: the repo's own tsconfig. The gate wraps it so
+  its module/path resolution is honored while the gate force-overrides
+  strictness (the repo cannot weaken the type bar). Omit it to use the gate's
+  strict base config.
+
+The harness then verifies the map: any `.rs`/`.py`/TS/JS file not covered by a
+matching declared project fails the gate, and any code in an un-adapted language
+(Go, Ruby, …) hard-fails — the only fix is Ops adding an adapter. `ansible` and
+`yaml` stay opt-in markers (a bare `.yml` is data as often as IaC), but can be
+declared to run at a sub-path.
+
 ## How a repo uses it
 
-The repo's CI calls one reusable workflow after it builds:
+The repo's CI calls one reusable workflow after it builds (and ships a
+`gate-config.json` at its root, per above):
 
 ```yaml
 jobs:
@@ -90,7 +133,7 @@ jobs:
     uses: grizzly-endeavors/grizzly-platform/.github/workflows/gate.yaml@master
     with:
       image: <registry>/myapp@${{ needs.build.outputs.digest }}
-      gate_version: v0.2.0            # pin the gate
+      gate_version: v0.3.0            # pin the gate
   deploy:
     needs: gate                       # only runs if the gate signed it
     ...

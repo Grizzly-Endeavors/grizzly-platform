@@ -7,7 +7,8 @@ Self-hosted infrastructure for Grizzly Endeavors projects (Infrastructure as Cod
 **Start here:** `docs/runbooks/ci-gate.md` — bootstrap, Audit→Enforce rollout, key rotation, gate version bump, deploy-denied diagnosis.
 
 - A versioned `grizzly-gate` container image (`docker/grizzly-gate/`) owns the per-language checks + scanners (rules live in the `config/` tree — one self-describing `manifest.toml` + native config per tool under `languages/` and `util/`; harness in Rust). The gate's config is authoritative: it is forced onto each tool and ignores the scanned repo's own config of the same kind. Apps call the reusable `.github/workflows/gate.yaml` after building; on a clean pass the gate cosign-signs the image **digest**. Kyverno (`kubernetes/infrastructure/kyverno{,-policies}/`) refuses unsigned images at admission in namespaces labelled `grizzly.io/gated=true`. Signing key in OpenBao `secret/grizzly-platform/cicd/cosign`; registry is zot (OCI referrers).
-- ADRs: `docs/decisions/028-centralized-ci-gate.md`, `docs/decisions/027-registry-zot.md`. Enforcement starts in **Audit**; flip to Enforce only after live first-party images are signed.
+- **Honest map (gate ≥ v0.3.0):** every gated repo must ship a root `gate-config.json` declaring its projects (`languages/`+`path`, node may add `tsconfig`). The harness (`detect.rs`) walks the whole tree and fails closed on undeclared code or unsupported languages (denylist in `config/detect.toml`); per-adapter `[detect]` blocks drive what counts as that language's evidence. No repo-controlled exclusions. Adding a language = new adapter **and** detect rules.
+- ADRs: `docs/decisions/028-centralized-ci-gate.md`, `docs/decisions/029-gate-config-honest-map.md`, `docs/decisions/027-registry-zot.md`. Enforcement starts in **Audit**; flip to Enforce only after live first-party images are signed.
 
 # Secrets Management
 
