@@ -56,33 +56,64 @@ source "${AUTH_FILE}"
 : "${INFISICAL_PROJECT_ID:?unset in ${AUTH_FILE}}"
 : "${INFISICAL_ENV:?unset in ${AUTH_FILE}}"
 
-log "authenticating to Infisical (project ${INFISICAL_PROJECT_ID}, env ${INFISICAL_ENV})"
-INFISICAL_TOKEN="$(infisical login \
-    --method=universal-auth \
-    --client-id="${INFISICAL_CLIENT_ID}" \
-    --client-secret="${INFISICAL_CLIENT_SECRET}" \
-    --plain --silent)"
-[ -n "${INFISICAL_TOKEN}" ] || die "Infisical login returned empty token"
+# Bounded retry. The unit is still a oneshot with Restart=no (fail loudly so
+# Prometheus alerts), but a *transient* boot-time DNS/network race reaching
+# Infisical shouldn't leave the vault sealed until a human notices. Retry a few
+# times with a short delay; if Infisical is genuinely unreachable we still exit
+# 1 after the budget and the alert fires. Keep RETRY_MAX*RETRY_DELAY (+ per-try
+# network timeouts) under the unit's TimeoutStartSec.
+RETRY_MAX={{ openbao_unseal_retry_max | default(5) }}
+RETRY_DELAY={{ openbao_unseal_retry_delay | default(15) }}
 
-# Submit shares 1..N until the threshold is met. We stop early if the
-# vault transitions to unsealed mid-way through — no need to submit the
-# rest. Each call to `bao operator unseal` is a separate HTTP request.
-for i in $(seq 1 "${THRESHOLD}"); do
-    KEY_NAME="${PREFIX}${i}"
-    log "submitting unseal share ${i}/${THRESHOLD}"
-    KEY="$(infisical secrets get "${KEY_NAME}" \
-        --projectId="${INFISICAL_PROJECT_ID}" \
-        --env="${INFISICAL_ENV}" \
-        --token="${INFISICAL_TOKEN}" \
-        --plain --silent)"
-    [ -n "${KEY}" ] || die "Infisical returned empty value for ${KEY_NAME}"
-    bao operator unseal -format=json "${KEY}" >/dev/null
-    unset KEY
+# One full unseal attempt. Returns 0 once unsealed, non-zero on any failure
+# (Infisical auth, key fetch, submit, or still-sealed). Called from a retry
+# loop, so it must `return` — never `exit` — on failure. `set -e` is suspended
+# inside a function invoked in an `if`/`||` context, so failures are handled
+# explicitly here rather than aborting the script.
+attempt_unseal() {
+    local token key i key_name
+    log "authenticating to Infisical (project ${INFISICAL_PROJECT_ID}, env ${INFISICAL_ENV})"
+    token="$(infisical login \
+        --method=universal-auth \
+        --client-id="${INFISICAL_CLIENT_ID}" \
+        --client-secret="${INFISICAL_CLIENT_SECRET}" \
+        --plain --silent)" || { log "Infisical login failed"; return 1; }
+    [ -n "${token}" ] || { log "Infisical login returned empty token"; return 1; }
 
-    if bao status -format=json 2>/dev/null | grep -q '"sealed": false'; then
-        log "vault unsealed after ${i} share(s)"
+    # Submit shares 1..N until the threshold is met; stop early if the vault
+    # transitions to unsealed mid-way. Each unseal is a separate HTTP request.
+    for i in $(seq 1 "${THRESHOLD}"); do
+        key_name="${PREFIX}${i}"
+        log "submitting unseal share ${i}/${THRESHOLD}"
+        key="$(infisical secrets get "${key_name}" \
+            --projectId="${INFISICAL_PROJECT_ID}" \
+            --env="${INFISICAL_ENV}" \
+            --token="${token}" \
+            --plain --silent)" || { log "fetch of ${key_name} failed"; return 1; }
+        [ -n "${key}" ] || { log "Infisical returned empty value for ${key_name}"; return 1; }
+        bao operator unseal -format=json "${key}" >/dev/null || { unset key; log "unseal submit failed"; return 1; }
+        unset key
+
+        if bao status -format=json 2>/dev/null | grep -q '"sealed": false'; then
+            log "vault unsealed after ${i} share(s)"
+            return 0
+        fi
+    done
+
+    log "submitted ${THRESHOLD} shares but vault is still sealed"
+    return 1
+}
+
+attempt=1
+while [ "${attempt}" -le "${RETRY_MAX}" ]; do
+    if attempt_unseal; then
         exit 0
     fi
+    if [ "${attempt}" -lt "${RETRY_MAX}" ]; then
+        log "attempt ${attempt}/${RETRY_MAX} failed — retrying in ${RETRY_DELAY}s (transient DNS/network at boot?)"
+        sleep "${RETRY_DELAY}"
+    fi
+    attempt=$((attempt + 1))
 done
 
-die "submitted ${THRESHOLD} shares but vault is still sealed — check bao status"
+die "unseal failed after ${RETRY_MAX} attempts — check Infisical reachability and bao status"
