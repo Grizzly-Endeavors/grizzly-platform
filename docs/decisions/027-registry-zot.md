@@ -5,7 +5,7 @@
 
 ## Context
 
-The in-cluster registry was `registry:2.8.3` (docker/distribution): anonymous, plain-HTTP, NodePort-mirrored via containerd, S3-backed on MinIO bulk. The CI gate ([ADR-026](026-centralized-ci-gate.md)) signs images with cosign, which stores signatures as OCI artifacts associated with the image digest. Reliable signature storage/discovery wants the OCI 1.1 **referrers API**, which docker/distribution 2.8 does not implement well. We also wanted Prometheus metrics from the registry.
+The in-cluster registry was `registry:2.8.3` (docker/distribution): anonymous, plain-HTTP, NodePort-mirrored via containerd, S3-backed on MinIO bulk. The CI gate ([ADR-028](028-centralized-ci-gate.md)) signs images with cosign, which stores signatures as OCI artifacts associated with the image digest. Reliable signature storage/discovery wants the OCI 1.1 **referrers API**, which docker/distribution 2.8 does not implement well. We also wanted Prometheus metrics from the registry.
 
 ## Decision
 

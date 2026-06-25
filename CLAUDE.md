@@ -7,7 +7,7 @@ Self-hosted infrastructure for Grizzly Endeavors projects (Infrastructure as Cod
 **Start here:** `docs/runbooks/ci-gate.md` — bootstrap, Audit→Enforce rollout, key rotation, gate version bump, deploy-denied diagnosis.
 
 - A versioned `grizzly-gate` container image (`docker/grizzly-gate/`) owns the per-language checks + scanners (rules live in `gate.toml`, harness in Rust). Apps call the reusable `.github/workflows/gate.yaml` after building; on a clean pass the gate cosign-signs the image **digest**. Kyverno (`kubernetes/infrastructure/kyverno{,-policies}/`) refuses unsigned images at admission in namespaces labelled `grizzly.io/gated=true`. Signing key in OpenBao `secret/grizzly-platform/cicd/cosign`; registry is zot (OCI referrers).
-- ADRs: `docs/decisions/026-centralized-ci-gate.md`, `docs/decisions/027-registry-zot.md`. Enforcement starts in **Audit**; flip to Enforce only after live first-party images are signed.
+- ADRs: `docs/decisions/028-centralized-ci-gate.md`, `docs/decisions/027-registry-zot.md`. Enforcement starts in **Audit**; flip to Enforce only after live first-party images are signed.
 
 # Secrets Management
 

@@ -1,4 +1,4 @@
-# ADR-026: Centralized CI Gate with Cosign Attestation and Kyverno Admission
+# ADR-028: Centralized CI Gate with Cosign Attestation and Kyverno Admission
 
 **Date:** 2026-06-25
 **Status:** accepted

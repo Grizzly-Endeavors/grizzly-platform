@@ -5,7 +5,7 @@ the platform — so CI doesn't get rebuilt by hand per repo, and code can ship
 without a human reviewing every change, because **the gate is the reviewer**.
 
 This is the design overview. For the *why* see
-[ADR-026](decisions/026-centralized-ci-gate.md) and
+[ADR-028](decisions/028-centralized-ci-gate.md) and
 [ADR-027](decisions/027-registry-zot.md); to *operate* it see
 [the runbook](runbooks/ci-gate.md).
 
@@ -99,7 +99,7 @@ build + deploy. A full example lives in
 
 - **Key-based cosign**, private key in the platform secret store (OpenBao),
   delivered to CI runners by External Secrets. The public key is embedded in the
-  Kyverno policy. (Keyless/Sigstore was considered and deferred — see ADR-026.)
+  Kyverno policy. (Keyless/Sigstore was considered and deferred — see ADR-028.)
 - Enforcement is **scoped** to namespaces labelled `grizzly.io/gated=true`, so
   third-party/upstream images that the gate can't sign are unaffected.
 - Rollout is staged: the policy ships in **Audit** (report-only) and flips to

@@ -2,7 +2,7 @@
 
 The centralized CI gate: a versioned `grizzly-gate` image runs the checks, cosign
 signs passing images, and Kyverno refuses unsigned images at the deploy boundary.
-Architecture: [ADR-026](../decisions/026-centralized-ci-gate.md),
+Architecture: [ADR-028](../decisions/028-centralized-ci-gate.md),
 registry: [ADR-027](../decisions/027-registry-zot.md).
 
 ## Components at a glance
