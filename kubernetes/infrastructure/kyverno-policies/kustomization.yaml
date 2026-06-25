@@ -1,0 +1,8 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# Kyverno ClusterPolicy CRs. Applied by the kyverno-policies Flux Kustomization
+# (dependsOn: infrastructure) so Kyverno's CRDs exist first.
+# platform-rules.yaml.disabled is intentionally NOT listed — it's a scaffold
+# for a later enforcement phase.
+resources:
+  - verify-gate-signature.yaml

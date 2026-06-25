@@ -1,0 +1,52 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: verify-gate-signature
+  annotations:
+    policies.kyverno.io/title: Verify CI gate signature
+    policies.kyverno.io/description: >-
+      Refuse to admit first-party images that lack a valid grizzly-gate cosign
+      signature. The signature is produced by the CI gate only after all checks
+      pass, so this is the deploy boundary that lets agents ship without manual
+      review. Scoped to namespaces labelled grizzly.io/gated=true so upstream /
+      third-party images (lab-apps) are unaffected.
+spec:
+  # background:false — image verification needs the admission-time context and
+  # must not run as a background scan over existing pods.
+  background: false
+  failurePolicy: Fail
+  webhookTimeoutSeconds: 30
+  rules:
+    - name: verify-first-party-images
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+              # Only gated namespaces. Label a namespace with
+              # `grizzly.io/gated: "true"` to opt it into enforcement.
+              namespaceSelector:
+                matchLabels:
+                  grizzly.io/gated: "true"
+      verifyImages:
+        - imageReferences:
+            - "registry.registry.svc.cluster.local:5000/*"
+          # Phase: start in Audit (report-only), flip to Enforce once all live
+          # first-party images are signed. See kyverno-policies/README.md.
+          failureAction: Audit
+          # Resolve tag→digest and verify the signature on the digest.
+          mutateDigest: true
+          verifyDigest: true
+          required: true
+          attestors:
+            - count: 1
+              entries:
+                - keys:
+                    # grizzly-gate cosign PUBLIC key. Not secret. Replace this
+                    # placeholder with the real cosign.pub from
+                    # `secret/grizzly-platform/cicd/cosign` (public_key) during
+                    # bootstrap — see docs/runbooks/ci-gate.md.
+                    publicKeys: |-
+                      -----BEGIN PUBLIC KEY-----
+                      REPLACE_WITH_GRIZZLY_GATE_COSIGN_PUBLIC_KEY
+                      -----END PUBLIC KEY-----

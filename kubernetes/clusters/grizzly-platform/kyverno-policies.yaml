@@ -1,0 +1,19 @@
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: kyverno-policies
+  namespace: flux-system
+spec:
+  # Applies Kyverno ClusterPolicy resources that depend on Kyverno's CRDs being
+  # installed by the kyverno HelmRelease in the main "infrastructure"
+  # Kustomization. Same pattern as cert-manager-issuers / external-secrets-stores.
+  dependsOn:
+    - name: infrastructure
+  interval: 5m
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  path: ./kubernetes/infrastructure/kyverno-policies
+  prune: true
+  wait: true
+  timeout: 3m

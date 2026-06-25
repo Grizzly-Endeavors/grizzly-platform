@@ -10,3 +10,4 @@ resources:
   - registry
   - external-secrets
   - storage
+  - kyverno
