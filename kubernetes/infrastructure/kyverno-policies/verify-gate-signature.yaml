@@ -44,11 +44,11 @@ spec:
             - count: 1
               entries:
                 - keys:
-                    # grizzly-gate cosign PUBLIC key. Not secret. Replace this
-                    # placeholder with the real cosign.pub from
-                    # `secret/grizzly-platform/cicd/cosign` (public_key) during
-                    # bootstrap — see docs/runbooks/ci-gate.md.
+                    # grizzly-gate cosign PUBLIC key (not secret). Matches the
+                    # private half in OpenBao secret/grizzly-platform/cicd/cosign.
+                    # Rotate: regenerate keypair, bao kv put, replace this block.
                     publicKeys: |-
                       -----BEGIN PUBLIC KEY-----
-                      REPLACE_WITH_GRIZZLY_GATE_COSIGN_PUBLIC_KEY
+                      MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE4KBckBkLKLINu9WATY50fiJXw1G7
+                      2BUAREgh9iwDwJYbvIVdFrUeaTSgJF/nt8Y8ga++d5SzXAxft1Jr1VnqlA==
                       -----END PUBLIC KEY-----
