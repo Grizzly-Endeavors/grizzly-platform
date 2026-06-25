@@ -62,7 +62,7 @@ registry: [ADR-027](../decisions/027-registry-zot.md).
    contents of `cosign.pub`, commit. (Public key is not secret.)
 4. **Build the gate image.** First build is manual (runners may scale from zero):
    ```sh
-   argo submit --from workflowtemplate/build-gate-image -n argo -p version=v0.1.0
+   argo submit --from workflowtemplate/build-gate-image -n argo -p version=v0.2.0
    ```
    Thereafter, pushes to `docker/grizzly-gate/**` trigger `build-gate-image.yaml`.
 5. **Onboard an app** by copying `deploy-with-gate.yaml.example` and pointing its

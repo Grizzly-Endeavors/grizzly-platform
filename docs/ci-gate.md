@@ -90,7 +90,7 @@ jobs:
     uses: grizzly-endeavors/grizzly-platform/.github/workflows/gate.yaml@master
     with:
       image: <registry>/myapp@${{ needs.build.outputs.digest }}
-      gate_version: v0.1.0            # pin the gate
+      gate_version: v0.2.0            # pin the gate
   deploy:
     needs: gate                       # only runs if the gate signed it
     ...
