@@ -66,7 +66,18 @@ registry: [ADR-027](../decisions/027-registry-zot.md).
    ```
    Thereafter, pushes to `docker/grizzly-gate/**` trigger `build-gate-image.yaml`.
 5. **Onboard an app** by copying `deploy-with-gate.yaml.example` and pointing its
-   `gate` job at the reusable workflow. Label its namespace gated:
+   `gate` job at the reusable workflow. Add a root **`gate-config.json`** to the
+   app repo honestly mapping its projects (required — the gate fails closed
+   without it):
+   ```json
+   { "version": 1, "projects": [ { "language": "rust", "path": "." } ] }
+   ```
+   Languages: `rust`/`python`/`node`/`ansible`/`yaml`; `path` must hold that
+   adapter's marker; a node project **containing TypeScript must** add
+   `"tsconfig": "tsconfig.json"` (drives project-aware typecheck + type-aware
+   eslint; the gate fails closed without it). Schema + rationale: [design doc](../ci-gate.md#declaring-the-repo-gate-configjson),
+   [ADR-029](../decisions/029-gate-config-honest-map.md). Then label its
+   namespace gated:
    ```sh
    kubectl label namespace <app> grizzly.io/gated=true --overwrite
    ```
@@ -95,8 +106,25 @@ admission.
   `gate_version` in callers. The gate's config is authoritative: it is forced
   onto each tool (via flags/env in the manifest) and ignores the repo's own
   config of the same kind.
+- **Add support for a new language:** add an adapter dir under
+  `config/languages/<lang>/` (`manifest.toml` + native config), give it a
+  `[detect]` block (the extensions/shebangs that are mandatory evidence), and
+  remove that language from the `detect.toml` `unsupported` denylist if it was
+  there. A repo cannot will a language into scope — both halves are Ops changes.
+  Update `ci-gate-coverage.md` and cut a new tag.
+- **Tune/relax dependency SCA (osv-scanner / trivy-fs):** policy is Ops-owned
+  (the gate ignores repo config). To accept a specific advisory or license, edit
+  the gate's config — the `--licenses` allowlist in
+  `config/util/osv-scanner/manifest.toml`, or severity/`ignore-unfixed` in
+  `config/util/trivy-fs/trivy.yaml` — then cut a new tag. SCA is max-denial by
+  default (all severities incl. unfixable, deny-unknown licenses); the license
+  allowlist is the noisiest knob (esp. npm). A sudden failure on a previously-green
+  build usually means a **newly-disclosed advisory** (data is fetched fresh) — by
+  design.
 - **Pin/roll back the gate:** apps set `gate_version:` on the reusable workflow
-  `with:`. Roll back by pointing it at a previous tag — no rebuild needed.
+  `with:`. Roll back by pointing it at a previous tag — no rebuild needed. (Note:
+  `gate-config.json` became mandatory in **v0.3.0**; repos pinned to ≤v0.2.0 don't
+  need it, repos on ≥v0.3.0 fail closed without it.)
 - **Rotate the signing key:** generate a new keypair, `bao kv put` it (step 2),
   update the public key in the policy (step 3), rebuild nothing — re-sign images on
   next CI run. Keep Audit until everything is re-signed under the new key, then
@@ -111,6 +139,21 @@ admission.
 **"Gate failed" in CI →** read the job log; the harness prints a PASS/FAIL summary
 table. The failing adapter/scanner name points at the cause (clippy, gitleaks,
 trivy CVE, etc.). No signature is produced, so deploy won't proceed.
+
+**Gate errors before any check runs ("fail closed") →** the honest-map stage
+rejected the repo. Common messages and fixes:
+- `required gate-config.json not found` — add the file to the repo root.
+- `honest-map verification failed … Undeclared code [lang] <path>` — a project of
+  that language exists but isn't declared; add it to `projects` (with the
+  language's marker present at that path).
+- `… Unsupported languages [lang] <path>` — the gate has no adapter for that
+  language; it cannot be gated. Either remove the code or have Ops add an adapter
+  (see "Add support for a new language").
+- `… TypeScript projects missing a tsconfig declaration` — a declared node project
+  contains `.ts`/`.tsx` but no `tsconfig`; add `"tsconfig": "<path>"` to it (needed
+  for project-aware typecheck + type-aware eslint).
+- `declared <lang> project has no <marker>` / `invalid path` / `tsconfig is only
+  valid for node` — the declaration is malformed; fix the offending `projects[i]`.
 
 **Gate job errors with "cosign signing material not present" →** the
 `cosign-signing-key` secret isn't synced. Check ESO:

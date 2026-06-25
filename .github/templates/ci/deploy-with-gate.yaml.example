@@ -4,6 +4,11 @@
 # The gate job calls the centrally-owned reusable workflow. The deploy job runs
 # ONLY if the gate passed (and therefore signed the image) — so an unsigned
 # image never reaches the cluster, and Kyverno would refuse it anyway.
+#
+# PREREQUISITE: this repo must contain a root `gate-config.json` honestly mapping
+# its projects, e.g.  { "version": 1, "projects": [ { "language": "rust", "path": "." } ] }
+# The gate (>= v0.3.0) fails closed without it, and on any undeclared or
+# unsupported code. See docs/ci-gate.md#declaring-the-repo-gate-configjson.
 
 name: Build and Deploy
 on:

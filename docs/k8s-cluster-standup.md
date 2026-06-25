@@ -195,7 +195,7 @@ Prereqs for the model itself. Done once, before any app migrates.
 Migrate services one at a time. Each migration exercises the 7a machinery and shakes out any template gaps.
 
 **Services to migrate (landing-page first, rest TBD):**
-- **landing-page** — migrated first because it's the simplest real workload, and the stale link to `bearflinn/lab-iac` on the site is fixed as part of this migration (new URL is `grizzly-endeavors/grizzly-platform`)
+- **landing-page** — migrated first because it's the simplest real workload, and the stale link to `bearflinn/grizzly-platform` on the site is fixed as part of this migration (new URL is `grizzly-endeavors/grizzly-platform`)
 - caz-portfolio
 - resume-site
 - Other services from the old cluster (anything still on the staging VM). Palworld was backed up and decommissioned indefinitely — see ADR-022.

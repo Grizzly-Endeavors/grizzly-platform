@@ -54,6 +54,12 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
+    ulimits:
+      # Go runtime creates OS threads on demand; the default Docker nproc
+      # limit is low enough to cause fatal crashes under normal load.
+      nproc:
+        soft: 65535
+        hard: 65535
     logging:
       driver: journald
       options:
