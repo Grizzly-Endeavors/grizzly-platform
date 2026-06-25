@@ -73,8 +73,9 @@ registry: [ADR-027](../decisions/027-registry-zot.md).
    { "version": 1, "projects": [ { "language": "rust", "path": "." } ] }
    ```
    Languages: `rust`/`python`/`node`/`ansible`/`yaml`; `path` must hold that
-   adapter's marker; node may add `"tsconfig": "tsconfig.json"` for repo-aware
-   typechecking. Schema + rationale: [design doc](../ci-gate.md#declaring-the-repo-gate-configjson),
+   adapter's marker; a node project **containing TypeScript must** add
+   `"tsconfig": "tsconfig.json"` (drives project-aware typecheck + type-aware
+   eslint; the gate fails closed without it). Schema + rationale: [design doc](../ci-gate.md#declaring-the-repo-gate-configjson),
    [ADR-029](../decisions/029-gate-config-honest-map.md). Then label its
    namespace gated:
    ```sh
@@ -139,6 +140,9 @@ rejected the repo. Common messages and fixes:
 - `… Unsupported languages [lang] <path>` — the gate has no adapter for that
   language; it cannot be gated. Either remove the code or have Ops add an adapter
   (see "Add support for a new language").
+- `… TypeScript projects missing a tsconfig declaration` — a declared node project
+  contains `.ts`/`.tsx` but no `tsconfig`; add `"tsconfig": "<path>"` to it (needed
+  for project-aware typecheck + type-aware eslint).
 - `declared <lang> project has no <marker>` / `invalid path` / `tsconfig is only
   valid for node` — the declaration is malformed; fix the offending `projects[i]`.
 

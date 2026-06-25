@@ -51,6 +51,8 @@ A lazy or hostile author (including an LLM taking every shortcut not explicitly 
 
 7. **Repo-aware TypeScript without relaxing strictness.** A node project may declare its own `tsconfig` for module/path *resolution*. The harness wraps it: a generated tsconfig `extends` the repo's (inheriting its `paths`/`baseUrl`) while **force-overriding the full `strict` compiler family** locally (which wins over `extends`), and relies on tsc's default `include` so the repo cannot shrink the typechecked set. The repo gets its layout honored; it cannot weaken the type bar. Without a declared `tsconfig`, the gate's strict `tsconfig.base.json` is used as before.
 
+   *(Extended in gate v0.4.0:)* the same wrapped tsconfig also drives **type-aware ESLint** (`typescript-eslint` `strictTypeChecked` + `stylisticTypeChecked` — `no-floating-promises`, `no-unsafe-*`, etc.), bringing TypeScript to parity with the Rust/Python regimes. Because type-aware linting needs the TypeScript program, a node project **containing TypeScript must declare its `tsconfig`** — the honest-map verifier (`detect.rs`) adds this as a third fail-closed class (alongside undeclared/unsupported). A JS-only node project may still omit it.
+
 ## Alternatives Considered
 
 - **Deny-unknown detection** (every extension must be adapter-claimed or on an Ops "benign" allowlist; anything else fails). Hardest to evade, but the benign allowlist grows huge, becomes its own relax point, and false-positives on every `.md`/`.svg`/lockfile. Rejected for a **hybrid**: adapter-backed extensions must be declared, a denylist of known code languages hard-fails, and benign non-code is ignored.

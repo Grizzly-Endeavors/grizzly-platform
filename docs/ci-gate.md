@@ -108,10 +108,12 @@ lives and *what language* it is — nothing that can relax a check:
 - `path` — the project directory, relative and in-tree (`.` is the root). The
   adapter's marker (`Cargo.toml`, `pyproject.toml`, `package.json`, `ansible/`,
   `.yamllint`) must exist there, or it's a declared-but-empty lie and fails.
-- `tsconfig` — node only, optional: the repo's own tsconfig. The gate wraps it so
-  its module/path resolution is honored while the gate force-overrides
-  strictness (the repo cannot weaken the type bar). Omit it to use the gate's
-  strict base config.
+- `tsconfig` — node only: the repo's own tsconfig. The gate wraps it so its
+  module/path resolution is honored (for both project-aware `tsc` *and*
+  type-aware eslint) while the gate force-overrides strictness — the repo cannot
+  weaken the type bar. **Required for any node project containing TypeScript**
+  (type-aware linting needs the type program; the gate fails closed without it);
+  a JS-only project may omit it.
 
 The harness then verifies the map: any `.rs`/`.py`/TS/JS file not covered by a
 matching declared project fails the gate, and any code in an un-adapted language

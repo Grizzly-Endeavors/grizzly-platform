@@ -11,9 +11,10 @@
 //! - extension matching is case-insensitive (`.RS` == `.rs`);
 //! - extensionless executables are classified by shebang interpreter.
 //!
-//! Two failure classes: *undeclared* adapter-backed code (a `.rs` not covered
-//! by any declared rust project), and *unsupported* code (a language with no
-//! adapter at all — e.g. Go). Either one is fatal.
+//! Three failure classes: *undeclared* adapter-backed code (a `.rs` not covered
+//! by any declared rust project), *unsupported* code (a language with no adapter
+//! at all — e.g. Go), and a node project that contains TypeScript but declares no
+//! `tsconfig` (type-aware linting needs the TS program). Any one is fatal.
 
 use std::collections::HashMap;
 use std::io::Read;
@@ -66,6 +67,10 @@ pub fn verify(source: &Path, tree: &Tree, projects: &[ResolvedProject]) -> Resul
 
     let mut undeclared: Vec<(String, PathBuf)> = Vec::new();
     let mut unsupported: Vec<(String, PathBuf)> = Vec::new();
+    // node projects shown to contain TypeScript but missing a `tsconfig`
+    // declaration: type-aware linting needs the program, so this is fatal.
+    let mut ts_without_config: std::collections::BTreeSet<PathBuf> =
+        std::collections::BTreeSet::new();
 
     let walker = WalkDir::new(source).follow_links(false).into_iter();
     for entry in walker.filter_entry(|e| !is_skipped_dir(e, source, &tree.detect.skip_dirs)) {
@@ -85,17 +90,20 @@ pub fn verify(source: &Path, tree: &Tree, projects: &[ResolvedProject]) -> Resul
 
         let hit = classify(path, &ext, &shebang);
         match hit {
-            Some(Hit::Adapter(lang)) => {
-                if !covered(&rel, &lang, projects) {
-                    undeclared.push((lang, rel));
+            Some(Hit::Adapter(lang)) => match covering(&rel, &lang, projects) {
+                None => undeclared.push((lang, rel)),
+                Some(p) => {
+                    if lang == "node" && is_typescript(&rel) && p.tsconfig.is_none() {
+                        ts_without_config.insert(p.rel_path.clone());
+                    }
                 }
-            }
+            },
             Some(Hit::Unsupported(lang)) => unsupported.push((lang, rel)),
             None => {}
         }
     }
 
-    if unsupported.is_empty() && undeclared.is_empty() {
+    if unsupported.is_empty() && undeclared.is_empty() && ts_without_config.is_empty() {
         return Ok(());
     }
 
@@ -121,7 +129,35 @@ pub fn verify(source: &Path, tree: &Tree, projects: &[ResolvedProject]) -> Resul
             crate::gateconfig::FILE,
         ));
     }
+    if !ts_without_config.is_empty() {
+        let lines = ts_without_config
+            .iter()
+            .map(|p| {
+                let where_ = if p.as_os_str().is_empty() {
+                    ".".to_string()
+                } else {
+                    p.display().to_string()
+                };
+                format!("    [node] {where_}")
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        sections.push(format!(
+            "  TypeScript projects missing a tsconfig declaration (needed for \
+             type-aware linting):\n{lines}\n\n  Add \"tsconfig\": \"<path>\" to each \
+             in {}.",
+            crate::gateconfig::FILE,
+        ));
+    }
     bail!(sections.join("\n\n"))
+}
+
+/// TypeScript source extensions (a subset of the node adapter's extensions).
+fn is_typescript(rel: &Path) -> bool {
+    rel.extension()
+        .and_then(|e| e.to_str())
+        .map(str::to_ascii_lowercase)
+        .is_some_and(|e| matches!(e.as_str(), "ts" | "tsx" | "mts" | "cts"))
 }
 
 /// Render a sorted violation list to `    [lang] path` lines, capped via
@@ -208,11 +244,17 @@ fn basename(s: &str) -> &str {
     s.rsplit(['/', '\\']).next().unwrap_or(s)
 }
 
-/// A file is covered iff some declared project of the same language is an
-/// ancestor (a root project, `rel_path == ""`, covers everything). Path
-/// comparison is component-wise, so `web` does not cover `web2/`.
-fn covered(rel: &Path, lang: &str, projects: &[ResolvedProject]) -> bool {
-    projects.iter().any(|p| {
+/// The declared project covering `rel` for `lang`, if any: a project of the same
+/// language whose path is an ancestor (a root project, `rel_path == ""`, covers
+/// everything). Path comparison is component-wise, so `web` does not cover
+/// `web2/`. When several match, the first declared wins (callers only need
+/// existence and the project's tsconfig state).
+fn covering<'a>(
+    rel: &Path,
+    lang: &str,
+    projects: &'a [ResolvedProject],
+) -> Option<&'a ResolvedProject> {
+    projects.iter().find(|p| {
         p.language == lang && (p.rel_path.as_os_str().is_empty() || rel.starts_with(&p.rel_path))
     })
 }
@@ -263,6 +305,16 @@ mod tests {
                     detect: Detect {
                         extensions: vec!["py".into()],
                         shebangs: vec!["python3".into()],
+                    },
+                    checks: vec![],
+                },
+                LanguageAdapter {
+                    name: "node".into(),
+                    marker: "package.json".into(),
+                    config_dir: PathBuf::from("/x"),
+                    detect: Detect {
+                        extensions: vec!["ts".into(), "tsx".into(), "js".into()],
+                        shebangs: vec!["node".into()],
                     },
                     checks: vec![],
                 },
@@ -363,6 +415,44 @@ mod tests {
         let projects = vec![proj("rust", "")];
         let err = verify(&root, &tree(), &projects).unwrap_err().to_string();
         assert!(err.contains("tool") && err.contains("python"), "{err}");
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn ts_project_without_tsconfig_fails() {
+        let root = scratch("ts-no-cfg");
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(root.join("app.ts"), "export const x = 1;").unwrap();
+        // node project declared but no tsconfig → type-aware lint impossible.
+        let projects = vec![proj("node", "")];
+        let err = verify(&root, &tree(), &projects).unwrap_err().to_string();
+        assert!(err.contains("tsconfig") && err.contains("[node]"), "{err}");
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn ts_project_with_tsconfig_passes() {
+        let root = scratch("ts-cfg");
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(root.join("app.ts"), "export const x = 1;").unwrap();
+        let projects = vec![ResolvedProject {
+            language: "node".into(),
+            rel_path: PathBuf::new(),
+            abs_path: PathBuf::from("/unused"),
+            tsconfig: Some(PathBuf::from("/unused/tsconfig.json")),
+        }];
+        assert!(verify(&root, &tree(), &projects).is_ok());
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn js_only_project_needs_no_tsconfig() {
+        let root = scratch("js-only");
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(root.join("app.js"), "const x = 1;").unwrap();
+        // Plain JS node project: no tsconfig required.
+        let projects = vec![proj("node", "")];
+        assert!(verify(&root, &tree(), &projects).is_ok());
         std::fs::remove_dir_all(&root).ok();
     }
 }
