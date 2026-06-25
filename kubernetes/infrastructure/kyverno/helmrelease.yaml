@@ -1,0 +1,62 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: kyverno
+  namespace: flux-system
+spec:
+  interval: 30m
+  chart:
+    spec:
+      chart: kyverno
+      # Pinned. App v1.13.x — failureAction lives at the verifyImages rule
+      # level (see kyverno-policies/verify-gate-signature.yaml).
+      version: "3.3.4"
+      sourceRef:
+        kind: HelmRepository
+        name: kyverno
+  targetNamespace: kyverno
+  install:
+    createNamespace: false
+  values:
+    # The in-cluster zot registry is plain HTTP; allow Kyverno's registry
+    # client to fetch cosign signatures from it. (Matches the rest of the
+    # platform's in-cluster registry posture — see ADR on the registry swap.)
+    features:
+      registryClient:
+        allowInsecure: true
+    # Prometheus metrics for the admission/background controllers (scraped by
+    # the R730xd Prometheus — see ansible/roles/r730xd-prometheus).
+    admissionController:
+      metering:
+        enabled: true
+      resources:
+        requests:
+          cpu: 100m
+          memory: 256Mi
+        limits:
+          cpu: 500m
+          memory: 512Mi
+    backgroundController:
+      resources:
+        requests:
+          cpu: 50m
+          memory: 128Mi
+        limits:
+          cpu: 200m
+          memory: 256Mi
+    reportsController:
+      resources:
+        requests:
+          cpu: 50m
+          memory: 128Mi
+        limits:
+          cpu: 200m
+          memory: 256Mi
+    cleanupController:
+      resources:
+        requests:
+          cpu: 50m
+          memory: 64Mi
+        limits:
+          cpu: 100m
+          memory: 128Mi

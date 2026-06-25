@@ -20,3 +20,4 @@ resources:
   - argo-workflows.yaml
   - notifications.yaml
   - flux-system.yaml
+  - cosign.yaml

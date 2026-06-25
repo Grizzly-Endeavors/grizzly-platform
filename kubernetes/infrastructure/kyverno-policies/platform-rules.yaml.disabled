@@ -1,0 +1,43 @@
+# SCAFFOLDED, NOT ACTIVE. This file is intentionally excluded from
+# kustomization.yaml (note the .disabled suffix). It captures the platform
+# "rule delta" we deferred from v1 — the conventions documented in CLAUDE.md
+# and the homelab-deploy skill that should eventually be enforced at admission
+# alongside the gate signature.
+#
+# To activate a later phase: move a rule into a real ClusterPolicy file, add it
+# to kustomization.yaml, roll out in Audit, then flip failureAction to Enforce.
+#
+# Candidate rules (all scoped to grizzly.io/gated=true namespaces):
+#   - require readinessProbe + livenessProbe on every container
+#   - require CPU/memory requests on every container
+#   - require ingress to use ingressClassName: nginx and a *.bearflinn.com host
+#   - disallow :latest tags (require a digest or immutable tag)
+#   - require the standard grizzly labels on workloads
+#
+# Example shape (require resource requests):
+#
+# apiVersion: kyverno.io/v1
+# kind: ClusterPolicy
+# metadata:
+#   name: require-resource-requests
+# spec:
+#   background: true
+#   rules:
+#     - name: require-requests
+#       match:
+#         any:
+#           - resources:
+#               kinds: [Pod]
+#               namespaceSelector:
+#                 matchLabels:
+#                   grizzly.io/gated: "true"
+#       validate:
+#         failureAction: Audit   # -> Enforce after rollout
+#         message: "CPU and memory requests are required."
+#         pattern:
+#           spec:
+#             containers:
+#               - resources:
+#                   requests:
+#                     memory: "?*"
+#                     cpu: "?*"

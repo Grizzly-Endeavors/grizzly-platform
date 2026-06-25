@@ -1,0 +1,50 @@
+# Example app CI: build → GATE → deploy. Copy into an app repo as
+# .github/workflows/deploy.yml and adjust the build/deploy steps for the stack.
+#
+# The gate job calls the centrally-owned reusable workflow. The deploy job runs
+# ONLY if the gate passed (and therefore signed the image) — so an unsigned
+# image never reaches the cluster, and Kyverno would refuse it anyway.
+
+name: Build and Deploy
+on:
+  push:
+    branches: [main]
+
+env:
+  REGISTRY: registry.registry.svc.cluster.local:5000
+  IMAGE_NAME: myapp
+
+jobs:
+  build:
+    runs-on: lab-runners
+    outputs:
+      digest: ${{ steps.push.outputs.digest }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and push (capture digest)
+        id: push
+        run: |
+          set -euo pipefail
+          docker build -t "$REGISTRY/$IMAGE_NAME:${GITHUB_SHA}" .
+          docker push "$REGISTRY/$IMAGE_NAME:${GITHUB_SHA}"
+          # Resolve the digest of what we just pushed; the gate signs by digest.
+          digest=$(docker inspect --format='{{index .RepoDigests 0}}' "$REGISTRY/$IMAGE_NAME:${GITHUB_SHA}" | cut -d@ -f2)
+          echo "digest=${digest}" >> "$GITHUB_OUTPUT"
+
+  gate:
+    needs: build
+    uses: grizzly-endeavors/grizzly-platform/.github/workflows/gate.yaml@master
+    with:
+      image: registry.registry.svc.cluster.local:5000/myapp@${{ needs.build.outputs.digest }}
+      gate_version: latest # pin to a released gate tag (e.g. v0.2.0) for reproducibility
+
+  deploy:
+    needs: gate # only runs if the gate passed and signed the image
+    runs-on: lab-runners
+    steps:
+      - uses: actions/checkout@v4
+      # ADR-020 model: bump deploy/values.yaml image tag to the signed digest
+      # and commit [skip ci]; Flux reconciles. (Replace with your deploy step.)
+      - name: Bump deployed tag
+        run: |
+          echo "Update deploy/values.yaml image to @${{ needs.build.outputs.digest }} and commit [skip ci]"

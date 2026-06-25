@@ -107,6 +107,27 @@ spec:
                   secretKeyRef:
                     name: sccache-s3-credentials
                     key: secretkey
+              # cosign signing material for the CI gate (synced from OpenBao via
+              # ESO — external-secrets-stores/cosign.yaml). Exposed here so the
+              # gate step can forward it into the gate container with
+              # `docker run -e COSIGN_PRIVATE_KEY -e COSIGN_PASSWORD`.
+              # optional:true so runners still start before the key is
+              # bootstrapped — only gate jobs fail (guarded in gate.yaml), not
+              # all CI. NOTE: visible to every job on this shared pool;
+              # acceptable single-tenant, revisit with a dedicated gate pool if
+              # that changes.
+              - name: COSIGN_PRIVATE_KEY
+                valueFrom:
+                  secretKeyRef:
+                    name: cosign-signing-key
+                    key: cosign.key
+                    optional: true
+              - name: COSIGN_PASSWORD
+                valueFrom:
+                  secretKeyRef:
+                    name: cosign-signing-key
+                    key: cosign.password
+                    optional: true
             resources:
               limits:
                 cpu: "8"

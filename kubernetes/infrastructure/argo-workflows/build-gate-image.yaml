@@ -1,0 +1,72 @@
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: build-gate-image
+  namespace: argo
+spec:
+  # Builds the grizzly-gate CI gate image in-cluster via Kaniko and pushes it to
+  # the in-cluster zot registry. Mirrors build-runner-image; the gate image is
+  # the one artifact Ops owns and versions — every app's CI pulls it by tag.
+  entrypoint: build
+  arguments:
+    parameters:
+      - name: git-ref
+        value: master
+      - name: version
+        value: dev
+  volumeClaimTemplates:
+    - metadata:
+        name: workspace
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: iscsi-zfs
+        resources:
+          requests:
+            storage: 15Gi
+  templates:
+    - name: build
+      steps:
+        - - name: clone
+            template: git-clone
+        - - name: build-push
+            template: kaniko
+
+    - name: git-clone
+      inputs:
+        parameters:
+          - name: git-ref
+            value: "{{workflow.parameters.git-ref}}"
+      container:
+        image: alpine/git:latest
+        command: [sh, -c]
+        args:
+          - |
+            git clone https://github.com/grizzly-endeavors/grizzly-platform.git /workspace/src
+            cd /workspace/src
+            git checkout {{inputs.parameters.git-ref}}
+        volumeMounts:
+          - name: workspace
+            mountPath: /workspace
+
+    - name: kaniko
+      container:
+        image: gcr.io/kaniko-project/executor:latest
+        args:
+          - --context=/workspace/src/docker/grizzly-gate
+          - --dockerfile=/workspace/src/docker/grizzly-gate/Dockerfile
+          - --destination=registry.registry.svc.cluster.local:5000/grizzly-gate:latest
+          - --destination=registry.registry.svc.cluster.local:5000/grizzly-gate:{{workflow.parameters.version}}
+          - --destination=registry.registry.svc.cluster.local:5000/grizzly-gate:{{workflow.uid}}
+          - --insecure
+          - --cache=true
+          - --cache-repo=registry.registry.svc.cluster.local:5000/grizzly-gate/cache
+        volumeMounts:
+          - name: workspace
+            mountPath: /workspace
+        resources:
+          requests:
+            cpu: "2"
+            memory: 4Gi
+          limits:
+            cpu: "4"
+            memory: 8Gi

@@ -1,0 +1,11 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# Kyverno operator install only. The ClusterPolicy CRs live in
+# kubernetes/infrastructure/kyverno-policies/ and are applied by a separate
+# Flux Kustomization (dependsOn: infrastructure) so the policies aren't
+# dry-run before Kyverno's CRDs exist — same pattern as cert-manager-issuers.
+resources:
+  - namespace.yaml
+  - helmrepository.yaml
+  - helmrelease.yaml
+  - metrics-service.yaml

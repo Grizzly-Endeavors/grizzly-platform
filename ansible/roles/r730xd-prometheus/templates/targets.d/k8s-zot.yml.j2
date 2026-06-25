@@ -1,0 +1,8 @@
+# Managed by Ansible — r730xd-prometheus role
+# zot registry metrics, exposed on the registry NodePort (30500) at /metrics.
+- targets:
+    - "{{ hostvars[groups['k8s_control_plane'][0]]['ansible_host'] }}:30500"
+  labels:
+    env: "grizzly-platform"
+    instance: "zot-registry"
+    component: "oci-registry"

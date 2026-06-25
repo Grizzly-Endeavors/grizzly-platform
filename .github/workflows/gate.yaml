@@ -1,0 +1,86 @@
+name: CI Gate
+
+# Reusable workflow: any repo in the grizzly-endeavors org calls this after it
+# has built and pushed its image (by digest) to the in-cluster zot registry.
+# The gate pulls the centrally-owned grizzly-gate image and runs it against the
+# source + built image: language adapters, SAST/secret/dependency scan, and an
+# image SBOM/CVE scan. On pass — and ONLY on pass — the gate cosign-signs the
+# image digest. That signature is what the Kyverno deploy boundary verifies
+# (kubernetes/infrastructure/kyverno-policies/verify-gate-signature.yaml), so a
+# green gate is what lets an agent ship without manual review.
+#
+# Caller shape:
+#   jobs:
+#     build:   # build + push to zot, emit the digest as an output
+#       ...
+#     gate:
+#       needs: build
+#       uses: grizzly-endeavors/grizzly-platform/.github/workflows/gate.yaml@master
+#       with:
+#         image: registry.registry.svc.cluster.local:5000/myapp@${{ needs.build.outputs.digest }}
+#     deploy:  # bump deploy/values.yaml tag → Flux (runs only if gate passed)
+#       needs: gate
+#       ...
+
+on:
+  workflow_call:
+    inputs:
+      image:
+        description: "Built image pinned by digest (registry.../app@sha256:...). The gate scans and, on pass, signs THIS digest."
+        required: true
+        type: string
+      gate_version:
+        description: "grizzly-gate image tag to pin (default: latest). Pin to a released tag for reproducibility."
+        required: false
+        default: "latest"
+        type: string
+      runs_on:
+        description: "Runner label."
+        required: false
+        default: "lab-runners"
+        type: string
+
+jobs:
+  gate:
+    runs-on: ${{ inputs.runs_on }}
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Run grizzly-gate
+        env:
+          GATE_IMAGE: registry.registry.svc.cluster.local:5000/grizzly-gate:${{ inputs.gate_version }}
+          TARGET_IMAGE: ${{ inputs.image }}
+        run: |
+          set -euo pipefail
+          if [ -z "${COSIGN_PRIVATE_KEY:-}" ] || [ -z "${COSIGN_PASSWORD:-}" ]; then
+            echo "::error::cosign signing material not present on the runner."
+            echo "Expected COSIGN_PRIVATE_KEY + COSIGN_PASSWORD env (synced from OpenBao"
+            echo "to arc-runners via ESO and exposed on the runner pod). See docs/runbooks/ci-gate.md."
+            exit 1
+          fi
+
+          docker pull "$GATE_IMAGE"
+
+          # Source is on the shared `work` volume, also mounted into the DinD
+          # sidecar, so the bind mount resolves. The gate reaches zot via
+          # cluster DNS through DinD (same path the runners push images on).
+          docker run --rm \
+            -v "$PWD:/src" \
+            -e COSIGN_PRIVATE_KEY \
+            -e COSIGN_PASSWORD \
+            "$GATE_IMAGE" \
+            --source /src \
+            --image "$TARGET_IMAGE" \
+            --sign \
+            --cosign-key env://COSIGN_PRIVATE_KEY \
+            --insecure-registry
+
+      - name: Gate summary
+        if: always()
+        run: |
+          if [ "${{ job.status }}" = "success" ]; then
+            echo "✅ Gate passed — image signed: \`${{ inputs.image }}\`" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "⛔ Gate failed — image NOT signed; deploy will be refused at admission." >> "$GITHUB_STEP_SUMMARY"
+          fi
