@@ -18,14 +18,37 @@ registry: [ADR-027](../decisions/027-registry-zot.md).
 
 ## Bootstrap (one-time, in order)
 
-1. **Cut over the registry to zot first.** Merge the registry change, let Flux
-   reconcile, then verify pulls still resolve (the swap is anonymous/HTTP/NodePort
-   drop-in, so containerd needs no change):
+1. **Cut over the registry to zot first — with image migration.**
+
+   ⚠️ **zot and `registry:2.8.3` use incompatible storage layouts.** Flipping the
+   Service to zot does *not* carry the existing images over — zot starts empty.
+   Already-running pods keep their cached images (`IfNotPresent`), but the runner
+   image is `imagePullPolicy: Always`, so a new runner pod would `ImagePullBackOff`
+   and CI would stall; any rescheduled app pod would fail to pull too. So migrate
+   the images as part of the cutover, in a low-activity window:
+
    ```sh
+   # a) Mirror existing images from the old registry INTO zot before flipping.
+   #    Run zot at a temporary second Service/port, or migrate post-flip and accept
+   #    a short pull-gap. Simplest: post-flip re-push via the build pipelines.
+   #
+   # b) After Flux reconciles zot:
    kubectl -n registry rollout status deploy/registry
-   kubectl -n registry get pods
-   # from a node: crictl pull localhost:30500/<some-existing-image> (or just watch app pods stay Running)
+   # c) Rebuild the runner image into zot (Argo pods don't need the runner image):
+   argo submit --from workflowtemplate/build-runner-image -n argo
+   #    then re-run each app's CI (or `skopeo copy` each image old→new) so every
+   #    referenced tag exists in zot.
    ```
+
+   Verify pulls resolve once images are present:
+   ```sh
+   kubectl -n registry get pods
+   kubectl get pods -A | grep -i imagepull   # expect none lingering after migration
+   ```
+
+   **Rollback:** `git revert` the registry commit and push — Flux restores
+   `registry:2.8.3`, which still has its original data at the old storage paths
+   (zot wrote elsewhere), so the previous state returns intact.
 2. **Generate the cosign keypair and store it in OpenBao:**
    ```sh
    COSIGN_PASSWORD=<pw> cosign generate-key-pair   # -> cosign.key, cosign.pub
