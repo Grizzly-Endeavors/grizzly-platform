@@ -20,55 +20,47 @@ spec:
     spec:
       containers:
         - name: registry
-          image: registry:2.8.3
+          # zot replaces registry:2.8.3 to gain the OCI 1.1 referrers API
+          # (cosign signatures attached to digests) + a Prometheus metrics
+          # extension. Pinned tag; re-pin to a digest once mirrored locally.
+          image: ghcr.io/project-zot/zot-linux-amd64:v2.1.2
           imagePullPolicy: IfNotPresent
+          args: ["serve", "/etc/zot/config.json"]
           ports:
             - name: http
               containerPort: 5000
               protocol: TCP
           env:
-            # Storage: S3 backend → MinIO bulk on R730xd (see
-            # ansible/roles/r730xd-minio-bulk). Credentials come from the
-            # registry-s3-creds Secret seeded by
-            # ansible/playbooks/seed-app-secrets.yml.
-            - name: REGISTRY_STORAGE
-              value: "s3"
-            - name: REGISTRY_STORAGE_S3_REGION
-              value: "us-east-1"  # MinIO ignores region, but the registry requires a value
-            - name: REGISTRY_STORAGE_S3_REGIONENDPOINT
-              value: "http://10.0.0.200:9002"  # R730xd LAN IP + MinIO bulk API port
-            - name: REGISTRY_STORAGE_S3_BUCKET
-              value: "lab-registry"
-            - name: REGISTRY_STORAGE_S3_FORCEPATHSTYLE
-              value: "true"  # required for MinIO
-            - name: REGISTRY_STORAGE_S3_SECURE
-              value: "false"
-            - name: REGISTRY_STORAGE_S3_ACCESSKEY
+            # S3 backend → MinIO bulk on R730xd (see ansible/roles/r730xd-minio-bulk).
+            # zot's S3 driver (docker/distribution) reads credentials from the
+            # AWS SDK env chain; we feed it the registry-s3-creds Secret seeded
+            # by ansible/playbooks/seed-app-secrets.yml (and synced via ESO,
+            # external-secrets-stores/registry.yaml).
+            - name: AWS_ACCESS_KEY_ID
               valueFrom:
                 secretKeyRef:
                   name: registry-s3-creds
                   key: accessKey
-            - name: REGISTRY_STORAGE_S3_SECRETKEY
+            - name: AWS_SECRET_ACCESS_KEY
               valueFrom:
                 secretKeyRef:
                   name: registry-s3-creds
                   key: secretKey
-            # HTTP server (plain HTTP — in-cluster only; see docs/decisions for
-            # the deferred external TLS decision).
-            - name: REGISTRY_HTTP_ADDR
-              value: ":5000"
-            # Allow image deletion (useful for cleanup of old tags).
-            - name: REGISTRY_STORAGE_DELETE_ENABLED
-              value: "true"
+          volumeMounts:
+            - name: config
+              mountPath: /etc/zot
+              readOnly: true
+            - name: cache
+              mountPath: /var/lib/zot
           readinessProbe:
             httpGet:
-              path: /
+              path: /v2/
               port: http
             initialDelaySeconds: 5
             periodSeconds: 10
           livenessProbe:
             httpGet:
-              path: /
+              path: /v2/
               port: http
             initialDelaySeconds: 15
             periodSeconds: 20
@@ -79,3 +71,9 @@ spec:
             limits:
               cpu: 500m
               memory: 512Mi
+      volumes:
+        - name: config
+          configMap:
+            name: zot-config
+        - name: cache
+          emptyDir: {}
