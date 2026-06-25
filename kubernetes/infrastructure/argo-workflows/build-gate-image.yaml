@@ -58,8 +58,9 @@ spec:
           - --destination=registry.registry.svc.cluster.local:5000/grizzly-gate:{{workflow.parameters.version}}
           - --destination=registry.registry.svc.cluster.local:5000/grizzly-gate:{{workflow.uid}}
           - --insecure
-          - --cache=true
-          - --cache-repo=registry.registry.svc.cluster.local:5000/grizzly-gate/cache
+          # Cache disabled: zot rejects kaniko's docker-v2 cache manifest
+          # (MANIFEST_INVALID). Re-enable if/when the cache repo is compatible.
+          - --cache=false
         volumeMounts:
           - name: workspace
             mountPath: /workspace
