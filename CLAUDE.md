@@ -2,6 +2,13 @@
 
 Self-hosted infrastructure for Grizzly Endeavors projects (Infrastructure as Code). See `README.md` for architecture, machines, repo structure, and common commands. `docs/hardware.md` has the live machine inventory, `docs/network.md` the network topology, and `docs/decisions/` the architectural rationale. The completed 2026 migration record lives in `archive/migration-2026/`.
 
+# CI Gate
+
+**Start here:** `docs/runbooks/ci-gate.md` — bootstrap, Audit→Enforce rollout, key rotation, gate version bump, deploy-denied diagnosis.
+
+- A versioned `grizzly-gate` container image (`docker/grizzly-gate/`) owns the per-language checks + scanners (rules live in `gate.toml`, harness in Rust). Apps call the reusable `.github/workflows/gate.yaml` after building; on a clean pass the gate cosign-signs the image **digest**. Kyverno (`kubernetes/infrastructure/kyverno{,-policies}/`) refuses unsigned images at admission in namespaces labelled `grizzly.io/gated=true`. Signing key in OpenBao `secret/grizzly-platform/cicd/cosign`; registry is zot (OCI referrers).
+- ADRs: `docs/decisions/026-centralized-ci-gate.md`, `docs/decisions/027-registry-zot.md`. Enforcement starts in **Audit**; flip to Enforce only after live first-party images are signed.
+
 # Secrets Management
 
 **Start here:** `docs/runbooks/openbao-quickref.md` — addresses, file paths, policies, auth methods, path layout, rotate/add how-tos, deploy-time gotchas.
