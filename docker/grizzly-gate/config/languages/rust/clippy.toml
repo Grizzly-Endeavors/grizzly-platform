@@ -1,0 +1,6 @@
+# Gate-owned clippy config (discovered via CLIPPY_CONF_DIR). Lint *levels* are
+# enforced on the command line (`-D warnings`); this file tunes the
+# configurable lints. Conservative defaults to start — tighten over time.
+cognitive-complexity-threshold = 30
+too-many-arguments-threshold = 8
+type-complexity-threshold = 250

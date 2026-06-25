@@ -1,0 +1,7 @@
+# Gate-owned ansible-lint config (passed via -c, authoritative over the repo's
+# .ansible-lint). Production profile as the strict baseline.
+profile: production
+
+# yamllint is invoked by ansible-lint internally; keep it on so YAML hygiene is
+# enforced alongside Ansible rules.
+use_default_rules: true

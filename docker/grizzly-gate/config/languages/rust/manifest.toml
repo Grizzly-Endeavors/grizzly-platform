@@ -1,0 +1,24 @@
+# Rust language adapter. Activated by a `Cargo.toml` at the source root; each
+# check is forced onto the gate's own config (colocated here), not the repo's.
+name = "rust"
+marker = "Cargo.toml"
+
+[[checks]]
+name = "fmt"
+# rustfmt options (--config-path) must follow `--`; they are not `cargo fmt` args.
+cmd = "cargo fmt --all --check -- --config-path {config}/rustfmt.toml"
+
+[[checks]]
+name = "clippy"
+cmd = "cargo clippy --all-targets --all-features -- -D warnings"
+# clippy.toml has no path flag — it is discovered from CLIPPY_CONF_DIR.
+env = { CLIPPY_CONF_DIR = "{config}" }
+
+[[checks]]
+name = "deny"
+cmd = "cargo deny check --config {config}/deny.toml"
+
+[[checks]]
+name = "test"
+# No external config to own; Cargo.toml defines the test surface.
+cmd = "cargo test --all-targets"

@@ -1,0 +1,15 @@
+# Gate-owned ruff config (passed via `--config`, authoritative over the repo's
+# pyproject ruff settings). A pragmatic strict baseline — expand the rule set as
+# the platform's Python footprint grows.
+target-version = "py311"
+line-length = 100
+
+[lint]
+select = [
+  "E",   # pycodestyle errors
+  "F",   # pyflakes
+  "I",   # isort (import order)
+  "B",   # flake8-bugbear
+  "UP",  # pyupgrade
+  "W",   # pycodestyle warnings
+]

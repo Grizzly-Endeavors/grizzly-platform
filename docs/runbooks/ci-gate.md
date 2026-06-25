@@ -9,7 +9,7 @@ registry: [ADR-027](../decisions/027-registry-zot.md).
 
 | Piece | Where |
 |---|---|
-| Gate image + harness | `docker/grizzly-gate/` (Dockerfile, `gate.toml`, `harness/`) |
+| Gate image + harness | `docker/grizzly-gate/` (Dockerfile, `config/` tree, `harness/`) |
 | Gate build | `kubernetes/infrastructure/argo-workflows/build-gate-image.yaml` + `.github/workflows/build-gate-image.yaml` |
 | Reusable CI job | `.github/workflows/gate.yaml` (called by apps; see `.github/templates/ci/deploy-with-gate.yaml.example`) |
 | Signing key | OpenBao `secret/grizzly-platform/cicd/cosign`; ESO → `cosign-signing-key` in `arc-runners` |
@@ -88,8 +88,13 @@ admission.
 
 ## Common tasks
 
-- **Change what the gate checks:** edit `docker/grizzly-gate/gate.toml` (and tool
-  pins in the Dockerfile), cut a new gate tag, then bump `gate_version` in callers.
+- **Change what the gate checks:** edit the relevant tool dir under
+  `docker/grizzly-gate/config/<languages|util>/<tool>/` — its `manifest.toml`
+  (what runs) and/or its native config file (e.g. `ruff.toml`, `clippy.toml`).
+  Bump tool pins in the Dockerfile if needed, cut a new gate tag, then bump
+  `gate_version` in callers. The gate's config is authoritative: it is forced
+  onto each tool (via flags/env in the manifest) and ignores the repo's own
+  config of the same kind.
 - **Pin/roll back the gate:** apps set `gate_version:` on the reusable workflow
   `with:`. Roll back by pointing it at a previous tag — no rebuild needed.
 - **Rotate the signing key:** generate a new keypair, `bao kv put` it (step 2),

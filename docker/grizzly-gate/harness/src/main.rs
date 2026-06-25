@@ -1,22 +1,24 @@
 //! grizzly-gate — the orchestration harness for the grizzly-platform CI gate.
 //!
 //! One artifact, centrally owned by Ops: it detects the stacks in a repo, runs
-//! the pinned per-language adapters + scanners defined in `gate.toml`, and — only
-//! if everything passes — signs the built image with cosign. The signature is the
-//! single proof that travels forward to the deploy boundary, where Kyverno refuses
-//! to admit any image lacking it.
+//! the pinned per-language adapters + scanners defined in the `config/` tree,
+//! and — only if everything passes — signs the built image with cosign. The
+//! signature is the single proof that travels forward to the deploy boundary,
+//! where Kyverno refuses to admit any image lacking it.
 
 mod config;
 
 use anyhow::{bail, Context, Result};
 use clap::Parser;
-use config::{Config, Scope};
+use config::Scope;
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::Instant;
 
-/// Rule set baked into the image; overridable per-invocation with `--config`.
-const DEFAULT_CONFIG: &str = include_str!("../../gate.toml");
+/// Config tree baked into the image; overridable per-invocation with `--config`
+/// or the `GRIZZLY_GATE_CONFIG_DIR` env var.
+const DEFAULT_CONFIG_DIR: &str = "/etc/grizzly-gate/config";
 
 #[derive(Parser)]
 #[command(
@@ -33,7 +35,9 @@ struct Cli {
     #[arg(long)]
     image: Option<String>,
 
-    /// Path to a gate.toml; falls back to the config baked into the image.
+    /// Path to a config root directory (with `languages/` and/or `util/`);
+    /// falls back to `GRIZZLY_GATE_CONFIG_DIR`, then the tree baked into the
+    /// image.
     #[arg(long)]
     config: Option<PathBuf>,
 
@@ -60,12 +64,13 @@ struct StepResult {
 fn main() -> Result<()> {
     let cli = Cli::parse();
 
-    let config_text = match &cli.config {
-        Some(path) => std::fs::read_to_string(path)
-            .with_context(|| format!("reading gate config {}", path.display()))?,
-        None => DEFAULT_CONFIG.to_string(),
-    };
-    let config = Config::parse(&config_text).context("parsing gate config")?;
+    let config_root = cli
+        .config
+        .clone()
+        .or_else(|| std::env::var_os("GRIZZLY_GATE_CONFIG_DIR").map(PathBuf::from))
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_CONFIG_DIR));
+    let tree = config::load_tree(&config_root)
+        .with_context(|| format!("loading gate config from {}", config_root.display()))?;
 
     let source = cli
         .source
@@ -82,22 +87,25 @@ fn main() -> Result<()> {
 
     // --- Language adapters -------------------------------------------------
     let mut matched_any = false;
-    for detector in &config.detectors {
-        if !source.join(&detector.marker).exists() {
+    for adapter in &tree.adapters {
+        if !source.join(&adapter.marker).exists() {
             continue;
         }
         matched_any = true;
+        let cfg = adapter.config_dir.to_string_lossy().to_string();
         println!(
             "\n=== stack: {} (marker: {}) ===",
-            detector.name, detector.marker
+            adapter.name, adapter.marker
         );
-        for check in &detector.checks {
+        for check in &adapter.checks {
             results.push(run(
-                &format!("{}:{}", detector.name, short(check)),
-                check,
+                &format!("{}:{}", adapter.name, check.name),
+                &check.cmd,
                 &source,
                 Some(&source_str),
                 None,
+                Some(&cfg),
+                &check.env,
             ));
         }
     }
@@ -106,7 +114,8 @@ fn main() -> Result<()> {
     }
 
     // --- Scanners ----------------------------------------------------------
-    for scanner in &config.scanners {
+    for scanner in &tree.scanners {
+        let cfg = scanner.config_dir.to_string_lossy().to_string();
         match scanner.scope {
             Scope::Source => {
                 results.push(run(
@@ -115,6 +124,8 @@ fn main() -> Result<()> {
                     &source,
                     Some(&source_str),
                     cli.image.as_deref(),
+                    Some(&cfg),
+                    &scanner.env,
                 ));
             }
             Scope::Image => match &cli.image {
@@ -124,6 +135,8 @@ fn main() -> Result<()> {
                     &source,
                     Some(&source_str),
                     Some(image),
+                    Some(&cfg),
+                    &scanner.env,
                 )),
                 None => println!(
                     "grizzly-gate :: skipping image scanner '{}' (no --image given)",
@@ -170,21 +183,35 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-/// Run one command line in `cwd`, substituting `{source}`/`{image}` placeholders.
+/// Run one command line in `cwd`, substituting `{source}`/`{image}`/`{config}`
+/// placeholders in the command and in each env value. `config` is the gate's
+/// config dir for this tool — the mechanism by which gate-owned config is forced
+/// onto the tool (via flags in `cmdline` or vars in `env`).
+#[allow(clippy::too_many_arguments)]
 fn run(
     label: &str,
     cmdline: &str,
     cwd: &Path,
     source: Option<&str>,
     image: Option<&str>,
+    config: Option<&str>,
+    env: &BTreeMap<String, String>,
 ) -> StepResult {
-    let mut rendered = cmdline.to_string();
-    if let Some(s) = source {
-        rendered = rendered.replace("{source}", s);
-    }
-    if let Some(i) = image {
-        rendered = rendered.replace("{image}", i);
-    }
+    let subst = |s: &str| -> String {
+        let mut r = s.to_string();
+        if let Some(v) = source {
+            r = r.replace("{source}", v);
+        }
+        if let Some(v) = image {
+            r = r.replace("{image}", v);
+        }
+        if let Some(v) = config {
+            r = r.replace("{config}", v);
+        }
+        r
+    };
+
+    let rendered = subst(cmdline);
     println!("\n── {label}\n   $ {rendered}");
 
     let parts = match shlex::split(&rendered) {
@@ -200,10 +227,12 @@ fn run(
     };
 
     let start = Instant::now();
-    let status = Command::new(&parts[0])
-        .args(&parts[1..])
-        .current_dir(cwd)
-        .status();
+    let mut command = Command::new(&parts[0]);
+    command.args(&parts[1..]).current_dir(cwd);
+    for (k, v) in env {
+        command.env(k, subst(v));
+    }
+    let status = command.status();
     let secs = start.elapsed().as_secs_f64();
 
     let ok = match status {
@@ -239,10 +268,4 @@ fn sign_image(image: &str, key: &str, insecure: bool) -> Result<()> {
         bail!("cosign sign failed for {image}");
     }
     Ok(())
-}
-
-/// First two tokens of a command, for compact but distinct summary labels
-/// (`cargo fmt` vs `cargo clippy` rather than just `cargo`).
-fn short(cmd: &str) -> String {
-    cmd.split_whitespace().take(2).collect::<Vec<_>>().join(" ")
 }

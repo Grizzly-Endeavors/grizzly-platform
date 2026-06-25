@@ -1,0 +1,11 @@
+# Gate-owned yamllint config (passed via -c, authoritative over the repo's
+# .yamllint). Based on the default ruleset with line-length relaxed to a warning
+# (long lines are common in CI/Helm YAML and shouldn't block a deploy).
+extends: default
+
+rules:
+  line-length:
+    level: warning
+  document-start: disable
+  truthy:
+    check-keys: false

@@ -1,0 +1,8 @@
+# Gate-owned rustfmt config. Stable-channel options only (the gate runs stable
+# rustfmt; unstable options would error). Enforces default formatting so style
+# is uniform across repos rather than per-repo.
+max_width = 100
+hard_tabs = false
+tab_spaces = 4
+newline_style = "Unix"
+use_small_heuristics = "Default"
