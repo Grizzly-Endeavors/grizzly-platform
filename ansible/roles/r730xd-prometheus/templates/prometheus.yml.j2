@@ -142,6 +142,23 @@ scrape_configs:
           - "/etc/prometheus/targets.d/k8s-argo.yml"
         refresh_interval: 30s
 
+  # zot OCI registry metrics (Prometheus extension on the registry HTTP port,
+  # reached via the registry NodePort; default /metrics path).
+  - job_name: "registry-zot"
+    file_sd_configs:
+      - files:
+          - "/etc/prometheus/targets.d/k8s-zot.yml"
+        refresh_interval: 30s
+
+  # Kyverno admission controller — the CI gate's deploy boundary. With
+  # failurePolicy:Fail, Kyverno being down blocks pod admission in gated
+  # namespaces, so this scrape feeds the KyvernoDown alert.
+  - job_name: "kyverno"
+    file_sd_configs:
+      - files:
+          - "/etc/prometheus/targets.d/k8s-kyverno.yml"
+        refresh_interval: 30s
+
   - job_name: "ingress-nginx"
     file_sd_configs:
       - files:

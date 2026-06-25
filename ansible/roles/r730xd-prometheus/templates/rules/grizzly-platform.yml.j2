@@ -678,3 +678,35 @@ groups:
           severity: critical
         annotations:
           summary: "resume-site has no available replicas"
+
+  - name: ci-gate
+    rules:
+      - alert: ZotRegistryDown
+        expr: up{job="registry-zot"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "zot OCI registry is down — image builds, the gate, and pulls all break"
+
+      - alert: KyvernoDown
+        # Kyverno is the deploy boundary with failurePolicy:Fail; if it's down,
+        # pod admission in gated namespaces is blocked. Treat as critical.
+        expr: up{job="kyverno"} == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Kyverno admission controller is down — deploys to gated namespaces will fail"
+
+      - alert: GateSignatureVerificationFailing
+        # verify-gate-signature rejecting/flagging images: unsigned images being
+        # deployed, or the cosign public key is wrong/placeholder. In Audit this
+        # is report-only; in Enforce it blocks the deploy.
+        expr: |
+          sum(rate(kyverno_policy_results_total{policy_name="verify-gate-signature",policy_validation_mode="enforce",rule_result="fail"}[15m])) > 0
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "CI gate signature verification is failing for one or more images"
