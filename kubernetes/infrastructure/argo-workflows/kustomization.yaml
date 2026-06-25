@@ -7,4 +7,5 @@ resources:
   - metrics-services.yaml
   - network-policy.yaml
   - build-runner-image.yaml
+  - build-gate-image.yaml
   - limitrange.yaml
