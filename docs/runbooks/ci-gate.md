@@ -112,6 +112,15 @@ admission.
   remove that language from the `detect.toml` `unsupported` denylist if it was
   there. A repo cannot will a language into scope — both halves are Ops changes.
   Update `ci-gate-coverage.md` and cut a new tag.
+- **Tune/relax dependency SCA (osv-scanner / trivy-fs):** policy is Ops-owned
+  (the gate ignores repo config). To accept a specific advisory or license, edit
+  the gate's config — the `--licenses` allowlist in
+  `config/util/osv-scanner/manifest.toml`, or severity/`ignore-unfixed` in
+  `config/util/trivy-fs/trivy.yaml` — then cut a new tag. SCA is max-denial by
+  default (all severities incl. unfixable, deny-unknown licenses); the license
+  allowlist is the noisiest knob (esp. npm). A sudden failure on a previously-green
+  build usually means a **newly-disclosed advisory** (data is fetched fresh) — by
+  design.
 - **Pin/roll back the gate:** apps set `gate_version:` on the reusable workflow
   `with:`. Roll back by pointing it at a previous tag — no rebuild needed. (Note:
   `gate-config.json` became mandatory in **v0.3.0**; repos pinned to ≤v0.2.0 don't

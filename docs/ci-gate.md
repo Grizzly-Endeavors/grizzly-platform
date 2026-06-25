@@ -60,7 +60,8 @@ everything by hand. Neither scales.
    binary) executes a declarative `config/` tree — one self-describing dir per
    tool under `languages/` (`Cargo.toml` → `cargo fmt`/`clippy -D warnings`/
    `deny`/`test`; `pyproject.toml` → `ruff`/`mypy`/`pytest`; …) and `util/`
-   (gitleaks, an offline-pinned Semgrep ruleset, Trivy for image SBOM/CVEs).
+   (gitleaks, a Semgrep ruleset, Trivy for image SBOM/CVEs, and cross-ecosystem
+   dependency SCA via osv-scanner + Trivy fs).
    Each dir carries a `manifest.toml` (what to run) next to the tool's own
    native config; the manifest forces that gate-owned config onto the tool (via
    `--config`/`--config-file`/`CLIPPY_CONF_DIR`/…), so a repo's own config

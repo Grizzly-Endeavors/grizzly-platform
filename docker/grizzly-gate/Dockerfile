@@ -25,6 +25,8 @@ ARG CARGO_DENY_VERSION=0.19.9
 ARG COSIGN_VERSION=2.4.1
 ARG TRIVY_VERSION=0.71.2
 ARG GITLEAKS_VERSION=8.21.2
+# OSV-Scanner: cross-ecosystem dependency SCA (vulns + license allowlist).
+ARG OSV_SCANNER_VERSION=2.4.0
 ARG NODE_VERSION=20.18.1
 ARG SEMGREP_VERSION=1.97.0
 ARG RUFF_VERSION=0.8.4
@@ -85,13 +87,15 @@ RUN pip install --no-cache-dir --break-system-packages pipx \
     && pipx inject --force ansible-lint "ansible-core<2.19" \
     && pipx install "yamllint==${YAMLLINT_VERSION}"
 
-# cosign, trivy, gitleaks (prebuilt binaries, pinned).
+# cosign, trivy, gitleaks, osv-scanner (prebuilt binaries, pinned).
 RUN curl -fsSL "https://github.com/sigstore/cosign/releases/download/v${COSIGN_VERSION}/cosign-linux-amd64" \
         -o /usr/local/bin/cosign && chmod +x /usr/local/bin/cosign \
     && curl -fsSL "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" \
         | tar -xz -C /usr/local/bin trivy \
     && curl -fsSL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
-        | tar -xz -C /usr/local/bin gitleaks
+        | tar -xz -C /usr/local/bin gitleaks \
+    && curl -fsSL "https://github.com/google/osv-scanner/releases/download/v${OSV_SCANNER_VERSION}/osv-scanner_linux_amd64" \
+        -o /usr/local/bin/osv-scanner && chmod +x /usr/local/bin/osv-scanner
 
 # Ship the gate's config tree (per-tool manifests + native configs), then vendor
 # a pinned Semgrep ruleset into the semgrep tool dir (offline, no registry fetch
