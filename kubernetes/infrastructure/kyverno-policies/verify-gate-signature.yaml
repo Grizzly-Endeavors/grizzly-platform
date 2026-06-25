@@ -33,9 +33,11 @@ spec:
             - "registry.registry.svc.cluster.local:5000/*"
           # Phase: start in Audit (report-only), flip to Enforce once all live
           # first-party images are signed. See kyverno-policies/README.md.
+          # NOTE: when flipping to Enforce, also set mutateDigest: true to pin
+          # tag→digest. Kyverno rejects mutateDigest:true under Audit (Audit is
+          # report-only and cannot mutate), so it stays false in this phase.
           failureAction: Audit
-          # Resolve tag→digest and verify the signature on the digest.
-          mutateDigest: true
+          mutateDigest: false
           verifyDigest: true
           required: true
           attestors:

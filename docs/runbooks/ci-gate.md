@@ -81,8 +81,10 @@ kubectl get clusterpolicyreport,policyreport -A          # see what would be blo
 ```
 
 Once every live first-party image in gated namespaces is signed and reports are
-clean, change `failureAction: Audit` → `Enforce` in the policy and commit.
-Unsigned images are then rejected at admission.
+clean, in `verify-gate-signature.yaml` change `failureAction: Audit` → `Enforce`
+**and** `mutateDigest: false` → `true` (digest pinning; Kyverno only permits
+mutation under Enforce), then commit. Unsigned images are then rejected at
+admission.
 
 ## Common tasks
 
