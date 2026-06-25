@@ -6,4 +6,5 @@ marker = ".yamllint"
 
 [[checks]]
 name = "yamllint"
-cmd = "yamllint -c {config}/yamllint.yml ."
+# --strict: warnings (not just errors) fail the gate — warnings are blockers.
+cmd = "yamllint --strict -c {config}/yamllint.yml ."

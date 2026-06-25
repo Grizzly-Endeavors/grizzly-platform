@@ -55,7 +55,6 @@ pub struct Scanner {
     pub scope: Scope,
     pub config_dir: PathBuf,
     pub cmd: String,
-    #[allow(dead_code)]
     pub env: BTreeMap<String, String>,
 }
 
@@ -187,11 +186,12 @@ mod tests {
 
         let tree = load_tree(&root).unwrap();
         assert_eq!(tree.adapters.len(), 1);
-        assert_eq!(tree.adapters[0].name, "rust");
-        assert_eq!(tree.adapters[0].checks.len(), 1);
-        assert!(tree.adapters[0].config_dir.ends_with("languages/rust"));
+        let adapter = tree.adapters.first().unwrap();
+        assert_eq!(adapter.name, "rust");
+        assert_eq!(adapter.checks.len(), 1);
+        assert!(adapter.config_dir.ends_with("languages/rust"));
         assert_eq!(tree.scanners.len(), 1);
-        assert_eq!(tree.scanners[0].scope, Scope::Source);
+        assert_eq!(tree.scanners.first().unwrap().scope, Scope::Source);
 
         std::fs::remove_dir_all(&root).ok();
     }

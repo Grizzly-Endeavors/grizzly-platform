@@ -82,73 +82,12 @@ fn main() -> Result<()> {
         println!("grizzly-gate :: image {image}");
     }
 
-    let mut results: Vec<StepResult> = Vec::new();
     let source_str = source.to_string_lossy().to_string();
-
-    // --- Language adapters -------------------------------------------------
-    let mut matched_any = false;
-    for adapter in &tree.adapters {
-        if !source.join(&adapter.marker).exists() {
-            continue;
-        }
-        matched_any = true;
-        let cfg = adapter.config_dir.to_string_lossy().to_string();
-        println!(
-            "\n=== stack: {} (marker: {}) ===",
-            adapter.name, adapter.marker
-        );
-        for check in &adapter.checks {
-            results.push(run(
-                &format!("{}:{}", adapter.name, check.name),
-                &check.cmd,
-                &source,
-                Some(&source_str),
-                None,
-                Some(&cfg),
-                &check.env,
-            ));
-        }
-    }
-    if !matched_any {
-        println!("grizzly-gate :: no language markers matched — running scanners only");
-    }
-
-    // --- Scanners ----------------------------------------------------------
-    for scanner in &tree.scanners {
-        let cfg = scanner.config_dir.to_string_lossy().to_string();
-        match scanner.scope {
-            Scope::Source => {
-                results.push(run(
-                    &format!("scan:{}", scanner.name),
-                    &scanner.cmd,
-                    &source,
-                    Some(&source_str),
-                    cli.image.as_deref(),
-                    Some(&cfg),
-                    &scanner.env,
-                ));
-            }
-            Scope::Image => match &cli.image {
-                Some(image) => results.push(run(
-                    &format!("scan:{}", scanner.name),
-                    &scanner.cmd,
-                    &source,
-                    Some(&source_str),
-                    Some(image),
-                    Some(&cfg),
-                    &scanner.env,
-                )),
-                None => println!(
-                    "grizzly-gate :: skipping image scanner '{}' (no --image given)",
-                    scanner.name
-                ),
-            },
-        }
-    }
+    let results = run_checks(&tree, &source, &source_str, cli.image.as_deref());
 
     // --- Verdict -----------------------------------------------------------
     println!("\n────────────────────────── gate summary ──────────────────────────");
-    let mut failed = 0usize;
+    let mut failed = 0_usize;
     for r in &results {
         let tag = if r.ok { "PASS" } else { "FAIL" };
         println!("  [{tag}] {:<40} {:>7.1}s", r.label, r.secs);
@@ -183,54 +122,123 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-/// Run one command line in `cwd`, substituting `{source}`/`{image}`/`{config}`
-/// placeholders in the command and in each env value. `config` is the gate's
-/// config dir for this tool — the mechanism by which gate-owned config is forced
-/// onto the tool (via flags in `cmdline` or vars in `env`).
-#[allow(clippy::too_many_arguments)]
+/// Placeholder substitutions for a command line and its env values: each
+/// `{source}`/`{image}`/`{config}` token is replaced with the corresponding
+/// value when present. `config` is the gate's config dir for the tool — the
+/// mechanism by which gate-owned config is forced onto it (via flags or env).
+#[derive(Clone, Copy)]
+struct Subst<'a> {
+    source: Option<&'a str>,
+    image: Option<&'a str>,
+    config: Option<&'a str>,
+}
+
+/// Run every applicable adapter check (marker present) and every scanner in
+/// scope, returning their results in execution order.
+fn run_checks(
+    tree: &config::Tree,
+    source: &Path,
+    source_str: &str,
+    image: Option<&str>,
+) -> Vec<StepResult> {
+    let mut results: Vec<StepResult> = Vec::new();
+
+    // --- Language adapters -------------------------------------------------
+    let mut matched_any = false;
+    for adapter in &tree.adapters {
+        if !source.join(&adapter.marker).exists() {
+            continue;
+        }
+        matched_any = true;
+        let cfg = adapter.config_dir.to_string_lossy().to_string();
+        println!(
+            "\n=== stack: {} (marker: {}) ===",
+            adapter.name, adapter.marker
+        );
+        let subst = Subst {
+            source: Some(source_str),
+            image: None,
+            config: Some(&cfg),
+        };
+        for check in &adapter.checks {
+            results.push(run(
+                &format!("{}:{}", adapter.name, check.name),
+                &check.cmd,
+                source,
+                subst,
+                &check.env,
+            ));
+        }
+    }
+    if !matched_any {
+        println!("grizzly-gate :: no language markers matched — running scanners only");
+    }
+
+    // --- Scanners ----------------------------------------------------------
+    for scanner in &tree.scanners {
+        let cfg = scanner.config_dir.to_string_lossy().to_string();
+        let subst = Subst {
+            source: Some(source_str),
+            image,
+            config: Some(&cfg),
+        };
+        let label = format!("scan:{}", scanner.name);
+        match scanner.scope {
+            Scope::Source => results.push(run(&label, &scanner.cmd, source, subst, &scanner.env)),
+            Scope::Image if image.is_some() => {
+                results.push(run(&label, &scanner.cmd, source, subst, &scanner.env));
+            }
+            Scope::Image => println!(
+                "grizzly-gate :: skipping image scanner '{}' (no --image given)",
+                scanner.name
+            ),
+        }
+    }
+
+    results
+}
+
+/// Run one command line in `cwd` after applying `subst` to the command and to
+/// each env value.
 fn run(
     label: &str,
     cmdline: &str,
     cwd: &Path,
-    source: Option<&str>,
-    image: Option<&str>,
-    config: Option<&str>,
+    subst: Subst,
     env: &BTreeMap<String, String>,
 ) -> StepResult {
-    let subst = |s: &str| -> String {
+    let apply = |s: &str| -> String {
         let mut r = s.to_string();
-        if let Some(v) = source {
+        if let Some(v) = subst.source {
             r = r.replace("{source}", v);
         }
-        if let Some(v) = image {
+        if let Some(v) = subst.image {
             r = r.replace("{image}", v);
         }
-        if let Some(v) = config {
+        if let Some(v) = subst.config {
             r = r.replace("{config}", v);
         }
         r
     };
 
-    let rendered = subst(cmdline);
+    let rendered = apply(cmdline);
     println!("\n── {label}\n   $ {rendered}");
 
-    let parts = match shlex::split(&rendered) {
-        Some(p) if !p.is_empty() => p,
-        _ => {
-            eprintln!("   ! could not parse command: {rendered}");
-            return StepResult {
-                label: label.into(),
-                ok: false,
-                secs: 0.0,
-            };
-        }
+    let parts = shlex::split(&rendered).unwrap_or_default();
+    let Some((program, args)) = parts.split_first() else {
+        eprintln!("   ! could not parse command: {rendered}");
+        return StepResult {
+            label: label.into(),
+            ok: false,
+            secs: 0.0,
+        };
     };
 
     let start = Instant::now();
-    let mut command = Command::new(&parts[0]);
-    command.args(&parts[1..]).current_dir(cwd);
+    let mut command = Command::new(program);
+    command.args(args).current_dir(cwd);
     for (k, v) in env {
-        command.env(k, subst(v));
+        command.env(k, apply(v));
     }
     let status = command.status();
     let secs = start.elapsed().as_secs_f64();
@@ -238,7 +246,7 @@ fn run(
     let ok = match status {
         Ok(s) => s.success(),
         Err(e) => {
-            eprintln!("   ! failed to spawn {}: {e}", parts[0]);
+            eprintln!("   ! failed to spawn {program}: {e}");
             false
         }
     };
@@ -249,8 +257,8 @@ fn run(
     }
 }
 
-/// cosign sign by digest. COSIGN_PASSWORD is inherited from the environment
-/// (delivered to the runner by ESO from OpenBao).
+/// cosign sign by digest. `COSIGN_PASSWORD` is inherited from the environment
+/// (delivered to the runner by ESO from `OpenBao`).
 fn sign_image(image: &str, key: &str, insecure: bool) -> Result<()> {
     // --tlog-upload=false keeps signing self-contained: no dependency on (and no
     // digest leakage to) the public Rekor transparency log. Verification is

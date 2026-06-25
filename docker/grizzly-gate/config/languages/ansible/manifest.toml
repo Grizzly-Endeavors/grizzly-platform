@@ -5,4 +5,5 @@ marker = "ansible"
 
 [[checks]]
 name = "ansible-lint"
-cmd = "ansible-lint -c {config}/ansible-lint.yml"
+# --strict: warnings are treated as failures — warnings are blockers.
+cmd = "ansible-lint --strict -c {config}/ansible-lint.yml"
