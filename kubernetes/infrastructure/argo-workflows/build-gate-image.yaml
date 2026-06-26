@@ -7,6 +7,8 @@ spec:
   # Builds the grizzly-gate CI gate image in-cluster via Kaniko and pushes it to
   # the in-cluster zot registry. Mirrors build-runner-image; the gate image is
   # the one artifact Ops owns and versions — every app's CI pulls it by tag.
+  # Source lives in its own repo (github.com/grizzly-endeavors/grizzly-gate),
+  # cloned below; that repo's CI submits this template on push.
   entrypoint: build
   arguments:
     parameters:
@@ -41,7 +43,7 @@ spec:
         command: [sh, -c]
         args:
           - |
-            git clone https://github.com/grizzly-endeavors/grizzly-platform.git /workspace/src
+            git clone https://github.com/grizzly-endeavors/grizzly-gate.git /workspace/src
             cd /workspace/src
             git checkout {{inputs.parameters.git-ref}}
         volumeMounts:
@@ -52,8 +54,8 @@ spec:
       container:
         image: gcr.io/kaniko-project/executor:latest
         args:
-          - --context=/workspace/src/docker/grizzly-gate
-          - --dockerfile=/workspace/src/docker/grizzly-gate/Dockerfile
+          - --context=/workspace/src
+          - --dockerfile=/workspace/src/Dockerfile
           - --destination=registry.registry.svc.cluster.local:5000/grizzly-gate:latest
           - --destination=registry.registry.svc.cluster.local:5000/grizzly-gate:{{workflow.parameters.version}}
           - --destination=registry.registry.svc.cluster.local:5000/grizzly-gate:{{workflow.uid}}

@@ -9,8 +9,8 @@ registry: [ADR-027](../decisions/027-registry-zot.md).
 
 | Piece | Where |
 |---|---|
-| Gate image + harness | `docker/grizzly-gate/` (Dockerfile, `config/` tree, `harness/`) |
-| Gate build | `kubernetes/infrastructure/argo-workflows/build-gate-image.yaml` + `.github/workflows/build-gate-image.yaml` |
+| Gate image + harness | external repo [grizzly-gate](https://github.com/Grizzly-Endeavors/grizzly-gate) (Dockerfile, `config/` tree, `harness/`) |
+| Gate build | `kubernetes/infrastructure/argo-workflows/build-gate-image.yaml` (clones grizzly-gate) + the gate repo's own `.github/workflows/build-gate-image.yaml` |
 | Reusable CI job | `.github/workflows/gate.yaml` (called by apps; see `.github/templates/ci/deploy-with-gate.yaml.example`) |
 | Signing key | OpenBao `secret/grizzly-platform/cicd/cosign`; ESO → `cosign-signing-key` in `arc-runners` |
 | Deploy boundary | `kubernetes/infrastructure/kyverno/` + `kubernetes/infrastructure/kyverno-policies/` |
@@ -64,7 +64,7 @@ registry: [ADR-027](../decisions/027-registry-zot.md).
    ```sh
    argo submit --from workflowtemplate/build-gate-image -n argo -p version=v0.2.0
    ```
-   Thereafter, pushes to `docker/grizzly-gate/**` trigger `build-gate-image.yaml`.
+   Thereafter, pushes to the [grizzly-gate](https://github.com/Grizzly-Endeavors/grizzly-gate) repo trigger its `build-gate-image.yaml`, which submits this same Argo build.
 5. **Onboard an app** by copying `deploy-with-gate.yaml.example` and pointing its
    `gate` job at the reusable workflow. Add a root **`gate-config.json`** to the
    app repo honestly mapping its projects (required — the gate fails closed
@@ -75,7 +75,7 @@ registry: [ADR-027](../decisions/027-registry-zot.md).
    Languages: `rust`/`python`/`node`/`ansible`/`yaml`; `path` must hold that
    adapter's marker; a node project **containing TypeScript must** add
    `"tsconfig": "tsconfig.json"` (drives project-aware typecheck + type-aware
-   eslint; the gate fails closed without it). Schema + rationale: [design doc](../ci-gate.md#declaring-the-repo-gate-configjson),
+   eslint; the gate fails closed without it). Schema + rationale: [design doc](https://github.com/Grizzly-Endeavors/grizzly-gate#declaring-the-repo-gate-configjson),
    [ADR-029](../decisions/029-gate-config-honest-map.md). Then label its
    namespace gated:
    ```sh
@@ -99,24 +99,26 @@ admission.
 
 ## Common tasks
 
-- **Change what the gate checks:** edit the relevant tool dir under
-  `docker/grizzly-gate/config/<languages|util>/<tool>/` — its `manifest.toml`
-  (what runs) and/or its native config file (e.g. `ruff.toml`, `clippy.toml`).
-  Bump tool pins in the Dockerfile if needed, cut a new gate tag, then bump
+  All gate config changes below happen in the [grizzly-gate](https://github.com/Grizzly-Endeavors/grizzly-gate) repo, then a new tag is cut and callers bump `gate_version`.
+
+- **Change what the gate checks:** in the gate repo, edit the relevant tool dir
+  under `config/<languages|util>/<tool>/` — its `manifest.toml` (what runs)
+  and/or its native config file (e.g. `ruff.toml`, `clippy.toml`). Bump tool
+  pins in the `Dockerfile` if needed, cut a new gate tag, then bump
   `gate_version` in callers. The gate's config is authoritative: it is forced
   onto each tool (via flags/env in the manifest) and ignores the repo's own
   config of the same kind.
-- **Add support for a new language:** add an adapter dir under
+- **Add support for a new language:** in the gate repo, add an adapter dir under
   `config/languages/<lang>/` (`manifest.toml` + native config), give it a
   `[detect]` block (the extensions/shebangs that are mandatory evidence), and
   remove that language from the `detect.toml` `unsupported` denylist if it was
   there. A repo cannot will a language into scope — both halves are Ops changes.
-  Update `ci-gate-coverage.md` and cut a new tag.
+  Update the gate repo's `docs/coverage.md` and cut a new tag.
 - **Tune/relax dependency SCA (osv-scanner / trivy-fs):** policy is Ops-owned
   (the gate ignores repo config). To accept a specific advisory or license, edit
   the gate's config — the `--licenses` allowlist in
   `config/util/osv-scanner/manifest.toml`, or severity/`ignore-unfixed` in
-  `config/util/trivy-fs/trivy.yaml` — then cut a new tag. SCA is max-denial by
+  `config/util/trivy-fs/trivy.yaml` (in the gate repo) — then cut a new tag. SCA is max-denial by
   default (all severities incl. unfixable, deny-unknown licenses); the license
   allowlist is the noisiest knob (esp. npm). A sudden failure on a previously-green
   build usually means a **newly-disclosed advisory** (data is fetched fresh) — by

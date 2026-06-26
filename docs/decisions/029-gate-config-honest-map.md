@@ -3,6 +3,7 @@
 **Date:** 2026-06-25
 **Status:** accepted
 **Amends:** [ADR-028](028-centralized-ci-gate.md)
+**Note (2026-06-26):** the gate's source was extracted to [Grizzly-Endeavors/grizzly-gate](https://github.com/Grizzly-Endeavors/grizzly-gate); ongoing gate-design docs live there. This record is unchanged.
 
 ## Context
 
