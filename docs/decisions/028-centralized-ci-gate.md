@@ -2,6 +2,7 @@
 
 **Date:** 2026-06-25
 **Status:** accepted
+**Note (2026-06-26):** the gate's source was extracted to its own repo — [Grizzly-Endeavors/grizzly-gate](https://github.com/Grizzly-Endeavors/grizzly-gate); ongoing gate-design docs live there. References to `docker/grizzly-gate/` below are historical (that path is now a pointer stub). This record is otherwise unchanged.
 
 ## Context
 
