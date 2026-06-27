@@ -17,5 +17,9 @@ spec:
     name: grizzly-gameservers
   path: ./games
   prune: true
-  wait: true
+  # wait: false — a GameServer's readiness is Agones' lifecycle (Scheduled ->
+  # Ready takes minutes and is driven by the in-pod SDK), and Flux's kstatus
+  # can't interpret GameServer.status.state, so wait: true blocks the
+  # Kustomization indefinitely. Apply the catalog; let Agones own server health.
+  wait: false
   timeout: 10m
