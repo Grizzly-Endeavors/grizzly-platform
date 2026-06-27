@@ -86,6 +86,20 @@ all:
       # setup-proxy-vps playbook's UFW reset still removes any lingering rule.)
       udp_forwarding_rules: []
 
+      # =======================================================================
+      # Game server ingress (grizzly-gameservers)
+      # =======================================================================
+      # Static UDP+TCP range DNAT'd 1:1 over wg0 to R730xd, which re-DNATs it
+      # to a K8s node where Agones hands out individual ports. Opened once;
+      # per-server allocation happens inside the cluster. Range is the single
+      # source of truth in network.yml (game_ingress_port_range). Apply scoped
+      # with: --tags game-ingress.
+      game_ingress:
+        enabled: true
+        port_range: "{{ game_ingress_port_range }}"
+        target_ip: "{{ wg_r730xd_ip }}"
+        protocols: [udp, tcp]
+
   vars:
     # Timezone
     timezone: "UTC"

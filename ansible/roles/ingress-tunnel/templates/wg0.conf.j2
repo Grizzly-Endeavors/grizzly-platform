@@ -27,13 +27,16 @@ PrivateKey = {{ vault_wg_r730xd_private_key }}
 MTU = {{ wg_mtu }}
 
 {% for r in ingress_dnat_rules %}
-# {{ r.proto }}/{{ r.port }} -> {{ r.target_ip }}:{{ r.target_port }}
-PostUp = iptables -t nat -A PREROUTING -i %i -p {{ r.proto }} --dport {{ r.port }} -j DNAT --to-destination {{ r.target_ip }}:{{ r.target_port }}
-PostUp = iptables -t nat -A POSTROUTING -d {{ r.target_ip }}/32 -p {{ r.proto }} --dport {{ r.target_port }} -j MASQUERADE
-PostUp = iptables -A FORWARD -i %i -o {{ lan_interface }} -d {{ r.target_ip }}/32 -p {{ r.proto }} --dport {{ r.target_port }} -j ACCEPT
-PostDown = iptables -t nat -D PREROUTING -i %i -p {{ r.proto }} --dport {{ r.port }} -j DNAT --to-destination {{ r.target_ip }}:{{ r.target_port }}
-PostDown = iptables -t nat -D POSTROUTING -d {{ r.target_ip }}/32 -p {{ r.proto }} --dport {{ r.target_port }} -j MASQUERADE
-PostDown = iptables -D FORWARD -i %i -o {{ lan_interface }} -d {{ r.target_ip }}/32 -p {{ r.proto }} --dport {{ r.target_port }} -j ACCEPT
+{# target_port optional: when omitted, forward the (possibly ranged) dport 1:1 with no remap (e.g. "7000:7010"). #}
+{% set dnat_dest = r.target_ip ~ (':' ~ r.target_port if r.target_port is defined else '') %}
+{% set fwd_dport = r.target_port if r.target_port is defined else r.port %}
+# {{ r.proto }}/{{ r.port }} -> {{ dnat_dest }}
+PostUp = iptables -t nat -A PREROUTING -i %i -p {{ r.proto }} --dport {{ r.port }} -j DNAT --to-destination {{ dnat_dest }}
+PostUp = iptables -t nat -A POSTROUTING -d {{ r.target_ip }}/32 -p {{ r.proto }} --dport {{ fwd_dport }} -j MASQUERADE
+PostUp = iptables -A FORWARD -i %i -o {{ lan_interface }} -d {{ r.target_ip }}/32 -p {{ r.proto }} --dport {{ fwd_dport }} -j ACCEPT
+PostDown = iptables -t nat -D PREROUTING -i %i -p {{ r.proto }} --dport {{ r.port }} -j DNAT --to-destination {{ dnat_dest }}
+PostDown = iptables -t nat -D POSTROUTING -d {{ r.target_ip }}/32 -p {{ r.proto }} --dport {{ fwd_dport }} -j MASQUERADE
+PostDown = iptables -D FORWARD -i %i -o {{ lan_interface }} -d {{ r.target_ip }}/32 -p {{ r.proto }} --dport {{ fwd_dport }} -j ACCEPT
 {% endfor %}
 # Return-path conntrack — must come after per-rule hooks so the reverse
 # iptables -D on PostDown runs in LIFO order.
