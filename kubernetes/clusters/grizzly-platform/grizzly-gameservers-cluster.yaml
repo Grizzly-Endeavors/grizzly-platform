@@ -1,0 +1,21 @@
+# Agones standup + the ops-agent guardrails (namespace, RBAC, NetworkPolicy)
+# live in the grizzly-gameservers repo under ./cluster so the gate vets them
+# before deploy. Rendered here from the same grizzly-gameservers GitRepository
+# the app workload uses. wait: true so Agones (HelmRelease + CRDs) is Ready
+# before the games Kustomization applies GameServer CRs against it.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: grizzly-gameservers-cluster
+  namespace: flux-system
+spec:
+  dependsOn:
+    - name: infrastructure
+  interval: 5m
+  sourceRef:
+    kind: GitRepository
+    name: grizzly-gameservers
+  path: ./cluster
+  prune: true
+  wait: true
+  timeout: 10m
