@@ -11,6 +11,12 @@ Address = {{ wg_vps_ip }}/30
 ListenPort = {{ wg_listen_port }}
 PrivateKey = {{ vault_wg_vps_private_key }}
 MTU = {{ wg_mtu }}
+# Clamp TCP MSS for forwarded sessions entering the tunnel so L3-forwarded game
+# traffic (player <-> game pod, pure DNAT) sizes segments to the wg0 MTU instead
+# of assuming 1500 and black-holing large packets here. The HTTP ingress path is
+# unaffected (Caddy proxies it, re-originating TCP at the tunnel MTU).
+PostUp = iptables -t mangle -A FORWARD -o %i -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu
+PostDown = iptables -t mangle -D FORWARD -o %i -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu
 
 [Peer]
 # R730xd — ingress bridge. May move to the off-the-shelf router (ADR-021) later; no contract depends on R730xd specifically.
@@ -25,6 +31,10 @@ AllowedIPs = {{ wg_r730xd_ip }}/32
 Address = {{ wg_r730xd_ip }}/30
 PrivateKey = {{ vault_wg_r730xd_private_key }}
 MTU = {{ wg_mtu }}
+# Clamp TCP MSS for forwarded sessions entering the tunnel (see VPS side) so the
+# game pod's return traffic to the player sizes to the wg0 MTU.
+PostUp = iptables -t mangle -A FORWARD -o %i -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu
+PostDown = iptables -t mangle -D FORWARD -o %i -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu
 
 {% for r in ingress_dnat_rules %}
 {# target_port optional: when omitted, forward the (possibly ranged) dport 1:1 with no remap (e.g. "7000:7010"). #}
