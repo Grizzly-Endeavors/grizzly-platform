@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: game-servers
+  labels:
+    app.kubernetes.io/name: grizzly-gameservers
+    app.kubernetes.io/managed-by: flux
+  # NOTE: grizzly.io/gated=true is intentionally NOT set yet. Agones injects an
+  # unsigned third-party SDK sidecar into every GameServer pod, so gating this
+  # namespace requires the Kyverno carve-out tracked in the app repo
+  # (cluster/kyverno/). Add the label once that exists. See the app repo's
+  # docs/design/00-overview.md → "Image admission carve-out".
