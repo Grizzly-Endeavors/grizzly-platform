@@ -20,6 +20,14 @@ controlPlaneEndpoint: "{{ k8s_control_plane_endpoint }}:6443"
 networking:
   podSubnet: "{{ k8s_pod_cidr_v4 }},{{ k8s_pod_cidr_v6 }}"
   serviceSubnet: "{{ k8s_service_cidr_v4 }},{{ k8s_service_cidr_v6 }}"
+apiServer:
+  extraArgs:
+    # Widen the NodePort range down to 7000 so grizzly-gameservers can bind
+    # game NodePort Services in 7000-7010 — the band the edge forwards 1:1 over
+    # wg0. Game-server reachability is NodePort-based (no node-pinning), so the
+    # external game port equals the NodePort end-to-end.
+    - name: "service-node-port-range"
+      value: "7000-32767"
 etcd:
   local:
     extraArgs:

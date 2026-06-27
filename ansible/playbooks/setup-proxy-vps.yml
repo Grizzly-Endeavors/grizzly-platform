@@ -106,8 +106,16 @@
           community.general.ufw:
             state: enabled
 
-    - name: Configure UDP port forwarding via NAT
-      when: udp_forwarding_rules is defined and udp_forwarding_rules | length > 0
+    # Ingress DNAT over the wg0 tunnel: legacy single-port UDP forwards
+    # (udp_forwarding_rules) plus the game-server port range (game_ingress).
+    # All NAT lives in one *nat block in before.rules — multiple *nat sections
+    # in one iptables-restore file would fail, so both sources render together.
+    # Tagged so the range can be (re)applied scoped: --tags game-ingress.
+    - name: Configure ingress port forwarding via NAT
+      when: >-
+        (udp_forwarding_rules | default([]) | length > 0)
+        or (game_ingress.enabled | default(false) | bool)
+      tags: [game-ingress, firewall]
       block:
         - name: Enable IP forwarding
           ansible.posix.sysctl:
@@ -124,7 +132,18 @@
             port: "{{ item.dest_port | string }}"
             to_ip: "{{ item.dest_ip }}"
             comment: "Forward: {{ item.comment | default(item.src_port ~ '/udp') }}"
-          loop: "{{ udp_forwarding_rules }}"
+          loop: "{{ udp_forwarding_rules | default([]) }}"
+
+        - name: Allow UFW routed traffic for the game server range
+          community.general.ufw:
+            rule: allow
+            route: yes
+            proto: "{{ item }}"
+            port: "{{ game_ingress.port_range }}"
+            to_ip: "{{ game_ingress.target_ip }}"
+            comment: "Game servers ({{ item }}) -> {{ game_ingress.target_ip }}"
+          loop: "{{ game_ingress.protocols | default(['udp', 'tcp']) }}"
+          when: game_ingress.enabled | default(false) | bool
 
         - name: Add NAT rules to UFW before.rules
           ansible.builtin.blockinfile:
@@ -135,11 +154,18 @@
               *nat
               :PREROUTING ACCEPT [0:0]
               :POSTROUTING ACCEPT [0:0]
-              {% for rule in udp_forwarding_rules %}
+              {% for rule in udp_forwarding_rules | default([]) %}
               # {{ rule.comment | default(rule.src_port ~ '/udp forward') }}
               -A PREROUTING -p udp --dport {{ rule.src_port }} -j DNAT --to-destination {{ rule.dest_ip }}:{{ rule.dest_port }}
               -A POSTROUTING -d {{ rule.dest_ip }}/32 -p udp --dport {{ rule.dest_port }} -j MASQUERADE
               {% endfor %}
+              {% if game_ingress.enabled | default(false) | bool %}
+              {% for proto in game_ingress.protocols | default(['udp', 'tcp']) %}
+              # game servers {{ proto }} {{ game_ingress.port_range }} -> {{ game_ingress.target_ip }} (1:1, over wg0)
+              -A PREROUTING -p {{ proto }} --dport {{ game_ingress.port_range }} -j DNAT --to-destination {{ game_ingress.target_ip }}
+              -A POSTROUTING -d {{ game_ingress.target_ip }}/32 -p {{ proto }} --dport {{ game_ingress.port_range }} -j MASQUERADE
+              {% endfor %}
+              {% endif %}
               COMMIT
           notify: Reload UFW
 

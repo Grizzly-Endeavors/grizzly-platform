@@ -215,6 +215,17 @@
             port: 30356
             target_ip: "{{ dell_inspiron_ip }}"
             target_port: 30356
+          # Game server ingress (grizzly-gameservers) — Agones dynamic port
+          # range, forwarded 1:1 (target_port omitted → port preserved
+          # end-to-end so an allocated port is consistent). Pods must be
+          # pinned to dell_inspiron (the forward target); node-pin decision
+          # pending — see grizzly-gameservers docs/design/00-overview.md.
+          - proto: udp
+            port: "{{ game_ingress_port_range }}"
+            target_ip: "{{ dell_inspiron_ip }}"
+          - proto: tcp
+            port: "{{ game_ingress_port_range }}"
+            target_ip: "{{ dell_inspiron_ip }}"
       tags: [wireguard, ingress-tunnel]
 
     - name: Display machine info

@@ -1,0 +1,23 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: grizzly-gameservers
+  namespace: flux-system
+spec:
+  interval: 5m
+  releaseName: grizzly-gameservers
+  targetNamespace: game-servers
+  chart:
+    spec:
+      chart: ./deploy
+      sourceRef:
+        kind: GitRepository
+        name: grizzly-gameservers
+        namespace: flux-system
+      reconcileStrategy: Revision
+  install:
+    remediation:
+      retries: 2
+  upgrade:
+    remediation:
+      retries: 2

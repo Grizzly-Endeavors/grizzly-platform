@@ -1,0 +1,13 @@
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: GitRepository
+metadata:
+  name: grizzly-gameservers
+  namespace: flux-system
+spec:
+  interval: 1m
+  url: https://github.com/Grizzly-Endeavors/grizzly-gameservers
+  ref:
+    branch: main
+  provider: github
+  secretRef:
+    name: github-app-credentials
