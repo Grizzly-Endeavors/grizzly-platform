@@ -78,4 +78,9 @@ spec:
           configMap:
             name: zot-config
         - name: cache
-          emptyDir: {}
+          # Persistent ZFS PVC, NOT emptyDir: zot's BoltDB index lives here
+          # (/var/lib/zot/cache.db) and must survive restarts, or every boot
+          # rescans the S3 store and re-runs restoreDedupedBlobs under a write
+          # lock. See docs/decisions/031-registry-cache-persistent-pvc.md.
+          persistentVolumeClaim:
+            claimName: registry-cache
