@@ -56,3 +56,12 @@ spec:
                       MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE4KBckBkLKLINu9WATY50fiJXw1G7
                       2BUAREgh9iwDwJYbvIVdFrUeaTSgJF/nt8Y8ga++d5SzXAxft1Jr1VnqlA==
                       -----END PUBLIC KEY-----
+                    # The gate signs with a private key and does NOT upload to a
+                    # Rekor transparency log (no Rekor is deployed). Cosign (and
+                    # thus Kyverno) defaults to requiring a tlog entry and fails
+                    # "signature not found in transparency log". Skip tlog: the
+                    # signature is still cryptographically verified against the
+                    # public key above; tlog would only add when-signed
+                    # auditability, which requires standing up Rekor (future).
+                    rekor:
+                      ignoreTlog: true
