@@ -15,3 +15,19 @@ k8s_registry_host: "registry.registry.svc.cluster.local:5000"
 
 # NodePort the registry Service exposes on every node.
 k8s_registry_nodeport: 30500
+
+# Upstream registries routed through the in-cluster zot pull-through cache.
+# zot's sync extension (onDemand) mirrors these — see
+# kubernetes/infrastructure/registry/configmap.yaml and
+# docs/decisions/032-registry-pullthrough-cache.md. For each entry we write a
+# containerd certs.d hosts.toml that tries the local NodePort mirror first and
+# falls back to `server` (the real upstream) if zot can't serve the image, so a
+# registry outage degrades to direct upstream pulls rather than a hard failure.
+# Blast radius note: this intercepts EVERY pull of these hosts cluster-wide
+# (including system images), not just CI builds — the `server` fallback is what
+# keeps that safe.
+k8s_registry_pullthrough_upstreams:
+  - host: docker.io
+    server: "https://registry-1.docker.io"
+  - host: gcr.io
+    server: "https://gcr.io"
