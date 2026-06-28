@@ -52,3 +52,11 @@ spec:
                       MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE4KBckBkLKLINu9WATY50fiJXw1G7
                       2BUAREgh9iwDwJYbvIVdFrUeaTSgJF/nt8Y8ga++d5SzXAxft1Jr1VnqlA==
                       -----END PUBLIC KEY-----
+                    # The gate signs with a private key and does NOT upload to a
+                    # Rekor transparency log (no Rekor is deployed). Without this,
+                    # cosign/Kyverno fails "signature not found in transparency
+                    # log" — so this Audit policy has been silently reporting
+                    # false failures. Skip tlog: the signature is still verified
+                    # against the public key; tlog auditability needs Rekor.
+                    rekor:
+                      ignoreTlog: true
