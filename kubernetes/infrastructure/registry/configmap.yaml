@@ -24,6 +24,16 @@ data:
   # for dedupe, which we don't run. fastRestart skips the startup storage->metaDB
   # walk on a clean restart (metaDB persists on the cache PVC); combined with
   # v2.1.18's dedupe-restore-complete marker, restarts no longer storm.
+  #
+  # extensions.sync (onDemand): transparent pull-through cache for docker.io +
+  # gcr.io. On a cache miss zot fetches from upstream and stores it here, then
+  # serves it LAN-local. content.prefix "**" maps the request path 1:1 onto the
+  # upstream repo. sync+S3 requires downloadDir (zot stages synced images on a
+  # local dir before the S3 push) — pointed at the cache PVC. Nodes route
+  # docker.io/gcr.io pulls here via containerd certs.d (k8s-registry-trust) and
+  # CI DinD via --registry-mirror. See docs/decisions/032-registry-pullthrough-cache.md.
+  # (The v2.1.2 attempt stalled on the S3 sync push under the dedupe-restore
+  # write lock; that lock is gone on v2.1.18 — see ADR-031.)
   config.json: |
     {
       "distSpecVersion": "1.1.0",
@@ -57,6 +67,32 @@ data:
           "prometheus": {
             "path": "/metrics"
           }
+        },
+        "sync": {
+          "enable": true,
+          "downloadDir": "/var/lib/zot/.sync",
+          "registries": [
+            {
+              "urls": ["https://registry-1.docker.io"],
+              "onDemand": true,
+              "tlsVerify": true,
+              "maxRetries": 3,
+              "retryDelay": "5m",
+              "content": [
+                { "prefix": "**" }
+              ]
+            },
+            {
+              "urls": ["https://gcr.io"],
+              "onDemand": true,
+              "tlsVerify": true,
+              "maxRetries": 3,
+              "retryDelay": "5m",
+              "content": [
+                { "prefix": "**" }
+              ]
+            }
+          ]
         }
       }
     }
