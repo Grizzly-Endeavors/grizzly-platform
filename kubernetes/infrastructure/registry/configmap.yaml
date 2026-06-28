@@ -14,16 +14,23 @@ data:
   # CI gate needs to attach cosign signatures to image digests. Adding auth is
   # a separate, later change (it ripples into containerd/DinD/kaniko creds).
   #
-  # rootdirectory /lab-registry: existing images were mirrored here during the
-  # cutover (the registry:2.8.3 data stays at the bucket root as a rollback net).
+  # rootdirectory /lab-registry-v2: fresh prefix created during the zot v2.1.18
+  # migration. We exported the in-use images (latest per repo) to OCI archives,
+  # pointed zot at this empty prefix so it boots with nothing to reconcile (no
+  # dedupe-restore storm), then re-pushed the keepers. The old /lab-registry
+  # prefix (full 34 GiB store) and the registry:2.8.3 data at the bucket root are
+  # retained as a rollback net until the migration is verified, then pruned.
   # dedupe MUST be false: with S3 remote storage zot requires a remote cache DB
-  # for dedupe, which we don't run.
+  # for dedupe, which we don't run. fastRestart skips the startup storage->metaDB
+  # walk on a clean restart (metaDB persists on the cache PVC); combined with
+  # v2.1.18's dedupe-restore-complete marker, restarts no longer storm.
   config.json: |
     {
       "distSpecVersion": "1.1.0",
       "storage": {
         "rootDirectory": "/var/lib/zot",
         "dedupe": false,
+        "fastRestart": true,
         "storageDriver": {
           "name": "s3",
           "region": "us-east-1",
@@ -31,7 +38,7 @@ data:
           "bucket": "lab-registry",
           "forcepathstyle": true,
           "secure": false,
-          "rootdirectory": "/lab-registry"
+          "rootdirectory": "/lab-registry-v2"
         }
       },
       "http": {

@@ -1,26 +1,40 @@
-# 031: Persist the zot cache DB on a ZFS PVC
+# 031: Fix the zot dedupe-restore storm — upgrade to v2.1.18 + persistent metaDB + fresh-prefix migration
 
 **Date:** 2026-06-28
 **Status:** accepted
 
 ## Context
 
-The in-cluster zot registry (ADR-027) stores blobs on MinIO/S3 but keeps its BoltDB index (`/var/lib/zot/cache.db`) on local filesystem. That path was an `emptyDir`, so the index was wiped on every pod restart. The registry once ran `dedupe: true` (leaving deduped blobs in S3) before being set to `dedupe: false`; with an empty cache on each boot, zot rescans the S3 store, finds the dedupe stubs, and runs `restoreDedupedBlobs` to un-dedupe them — serial, throttled to ~9 blobs/min by the task scheduler, holding a per-digest write lock. For this store (775 stubs) that locked writes for ~87 minutes per restart, and every prior restart interrupted it before completion, so it never converged. Pushes hung at `Waiting` the whole time. Diagnosed in issue #31's follow-up.
+The in-cluster zot registry (ADR-027, then pinned at v2.1.2) intermittently locked all writes — pushes hung at `Waiting` for ~90 minutes after any restart, while reads stayed fine. Root cause, traced through the v2.1.2 source:
+
+- The registry once ran `dedupe: true`, leaving deduped blobs in the S3 store; it was later set to `dedupe: false`.
+- At startup the controller unconditionally calls `RunDedupeBlobs`, whose `DedupeTaskGenerator` "restores" every deduped digest back to independent copies. In v2.1.2 the generator's `Next()` calls `GetNextDigestWithBlobPaths` **once per digest**, and each call does a **full `storeDriver.Walk` of the entire store** — an **O(N²) scan**. Over S3 (slow `LIST`) that is ~90 min for this store (~780 blobs), each per-digest task taking the global write lock.
+- It runs **once per boot** (interval `time.Duration(0)`), so it was invisible for 79 days of uptime and only resurfaced when a restart re-triggered it. The cache/index is never consulted on this path, so persisting it does **not** fix the storm.
+
+A first attempt (persist the BoltDB index on a PVC) was necessary but **not sufficient** — it doesn't touch the O(N²) storage walk. The real fix needed a newer zot.
 
 ## Decision
 
-Back `/var/lib/zot` with a small `iscsi-zfs-retain` RWO PVC instead of `emptyDir`, so the BoltDB index survives restarts. Bulk blobs stay on MinIO/S3 unchanged; only the small index moves to the fast ZFS tier. `dedupe` stays `false` (S3 without a remote cache DB cannot dedupe safely — that mismatch is what triggered the storm). The one-time restore was allowed to complete before cutover, so the S3 store is now fully materialized (no stubs remain).
+**Upgrade zot v2.1.2 → v2.1.18 and re-create the store on a fresh, pruned prefix.**
+
+1. **v2.1.18** adds a `DedupeRestoreCompleteMarker`: after one restore pass it writes a marker and all later restarts skip the restore scan entirely, plus a `fastRestart: true` storage flag that skips the startup storage→metaDB walk on a clean restart. Both require a persistent rootDir/metaDB.
+2. **Persistent rootDir** — `/var/lib/zot` (BoltDB metaDB + cache) is backed by an `iscsi-zfs-retain` RWO PVC instead of `emptyDir`, so the marker/metaDB/`fastRestart` stamp survive restarts. Bulk blobs stay on MinIO/S3; only the small index is on the ZFS tier.
+3. **Fresh prefix** — rather than wait out one last storm on the accumulated 34 GiB store, the in-use images (latest per repo) were exported to OCI archives with `skopeo`, zot was pointed at a new empty S3 prefix (`/lab-registry-v2`), and the keepers re-pushed. An empty store has nothing to reconcile, so the migration boots with **no storm at all**, and accumulated cruft (hundreds of UUID build tags on `grizzly-gate`, dead `grizzly-gameservers`, upstream mirror copies) is dropped. `dedupe` stays `false`.
+
+The old `/lab-registry` prefix and the registry:2.8.3 data at the bucket root are retained as a rollback net until the migration is verified, then pruned.
 
 ## Alternatives Considered
 
-- **DynamoDB as zot's remote `cacheDriver`** — zot's documented remote cache for S3, but it adds another stateful service to run for an index that fits in a single small BoltDB file on a single-replica registry.
-- **Move all registry blobs to a ZFS PVC** — rejected: bulk write-few/read-heavy container layers belong on MinIO object storage, not the fast live tier. Only the latency-sensitive index needs fast disk.
-- **Keep `emptyDir`, rely on the restore completing once** — the materialized store means restore no longer recurs, but every boot still does a full-store rescan + GC storm and rebuilds the index from scratch. A persistent index removes that entirely.
+- **Persistent PVC alone (the first attempt)** — necessary for the v2.1.18 marker/`fastRestart` to persist, but on v2.1.2 it does nothing for the O(N²) storage walk. Insufficient on its own.
+- **Eat one final v2.1.2 (or v2.1.18 first-boot) storm in place** — ~90 min of degraded writes and keeps all the accumulated cruft. The fresh-prefix export/import avoids the storm and prunes in one move.
+- **Nuke and rebuild every image via CI** — more wall-clock and coordination (re-push + re-run pipelines, ImagePull risk) than exporting the handful of in-use images directly.
+- **DynamoDB remote `cacheDriver` / move blobs to filesystem** — would enable dedupe but adds infra or violates the storage split (bulk blobs belong on MinIO, not the fast tier). Out of scope.
 
 ## Consequences
 
-- Restarts are fast and writes stay available — no rescan, restore, or GC storm on boot; the storm/lock recurrence is eliminated.
-- The index lives on the ZFS tier (tiny: tens of MB), keeping bulk blobs on MinIO per the registry's storage split.
-- `iscsi-zfs-retain` means an accidental PVC delete doesn't silently force a full index rebuild from the 34 GiB store. The index remains reconstructible from S3 if ever lost (one rescan).
-- `dedupe` must remain `false` while on the S3 backend without a remote cache DB; re-enabling it requires DynamoDB (or moving blobs to filesystem storage) first.
-- Unblocks revisiting the pull-through cache (#31): the sync push that "stalled indefinitely" was almost certainly queued behind this same write lock, not an inherent S3/sync limitation.
+- Restarts no longer storm: the marker skips dedupe-restore and `fastRestart` skips the metaDB walk; the registry comes back in seconds.
+- The store is small and current (latest-only); future GC/any-walk cost is proportionally lower.
+- `dedupe` must remain `false` on the S3 backend without a remote cache DB; re-enabling it requires DynamoDB first.
+- Signatures: nothing was signed yet (Kyverno is in Audit), so no cosign artifacts needed migrating; first-party images sign on their next gate build.
+- Cleanup debt: the old `/lab-registry` prefix (~34 GiB) and the `docker/` registry:2.8.3 rollback data remain in the bucket until the migration is confirmed good, then deleted.
+- Unblocks revisiting the pull-through cache (#31): the sync push that "stalled indefinitely" was queued behind this same write lock, not an inherent S3/sync limitation.
