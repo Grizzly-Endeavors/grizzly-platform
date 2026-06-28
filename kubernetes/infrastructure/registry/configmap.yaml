@@ -18,6 +18,15 @@ data:
   # cutover (the registry:2.8.3 data stays at the bucket root as a rollback net).
   # dedupe MUST be false: with S3 remote storage zot requires a remote cache DB
   # for dedupe, which we don't run.
+  #
+  # Pull-through cache (extensions.sync, onDemand): zot transparently mirrors
+  # Docker Hub + GCR. Containerd on every node redirects docker.io/gcr.io pulls
+  # here (ansible/roles/k8s-registry-trust certs.d entries) and the DinD daemon
+  # in CI runners sets --registry-mirror to this registry, so external base
+  # images are fetched once and served LAN-local thereafter — no manifest
+  # rewrites needed. content.prefix "**" maps the request path 1:1 onto the
+  # upstream repo (e.g. library/alpine → registry-1.docker.io/library/alpine).
+  # See docs/decisions/031-registry-pullthrough-cache.md.
   config.json: |
     {
       "distSpecVersion": "1.1.0",
@@ -50,6 +59,31 @@ data:
           "prometheus": {
             "path": "/metrics"
           }
+        },
+        "sync": {
+          "enable": true,
+          "registries": [
+            {
+              "urls": ["https://registry-1.docker.io"],
+              "onDemand": true,
+              "tlsVerify": true,
+              "maxRetries": 3,
+              "retryDelay": "5m",
+              "content": [
+                { "prefix": "**" }
+              ]
+            },
+            {
+              "urls": ["https://gcr.io"],
+              "onDemand": true,
+              "tlsVerify": true,
+              "maxRetries": 3,
+              "retryDelay": "5m",
+              "content": [
+                { "prefix": "**" }
+              ]
+            }
+          ]
         }
       }
     }
