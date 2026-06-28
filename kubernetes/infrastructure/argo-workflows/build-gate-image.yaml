@@ -43,13 +43,9 @@ spec:
         command: [sh, -c]
         args:
           - |
-            # Shallow fetch of just the requested ref (branch, tag, or SHA) so
-            # we don't pull the whole history into the build context.
-            git init /workspace/src
+            git clone https://github.com/grizzly-endeavors/grizzly-gate.git /workspace/src
             cd /workspace/src
-            git remote add origin https://github.com/grizzly-endeavors/grizzly-gate.git
-            git fetch --depth=1 origin {{inputs.parameters.git-ref}}
-            git checkout FETCH_HEAD
+            git checkout {{inputs.parameters.git-ref}}
         volumeMounts:
           - name: workspace
             mountPath: /workspace

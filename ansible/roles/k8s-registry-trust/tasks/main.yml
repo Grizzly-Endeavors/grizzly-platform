@@ -65,46 +65,6 @@
   become: yes
 
 # ==========================================================================
-# Write pull-through mirror hosts.toml for upstream registries
-# ==========================================================================
-
-- name: Ensure certs.d directories exist for pull-through upstreams
-  ansible.builtin.file:
-    path: "/etc/containerd/certs.d/{{ item.host }}"
-    state: directory
-    mode: "0755"
-  loop: "{{ k8s_registry_pullthrough_upstreams }}"
-  loop_control:
-    label: "{{ item.host }}"
-  become: yes
-
-- name: Route upstream pulls through the in-cluster zot pull-through cache
-  ansible.builtin.copy:
-    dest: "/etc/containerd/certs.d/{{ item.host }}/hosts.toml"
-    mode: "0644"
-    content: |
-      # Managed by ansible/roles/k8s-registry-trust.
-      #
-      # Transparent pull-through cache: route {{ item.host }} pulls through the
-      # in-cluster zot registry (NodePort on localhost), which mirrors the
-      # upstream on demand (extensions.sync). Unlike the in-cluster registry
-      # entry above, we DO set `server` here — these hosts are publicly
-      # resolvable, so containerd can fall back to a direct upstream pull if zot
-      # can't serve the image. A registry outage degrades to upstream rather
-      # than a hard failure.
-      #
-      # This intercepts every {{ item.host }} pull on this node — see the blast
-      # radius note in defaults/main.yml and ADR 031.
-      server = "{{ item.server }}"
-
-      [host."http://localhost:{{ k8s_registry_nodeport }}"]
-        capabilities = ["pull", "resolve"]
-  loop: "{{ k8s_registry_pullthrough_upstreams }}"
-  loop_control:
-    label: "{{ item.host }}"
-  become: yes
-
-# ==========================================================================
 # Verify
 # ==========================================================================
 

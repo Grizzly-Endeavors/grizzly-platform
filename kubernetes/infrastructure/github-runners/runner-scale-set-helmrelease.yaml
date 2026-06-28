@@ -150,13 +150,6 @@ spec:
               # Allow pushing to the in-cluster OCI registry over plain HTTP.
               # Matches kubernetes/infrastructure/registry/service.yaml.
               - --insecure-registry=registry.registry.svc.cluster.local:5000
-              # Route Docker Hub pulls (docker build FROM, docker pull) through
-              # the in-cluster zot pull-through cache so base images are fetched
-              # once and served LAN-local. dockerd --registry-mirror only
-              # mirrors Docker Hub; that's fine — the only non-Docker-Hub image
-              # in CI builds is the gcr.io kaniko executor, which runs as an
-              # Argo pod (cached at the containerd layer instead). See ADR 031.
-              - --registry-mirror=http://registry.registry.svc.cluster.local:5000
             env:
               - name: DOCKER_GROUP_GID
                 value: "123"
