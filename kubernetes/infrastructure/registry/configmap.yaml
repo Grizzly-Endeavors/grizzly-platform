@@ -26,6 +26,10 @@ data:
   # images are fetched once and served LAN-local thereafter — no manifest
   # rewrites needed. content.prefix "**" maps the request path 1:1 onto the
   # upstream repo (e.g. library/alpine → registry-1.docker.io/library/alpine).
+  # sync.downloadDir is REQUIRED here because storage is remote (S3): zot stages
+  # synced images on a local dir before pushing to the backend, and refuses to
+  # start (sync + remote storage) without it. We point it at a subdir of the
+  # /var/lib/zot cache emptyDir so staging and rootDirectory share a filesystem.
   # See docs/decisions/031-registry-pullthrough-cache.md.
   config.json: |
     {
@@ -62,6 +66,7 @@ data:
         },
         "sync": {
           "enable": true,
+          "downloadDir": "/var/lib/zot/.sync",
           "registries": [
             {
               "urls": ["https://registry-1.docker.io"],
