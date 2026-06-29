@@ -4,6 +4,13 @@
 # Called by cron with tier argument: run-checks.sh [tier1|tier2|all]
 set -euo pipefail
 
+# cron's default PATH is /usr/bin:/bin, which excludes /usr/sbin and /sbin —
+# where smartctl, zpool, ipmitool, snapraid, etc. live. Without this, those
+# tools are silently "command not found" under cron and checks report false
+# failures (e.g. every drive read as SMART-unhealthy). Exported so the child
+# check scripts inherit it.
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/sbin:/usr/bin:/bin"
+
 CHECKS_DIR="{{ monitoring_lib_dir }}/checks"
 TIER="${1:-all}"
 
