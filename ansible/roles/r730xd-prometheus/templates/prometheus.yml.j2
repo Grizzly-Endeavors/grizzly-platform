@@ -137,7 +137,7 @@ scrape_configs:
       - source_labels: [__meta_kubernetes_pod_node_name]
         target_label: instance
       - target_label: env
-        replacement: "homelab"
+        replacement: "grizzly-platform"
       - target_label: component
         replacement: "cilium-operator"
 
@@ -215,6 +215,8 @@ scrape_configs:
         target_label: __param_target
       - source_labels: [__param_target]
         target_label: instance
+      - target_label: env
+        replacement: "grizzly-platform"
       - target_label: __address__
         replacement: "{{ prometheus_blackbox_exporter }}"
 {% endif %}
