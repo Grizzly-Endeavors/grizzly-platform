@@ -110,11 +110,36 @@ scrape_configs:
           - "/etc/prometheus/targets.d/k8s-cilium-agent.yml"
         refresh_interval: 30s
 
+  # Cilium operator is a single-replica, hostNetwork Deployment that floats
+  # across nodes, so a static file_sd target can't track it. Discover the pod
+  # via the kube API and scrape it on its node IP:9963. Uses the
+  # prometheus-metrics SA token (needs pods list/watch — granted in
+  # setup-k8s-cluster-metrics.yml).
   - job_name: "cilium-operator"
-    file_sd_configs:
-      - files:
-          - "/etc/prometheus/targets.d/k8s-cilium-operator.yml"
-        refresh_interval: 30s
+    kubernetes_sd_configs:
+      - role: pod
+        api_server: "https://{{ hostvars[groups['k8s_control_plane'][0]]['ansible_host'] }}:6443"
+        tls_config:
+          ca_file: /etc/prometheus/k8s-auth/ca.crt
+        authorization:
+          credentials_file: /etc/prometheus/k8s-auth/token
+        namespaces:
+          names:
+            - kube-system
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_label_io_cilium_app]
+        regex: operator
+        action: keep
+      - source_labels: [__meta_kubernetes_pod_ip]
+        regex: (.+)
+        target_label: __address__
+        replacement: "${1}:9963"
+      - source_labels: [__meta_kubernetes_pod_node_name]
+        target_label: instance
+      - target_label: env
+        replacement: "homelab"
+      - target_label: component
+        replacement: "cilium-operator"
 
   - job_name: "hubble"
     file_sd_configs:

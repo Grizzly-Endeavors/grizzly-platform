@@ -100,30 +100,36 @@ all:
         target_ip: "{{ wg_r730xd_ip }}"
         protocols: [udp, tcp]
 
-  vars:
-    # Timezone
-    timezone: "UTC"
+      # =======================================================================
+      # Host-scoped settings (VPS only)
+      # =======================================================================
+      # These MUST stay under the proxy-vps-1 host, not under `all: vars:`.
+      # `all` is the magic group spanning every inventory file, so anything
+      # here under `all` leaks to r730xd and the lab nodes — e.g. it previously
+      # forced caddy into monitoring_required_services on every host (false
+      # ServiceDown alerts) and disabled smartd/IPMI monitoring on the r730xd.
+      timezone: "UTC"
 
-    # Monitoring — VPS has no IPMI/BMC or SMART-capable disks
-    ipmi_exporter_enabled: false
-    smartd_enabled: false
-    monitoring_required_services:
-      - "prometheus-node-exporter"
-      - "caddy"
-    monitoring_optional_services: []
+      # Monitoring — VPS has no IPMI/BMC or SMART-capable disks
+      ipmi_exporter_enabled: false
+      smartd_enabled: false
+      monitoring_required_services:
+        - "prometheus-node-exporter"
+        - "caddy"
+      monitoring_optional_services: []
 
-    # Home network public IP for monitoring firewall rules.
-    # R730xd Prometheus scrapes VPS over the internet from this address.
-    # R730xd is enrolled in the NetBird admin group for operator access only
-    # (never used for VPS→home ingress — that goes through the dedicated WG
-    # tunnel per ADR-019). Update this if the ISP assigns a new IP.
-    monitoring_home_ip: "{{ home_public_ip }}"
+      # Home network public IP for monitoring firewall rules.
+      # R730xd Prometheus scrapes VPS over the internet from this address.
+      # R730xd is enrolled in the NetBird admin group for operator access only
+      # (never used for VPS→home ingress — that goes through the dedicated WG
+      # tunnel per ADR-019). Update this if the ISP assigns a new IP.
+      monitoring_home_ip: "{{ home_public_ip }}"
 
-    # Firewall configuration
-    enable_firewall: true
+      # Firewall configuration
+      enable_firewall: true
 
-    # UFW rules
-    ufw_web_rules:
-      - { port: '80', proto: 'tcp', comment: 'HTTP' }
-      - { port: '443', proto: 'tcp', comment: 'HTTPS' }
-      - { port: '51822', proto: 'udp', comment: 'WireGuard (ingress tunnel to R730xd)' }
+      # UFW rules
+      ufw_web_rules:
+        - { port: '80', proto: 'tcp', comment: 'HTTP' }
+        - { port: '443', proto: 'tcp', comment: 'HTTPS' }
+        - { port: '51822', proto: 'udp', comment: 'WireGuard (ingress tunnel to R730xd)' }

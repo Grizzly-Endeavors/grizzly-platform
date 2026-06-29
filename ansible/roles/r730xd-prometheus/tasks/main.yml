@@ -24,14 +24,18 @@
     - "{{ prometheus_compose_dir }}/rules"
     - "{{ prometheus_compose_dir }}/targets.d"
 
-- name: Seed file_sd targets from defaults
+- name: Render static file_sd targets
+  # force: true so these stay in sync with prometheus_node_targets /
+  # prometheus_ipmi_targets. Per-worker targets live in separate
+  # node-*.yml / ipmi-*.yml files (written by setup-k8s-worker.yml), so there
+  # is nothing dynamic in these two files to clobber. The old force: false
+  # "seed" left decommissioned hosts (e.g. staging-vm) here forever.
   ansible.builtin.template:
     src: "{{ item.src }}"
     dest: "{{ prometheus_compose_dir }}/targets.d/{{ item.dest }}"
     owner: root
     group: root
     mode: "0644"
-    force: false
   loop:
     - { src: "targets.d/nodes.yml.j2", dest: "nodes.yml" }
     - { src: "targets.d/ipmi.yml.j2", dest: "ipmi.yml" }
