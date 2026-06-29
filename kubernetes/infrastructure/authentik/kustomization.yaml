@@ -7,3 +7,15 @@ resources:
   - externalsecret.yaml
   - ingress.yaml
   - metrics-service.yaml
+# File-based blueprints, mounted by the chart's blueprints.configMaps into
+# server + worker at /blueprints/custom/ (only .yaml keys are discovered). The
+# worker auto-applies them. Fixed name (no hash suffix) so the HelmRelease can
+# reference it; content changes sync into the mount and re-discover in place.
+configMapGenerator:
+  - name: authentik-blueprints
+    namespace: authentik
+    files:
+      - blueprints/brand.yaml
+      - blueprints/groups.yaml
+generatorOptions:
+  disableNameSuffixHash: true

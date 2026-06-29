@@ -1,0 +1,16 @@
+version: 1
+metadata:
+  name: grizzly-baseline-groups
+# Baseline RBAC groups. akadmin is folded into grizzly-admins via !Find so the
+# superuser group has a member without hardcoding a primary key.
+entries:
+  - model: authentik_core.group
+    identifiers:
+      name: grizzly-admins
+    attrs:
+      is_superuser: true
+      users:
+        - !Find [authentik_core.user, [username, akadmin]]
+  - model: authentik_core.group
+    identifiers:
+      name: grizzly-users
