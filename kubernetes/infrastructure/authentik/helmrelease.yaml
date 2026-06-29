@@ -91,6 +91,20 @@ spec:
             secretKeyRef:
               name: authentik-secrets
               key: bootstrap_token
+        # OIDC client creds for the Nextcloud provider, consumed by
+        # blueprints/nextcloud.yaml via !Env. The worker (which applies
+        # blueprints) reads these; injecting on every authentik Deployment via
+        # global.env is harmless for the server.
+        - name: AUTHENTIK_NEXTCLOUD_CLIENT_ID
+          valueFrom:
+            secretKeyRef:
+              name: authentik-secrets
+              key: oidc_nextcloud_client_id
+        - name: AUTHENTIK_NEXTCLOUD_CLIENT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: authentik-secrets
+              key: oidc_nextcloud_client_secret
 
     # --- Server (web/API) ---------------------------------------------------
     # Ingress handled by ingress.yaml (kept separate, repo convention), so the

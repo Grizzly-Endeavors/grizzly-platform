@@ -17,5 +17,6 @@ configMapGenerator:
     files:
       - blueprints/brand.yaml
       - blueprints/groups.yaml
+      - blueprints/nextcloud.yaml
 generatorOptions:
   disableNameSuffixHash: true
