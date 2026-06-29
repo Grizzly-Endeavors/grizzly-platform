@@ -1,0 +1,12 @@
+version: 1
+metadata:
+  name: grizzly-baseline-brand
+# Customize the chart's default fallback brand in place (matched by domain).
+# Idempotent: re-applied every reconcile, so UI edits to these fields revert.
+entries:
+  - model: authentik_brands.brand
+    identifiers:
+      domain: authentik-default
+    attrs:
+      branding_title: "Grizzly Endeavors"
+      # branding_logo / branding_favicon: add once assets are hosted.
