@@ -47,8 +47,9 @@ entries:
   - model: authentik_stages_prompt.prompt
     id: invitation-token-field
     identifiers:
-      field_key: token
+      name: grizzly-invitation-token
     attrs:
+      field_key: token
       label: Invitation code
       type: text
       required: true
