@@ -202,6 +202,15 @@ scrape_configs:
           - "/etc/prometheus/targets.d/k8s-cert-manager.yml"
         refresh_interval: 30s
 
+  # authentik — central identity provider. SSO/OIDC for every app wired to it,
+  # so an outage cascades to those logins; this scrape feeds the AuthentikDown
+  # alert. Metrics on the server :9300 port, published via NodePort 30891.
+  - job_name: "authentik"
+    file_sd_configs:
+      - files:
+          - "/etc/prometheus/targets.d/k8s-authentik.yml"
+        refresh_interval: 30s
+
 {% if prometheus_blackbox_targets is defined and prometheus_blackbox_targets | length > 0 %}
   - job_name: "blackbox"
     metrics_path: /probe

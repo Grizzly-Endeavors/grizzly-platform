@@ -1,0 +1,144 @@
+---
+# setup-authentik.yml — R730xd-side wiring for the Authentik identity provider.
+#
+# Authentik itself is deployed to Kubernetes via Flux
+# (kubernetes/infrastructure/authentik). This playbook handles the two pieces
+# that live on the R730xd foundation host:
+#
+#   Play 1  Provision the `authentik` database + login role on the foundation
+#           PostgreSQL (the K8s ExternalSecret and this role share one password,
+#           sourced from OpenBao secret/grizzly-platform/platform/authentik).
+#   Play 2  Register the authentik server metrics NodePort (30891) as a
+#           Prometheus scrape target and load the AuthentikDown alert.
+#
+# Prerequisites:
+#   - Foundation Postgres running (deploy-foundation-stores.yml).
+#   - OpenBao seeded: secret/grizzly-platform/platform/authentik with keys
+#     secret_key, db_password, bootstrap_password, bootstrap_token. The
+#     db_password value becomes the authentik role password below — generate it
+#     WITHOUT single quotes (e.g. `openssl rand -base64 36`).
+#
+# Usage (use the DEFAULT inventory — play 2 templates the control-plane IP from
+# the k8s_control_plane group in inventory/lab-nodes.yml, so do NOT scope this
+# to -i inventory/r730xd.yml):
+#   ansible-playbook ansible/playbooks/setup-authentik.yml \
+#     --vault-password-file .vault_pass -v
+#
+# Run just the DB or just the metrics half:
+#   ... --tags db
+#   ... --tags metrics
+
+- name: Provision Authentik database on foundation Postgres
+  hosts: r730xd
+  become: yes
+  gather_facts: no
+  tags: [db]
+
+  # The authentik role password lives only in OpenBao (no static vault.yml
+  # fallback), so this play always reads from OpenBao.
+  vars:
+    openbao_read_enabled: true
+
+  vars_files:
+    - "{{ playbook_dir }}/../vars/openbao_auth.yml"
+
+  pre_tasks:
+    - name: Load OpenBao-sourced platform secrets
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/../vars/openbao_secrets.yml"
+
+    - name: Verify foundation Postgres container is running
+      ansible.builtin.command: docker exec foundation-postgres pg_isready -U postgres
+      changed_when: false
+
+  tasks:
+    # psql -U postgres connects over the container's local socket (trust auth),
+    # the same path the role's healthcheck uses — no superuser password needed.
+    # The role password is passed via psql's :'pw' literal (safe quoting); the
+    # SQL is fed on stdin (docker exec -i), because psql only interpolates
+    # variables for stdin/-f input, NOT for -c command strings.
+    - name: Check whether the authentik role exists
+      ansible.builtin.command: >-
+        docker exec foundation-postgres
+        psql -U postgres -tAc
+        "SELECT 1 FROM pg_roles WHERE rolname='authentik'"
+      register: ak_role
+      changed_when: false
+
+    - name: Create the authentik login role
+      ansible.builtin.shell:
+        cmd: >-
+          set -o pipefail;
+          printf "CREATE ROLE authentik LOGIN PASSWORD :'pw';\n"
+          | docker exec -i foundation-postgres
+          psql -U postgres -v ON_ERROR_STOP=1 -v pw="$PGPW"
+        executable: /bin/bash
+      environment:
+        PGPW: "{{ vault_authentik_db_password }}"
+      when: ak_role.stdout != "1"
+      no_log: true
+
+    - name: Keep the authentik role password in sync with OpenBao
+      ansible.builtin.shell:
+        cmd: >-
+          set -o pipefail;
+          printf "ALTER ROLE authentik LOGIN PASSWORD :'pw';\n"
+          | docker exec -i foundation-postgres
+          psql -U postgres -v ON_ERROR_STOP=1 -v pw="$PGPW"
+        executable: /bin/bash
+      environment:
+        PGPW: "{{ vault_authentik_db_password }}"
+      no_log: true
+      changed_when: false
+
+    - name: Check whether the authentik database exists
+      ansible.builtin.command: >-
+        docker exec foundation-postgres
+        psql -U postgres -tAc
+        "SELECT 1 FROM pg_database WHERE datname='authentik'"
+      register: ak_db
+      changed_when: false
+
+    - name: Create the authentik database owned by the authentik role
+      ansible.builtin.command: >-
+        docker exec foundation-postgres
+        psql -U postgres -v ON_ERROR_STOP=1
+        -c "CREATE DATABASE authentik OWNER authentik"
+      when: ak_db.stdout != "1"
+
+- name: Deploy Authentik Prometheus target and alert
+  hosts: r730xd
+  become: yes
+  gather_facts: no
+  tags: [metrics]
+
+  vars_files:
+    - "{{ playbook_dir }}/../roles/r730xd-prometheus/defaults/main.yml"
+    - "{{ playbook_dir }}/../inventory/group_vars/all/network.yml"
+
+  tasks:
+    - name: Template authentik Prometheus targets
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../roles/r730xd-prometheus/templates/targets.d/k8s-authentik.yml.j2"
+        dest: "/opt/observability/prometheus/targets.d/k8s-authentik.yml"
+        mode: "0644"
+
+    - name: Re-template Prometheus configuration
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../roles/r730xd-prometheus/templates/prometheus.yml.j2"
+        dest: "/opt/observability/prometheus/prometheus.yml"
+        mode: "0644"
+      register: prom_config
+
+    - name: Re-template alert rules
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../roles/r730xd-prometheus/templates/rules/grizzly-platform.yml.j2"
+        dest: "/opt/observability/prometheus/rules/grizzly-platform.yml"
+        mode: "0644"
+      register: prom_rules
+
+    - name: Recreate Prometheus container if config changed
+      ansible.builtin.command: docker compose up -d --force-recreate prometheus
+      args:
+        chdir: /opt/observability/prometheus
+      when: prom_config is changed or prom_rules is changed

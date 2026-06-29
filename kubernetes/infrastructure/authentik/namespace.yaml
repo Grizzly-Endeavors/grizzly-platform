@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: authentik
+  labels:
+    kubernetes.io/metadata.name: authentik
+  # NOTE: deliberately NOT labelled `grizzly.io/gated: "true"`. Authentik runs
+  # the third-party ghcr.io/goauthentik/server image, which is not built or
+  # cosign-signed by our CI gate, so it must stay out of the Kyverno
+  # signature-enforcement scope (kubernetes/infrastructure/kyverno-policies).
