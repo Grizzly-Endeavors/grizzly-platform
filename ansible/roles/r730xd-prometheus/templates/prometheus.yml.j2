@@ -52,18 +52,20 @@ scrape_configs:
           - "/etc/prometheus/targets.d/k8s-etcd.yml"
         refresh_interval: 30s
 
-  # OpenBao health probe. Scrapes /v1/sys/health without a token; the
-  # endpoint returns 200 when up+unsealed and 503 when sealed, so
-  # `up{job="openbao"} == 0` fires for "down OR sealed". The operator
-  # distinguishes via `systemctl status foundation-openbao
-  # openbao-auto-unseal`. A follow-up (wiring in the prometheus-readonly
-  # token) will add internal metrics like vault_core_unsealed.
+  # OpenBao internal telemetry. Scrapes /v1/sys/metrics?format=prometheus,
+  # which requires a token (prometheus-readonly policy → read sys/metrics).
+  # The OpenBao Agent (r730xd-openbao-agent role) auto-authenticates via
+  # AppRole and writes a short-TTL token to a file sink, bind-mounted here
+  # as /etc/prometheus/openbao/token. `up{job="openbao"} == 0` now means the
+  # server is down/sealed OR the agent token is missing — see
+  # docs/runbooks/openbao-quickref.md and issue #41.
   - job_name: "openbao"
     scheme: https
-    metrics_path: /v1/sys/health
+    metrics_path: /v1/sys/metrics
     params:
-      standbyok: ["true"]
-      perfstandbyok: ["true"]
+      format: ["prometheus"]
+    authorization:
+      credentials_file: /etc/prometheus/openbao/token
     tls_config:
       # Self-signed CA from the r730xd-openbao role. The Prometheus
       # container doesn't have the host CA bundle; skipping verify is
