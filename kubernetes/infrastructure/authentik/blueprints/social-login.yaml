@@ -1,0 +1,150 @@
+version: 1
+metadata:
+  name: grizzly-social-login
+# Social federation (Discord + GitHub) with invitation-gated closed enrollment.
+#
+# Login: returning users click a Discord/GitHub button on the sso.bearflinn.com
+# login page (the default identification stage, updated below to show the
+# sources) and are matched to their existing linked account.
+#
+# Enrollment (closed): a NEW social login has no match, so Authentik runs the
+# source's enrollment_flow -> grizzly-invite-enrollment. That flow prompts for
+# an invitation code and a missing/invalid code halts it (the invitation stage's
+# continue_flow_without_invitation:false is the gate). A valid code -> the user
+# is created from the provider's identity and auto-added to grizzly-users.
+#
+# Per-user onboarding = create an invitation (Admin UI / API) and hand the
+# person the code; they sign in with Discord/GitHub and paste it. No user object
+# is pre-provisioned, so no human PII lives in git or OpenBao.
+#
+# Source client_id/client_secret are NOT in git: injected into the worker (which
+# applies blueprints) via global.env as AUTHENTIK_{DISCORD,GITHUB}_CLIENT_{ID,
+# SECRET}, sourced from OpenBao secret/grizzly-platform/platform/authentik by the
+# authentik ExternalSecret. See docs/decisions/039-...-invitation-enrollment.md.
+#
+# Everything is one blueprint (not split) so the source<->flow cross-references
+# resolve via !KeyOf in a single atomic transaction; a two-file split would force
+# cross-file !Find and risk a second 60m reconcile before converging.
+entries:
+  # --- OAuth sources --------------------------------------------------------
+  - model: authentik_sources_oauth.oauthsource
+    id: discord-source
+    identifiers:
+      slug: discord
+    attrs:
+      name: Discord
+      provider_type: discord
+      enabled: true
+      consumer_key: !Env [AUTHENTIK_DISCORD_CLIENT_ID, ""]
+      consumer_secret: !Env [AUTHENTIK_DISCORD_CLIENT_SECRET, ""]
+      # Match returning logins by the provider's stable subject id, not by
+      # trusting a provider-supplied email. (email_link would auto-merge across
+      # providers by email — not wanted here.)
+      user_matching_mode: identifier
+      authentication_flow: !Find [authentik_flows.flow, [slug, default-source-authentication]]
+      enrollment_flow: !KeyOf invite-enrollment-flow
+
+  - model: authentik_sources_oauth.oauthsource
+    id: github-source
+    identifiers:
+      slug: github
+    attrs:
+      name: GitHub
+      provider_type: github
+      enabled: true
+      consumer_key: !Env [AUTHENTIK_GITHUB_CLIENT_ID, ""]
+      consumer_secret: !Env [AUTHENTIK_GITHUB_CLIENT_SECRET, ""]
+      user_matching_mode: identifier
+      authentication_flow: !Find [authentik_flows.flow, [slug, default-source-authentication]]
+      enrollment_flow: !KeyOf invite-enrollment-flow
+
+  # --- Show the source buttons on the main login page -----------------------
+  # Authoritative on this stage's `sources` list: keep the built-in source so
+  # local username/password still works, plus the two OAuth sources.
+  - model: authentik_stages_identification.identificationstage
+    identifiers:
+      name: default-authentication-identification
+    attrs:
+      sources:
+        - !Find [authentik_core.source, [slug, authentik-built-in]]
+        - !KeyOf discord-source
+        - !KeyOf github-source
+
+  # --- Invitation-gated enrollment flow -------------------------------------
+  - model: authentik_flows.flow
+    id: invite-enrollment-flow
+    identifiers:
+      slug: grizzly-invite-enrollment
+    attrs:
+      name: Grizzly invite enrollment
+      title: Complete your sign-up
+      designation: enrollment
+      # No standalone access — this flow is only reachable as a source's
+      # enrollment fallback after social auth.
+      authentication: none
+
+  # Prompt that collects the invitation code. field_key must be `token` so the
+  # invitation stage reads it from the flow context.
+  - model: authentik_stages_prompt.prompt
+    id: invitation-token-field
+    identifiers:
+      field_key: token
+    attrs:
+      label: Invitation code
+      type: text
+      required: true
+      placeholder: Paste the invitation code you were given
+      order: 0
+
+  - model: authentik_stages_prompt.promptstage
+    id: invitation-prompt-stage
+    identifiers:
+      name: grizzly-invitation-prompt
+    attrs:
+      fields:
+        - !KeyOf invitation-token-field
+
+  # The gate: an invalid/absent token halts the flow (no account created).
+  - model: authentik_stages_invitation.invitationstage
+    id: invitation-stage
+    identifiers:
+      name: grizzly-invitation
+    attrs:
+      continue_flow_without_invitation: false
+
+  # Creates the user from the source-provided identity, active, in grizzly-users.
+  - model: authentik_stages_user_write.userwritestage
+    id: enrollment-write-stage
+    identifiers:
+      name: grizzly-enrollment-write
+    attrs:
+      user_creation_mode: always_create
+      create_users_as_inactive: false
+      create_users_group: !Find [authentik_core.group, [name, grizzly-users]]
+
+  - model: authentik_stages_user_login.userloginstage
+    id: enrollment-login-stage
+    identifiers:
+      name: grizzly-enrollment-login
+
+  # Bindings: code prompt -> invitation gate -> user write -> login.
+  - model: authentik_flows.flowstagebinding
+    identifiers:
+      target: !KeyOf invite-enrollment-flow
+      stage: !KeyOf invitation-prompt-stage
+      order: 10
+  - model: authentik_flows.flowstagebinding
+    identifiers:
+      target: !KeyOf invite-enrollment-flow
+      stage: !KeyOf invitation-stage
+      order: 20
+  - model: authentik_flows.flowstagebinding
+    identifiers:
+      target: !KeyOf invite-enrollment-flow
+      stage: !KeyOf enrollment-write-stage
+      order: 30
+  - model: authentik_flows.flowstagebinding
+    identifiers:
+      target: !KeyOf invite-enrollment-flow
+      stage: !KeyOf enrollment-login-stage
+      order: 40

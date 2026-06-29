@@ -105,6 +105,29 @@ spec:
             secretKeyRef:
               name: authentik-secrets
               key: oidc_nextcloud_client_secret
+        # OAuth client creds for the Discord + GitHub social sources, consumed by
+        # blueprints/social-login.yaml via !Env. The worker (which applies
+        # blueprints) reads these; injecting on every Deployment is harmless.
+        - name: AUTHENTIK_DISCORD_CLIENT_ID
+          valueFrom:
+            secretKeyRef:
+              name: authentik-secrets
+              key: oauth_discord_client_id
+        - name: AUTHENTIK_DISCORD_CLIENT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: authentik-secrets
+              key: oauth_discord_client_secret
+        - name: AUTHENTIK_GITHUB_CLIENT_ID
+          valueFrom:
+            secretKeyRef:
+              name: authentik-secrets
+              key: oauth_github_client_id
+        - name: AUTHENTIK_GITHUB_CLIENT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: authentik-secrets
+              key: oauth_github_client_secret
 
     # --- Server (web/API) ---------------------------------------------------
     # Ingress handled by ingress.yaml (kept separate, repo convention), so the

@@ -18,5 +18,6 @@ configMapGenerator:
       - blueprints/brand.yaml
       - blueprints/groups.yaml
       - blueprints/nextcloud.yaml
+      - blueprints/social-login.yaml
 generatorOptions:
   disableNameSuffixHash: true
