@@ -21,10 +21,10 @@ Never leave a removed object orphaned in the running instance. A blueprint disap
 
 ## User identity & access (`social-login.yaml`)
 
-Human users are **not** declared as blueprint objects — there are no `authentik_core.user` entries, by design, so no human PII (emails/names) ever lands in this public repo or in OpenBao. Identity comes from the social provider (Discord/GitHub) at first login; the account is created from the provider's data.
+Human users are **not** declared as blueprint objects — there are no `authentik_core.user` entries, by design, so no human PII (emails/names) ever lands in this public repo or in OpenBao. Identity comes from the social provider (Discord/GitHub/Google) at first login; the account is created from the provider's data.
 
 Access is **closed, gated by invitation**. The flow `grizzly-invite-enrollment` prompts for an invitation code and its invitation stage (`continue_flow_without_invitation: false`) halts the flow when the code is missing/invalid — so an uninvited social login creates no account. Enrolled users are auto-added to `grizzly-users` by the User Write stage (`create_users_group`), created active (`create_users_as_inactive: false`). See [ADR-039](../../../../docs/decisions/039-authentik-social-federation-invitation-enrollment.md).
 
-**Onboarding a person** (per-user cost = one invite + a message): create an invitation — Admin UI → *Directory → Invitations* (or the API) — and hand them the code. They open `sso.bearflinn.com`, click **Discord** or **GitHub**, and paste the code. Promotion to `grizzly-admins` is a separate, deliberate step (not automated). Revoking access is deleting the user (and their source connection) in Authentik — there's no blueprint object to remove.
+**Onboarding a person** (per-user cost = one invite + a message): create an invitation — Admin UI → *Directory → Invitations* (or the API) — and hand them the code. They open `sso.bearflinn.com`, click **Discord**, **GitHub**, or **Google**, and paste the code. Promotion to `grizzly-admins` is a separate, deliberate step (not automated). Revoking access is deleting the user (and their source connection) in Authentik — there's no blueprint object to remove.
 
 **Break-glass / no-social path:** there is no SMTP, so no self-service email password reset. For a user without a social account, an admin issues a one-time recovery link (Admin UI → *Directory → Users → \<user\> → Create recovery link*) handed out-of-band. `akadmin` retains its bootstrap password.
