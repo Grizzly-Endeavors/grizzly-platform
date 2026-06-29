@@ -37,7 +37,9 @@ prometheus_node_targets:
   - target: "{{ r730xd_ip }}:9100"
     labels:
       instance: "r730xd"
-  - target: "{{ proxy_vps_public_ip }}:9100"
+  # Scraped over the wg0 point-to-point tunnel, not the public IP (firewalled).
+  # Nothing exposed publicly — see ADR-019 and issue #42.
+  - target: "{{ wg_vps_ip }}:9100"
     labels:
       instance: "proxy-vps"
 
@@ -69,8 +71,10 @@ prometheus_observability_targets:
     target: "{{ r730xd_ip }}:9121"
   - job: "cadvisor"
     target: "{{ r730xd_ip }}:8080"
+  # Caddy's dedicated metrics listener (caddy_metrics_port), scraped over the
+  # wg0 tunnel — not the localhost-only admin API. See issue #42.
   - job: "caddy"
-    target: "{{ proxy_vps_public_ip }}:2019"
+    target: "{{ wg_vps_ip }}:2019"
 
 # Scrape targets — blackbox probes (external endpoints)
 prometheus_blackbox_targets:

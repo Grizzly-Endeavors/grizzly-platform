@@ -210,18 +210,35 @@
         name: monitoring-checks
       tags: [monitoring]
 
-    - name: Allow monitoring ports from trusted networks
+    # Prometheus (on r730xd) scrapes node-exporter + Caddy metrics over the wg0
+    # point-to-point tunnel only — nothing public. The old NetBird-mesh and
+    # home-network allow rules were for the retired public-IP scrape path and
+    # are pruned below to shrink attack surface. See issue #42 / ADR-019.
+    - name: Allow monitoring ports from the r730xd wg0 tunnel
       community.general.ufw:
         rule: allow
         port: "{{ item.port }}"
         proto: tcp
-        from_ip: "{{ item.from }}"
+        from_ip: "{{ wg_r730xd_ip }}"
         comment: "{{ item.comment }}"
       loop:
-        - { port: '9100', from: '100.96.0.0/11', comment: 'node-exporter (NetBird)' }
-        - { port: '2019', from: '100.96.0.0/11', comment: 'Caddy metrics (NetBird)' }
-        - { port: '9100', from: '{{ monitoring_home_ip }}', comment: 'node-exporter (home network)' }
-        - { port: '2019', from: '{{ monitoring_home_ip }}', comment: 'Caddy metrics (home network)' }
+        - { port: '9100', comment: 'node-exporter (wg0 tunnel)' }
+        - { port: '2019', comment: 'Caddy metrics (wg0 tunnel)' }
+      when: enable_firewall | default(true) | bool
+      tags: [monitoring]
+
+    - name: Prune retired monitoring allow rules (public-IP scrape path)
+      community.general.ufw:
+        rule: allow
+        delete: true
+        port: "{{ item.port }}"
+        proto: tcp
+        from_ip: "{{ item.from }}"
+      loop:
+        - { port: '9100', from: '100.96.0.0/11' }
+        - { port: '2019', from: '100.96.0.0/11' }
+        - { port: '9100', from: '{{ monitoring_home_ip }}' }
+        - { port: '2019', from: '{{ monitoring_home_ip }}' }
       when: enable_firewall | default(true) | bool and monitoring_home_ip is defined
       tags: [monitoring]
 
