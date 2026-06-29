@@ -63,7 +63,7 @@ Applied by `bootstrap-openbao.yml`. Re-apply by re-running that playbook (idempo
 | `grizzly-platform-admin` | Full CRUD on `secret/*`, read sys mounts/policies |
 | `ansible-readonly` | Read `secret/data/grizzly-platform/*` |
 | `ansible-readwrite` | Read/write `secret/data/grizzly-platform/*` |
-| `prometheus-readonly` | Read `sys/metrics` only (for future scrape token) |
+| `prometheus-readonly` | Read `sys/metrics` only — used by the Prometheus scrape token (issue #41) |
 | `ansible-platform-read` | Read `secret/data/grizzly-platform/*` — for AppRole consumers (Phase C+) |
 | `eso-platform-read` | Read `secret/data/grizzly-platform/*` — for Kubernetes auth consumers (ESO, Phase D+) |
 
@@ -73,6 +73,7 @@ Applied by `bootstrap-openbao.yml`. Re-apply by re-running that playbook (idempo
 |---|---|---|---|---|
 | token (root) | Bootstrap + rotation playbooks | — | root | One-off; rotated via rotate-openbao-keys.yml --tags root-token |
 | approle | Ansible IaC plays | `ansible-iac` | `ansible-platform-read` | CIDR-bound to 10.0.0.0/24. role_id + secret_id in vault.yml (via scripts/set-openbao-approle-secrets.sh). Rotate with rotate-openbao-keys.yml --tags approle-secret |
+| approle | Prometheus (via OpenBao Agent) | `prometheus-metrics` | `prometheus-readonly` | secret_id CIDR-bound to 10.0.0.0/24. The `r730xd-openbao-agent` container (network_mode host) auto-auths and writes a short-TTL token to `/opt/observability/openbao-agent/sink/token`, which Prometheus bind-mounts to scrape `sys/metrics`. Provision/rotate with `setup-openbao-prometheus-agent.yml` (add `-e force_remint_secret_id=true` to rotate). |
 | kubernetes | External Secrets Operator | `external-secrets` | `eso-platform-read` | SA `external-secrets:external-secrets`. Reviewer-JWT from `openbao-auth:openbao-auth-token` Secret. Refresh with rotate-openbao-keys.yml --tags k8s-auth-jwt |
 
 ## Secret path layout

@@ -94,3 +94,11 @@ openbao_api_addr: "https://{{ r730xd_ip }}:{{ openbao_api_port }}"
 #   scripts/fetch-openbao-ca.sh
 # Override via `-e openbao_tls_ca_path=/alt/path/ca.crt`.
 openbao_tls_ca_path: "/usr/local/share/ca-certificates/grizzly-platform-openbao-ca.crt"
+
+# OpenBao Agent that mints the Prometheus sys/metrics scrape token (issue #41).
+# Shared here (not just in the r730xd-openbao-agent role defaults) because the
+# r730xd-prometheus role bind-mounts the sink dir to read the token. The sink
+# token is short-TTL and read-only on sys/metrics, so a host-local 0644 file is
+# acceptable; the secret_id that authenticates the agent is CIDR-bound + 0600.
+openbao_agent_base_dir: "/opt/observability/openbao-agent"
+openbao_agent_sink_dir: "{{ openbao_agent_base_dir }}/sink"
