@@ -73,6 +73,10 @@ entries:
       continue_flow_without_invitation: false
 
   # Creates the user from the source-provided identity, active, in grizzly-users.
+  # user_type: internal so enrolled users can reach their dashboard/app launcher
+  # and manage their account — the stage default (external) is a B2C/app-only
+  # type that's barred from the authentik interface. Internal users are free and
+  # unlimited in OSS authentik.
   - model: authentik_stages_user_write.userwritestage
     id: enrollment-write-stage
     identifiers:
@@ -80,6 +84,7 @@ entries:
     attrs:
       user_creation_mode: always_create
       create_users_as_inactive: false
+      user_type: internal
       create_users_group: !Find [authentik_core.group, [name, grizzly-users]]
 
   - model: authentik_stages_user_login.userloginstage
