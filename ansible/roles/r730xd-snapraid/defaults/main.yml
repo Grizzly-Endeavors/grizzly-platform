@@ -15,7 +15,13 @@ snapraid_boot_content_path: "/var/lib/snapraid/snapraid.content"
 # --- Exclude Patterns ---
 snapraid_excludes:
   - "*.unrecoverable"
-  - "/tmp/"
+  # Unanchored (no leading slash) so it matches any directory named "tmp" at
+  # any depth — covers root /tmp and, importantly, MinIO's volatile
+  # .minio.sys/tmp/ (incl. .trash/). MinIO churns those files mid-sync, which
+  # otherwise causes "file errors" / "cannot modify data disk during sync" and
+  # a non-zero exit on every run. They are MinIO-managed and regenerable, so
+  # they don't belong in parity.
+  - "tmp/"
   - "/lost+found/"
   - ".Thumbs.db"
   - ".DS_Store"
