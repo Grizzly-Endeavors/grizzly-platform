@@ -38,6 +38,7 @@
       tags: [always]
 
     - name: Validate drive bay inventory exists
+      tags: [always]
       ansible.builtin.assert:
         that:
           - r730xd_drive_bays is defined
@@ -47,6 +48,7 @@
           (ansible/inventory/r730xd.yml).
 
     - name: Query iDRAC for physical disk info
+      tags: [always]
       ansible.builtin.command: >
         {{ idrac_ssh_cmd }} "racadm storage get pdisks -o"
       delegate_to: localhost
@@ -56,6 +58,7 @@
       no_log: true
 
     - name: Parse iDRAC disk info into bay→serial mapping
+      tags: [always]
       ansible.builtin.set_fact:
         idrac_bay_map: "{{ _bay_map }}"
       vars:
@@ -85,11 +88,13 @@
           {{ result }}
 
     - name: Query host block devices
+      tags: [always]
       ansible.builtin.command: lsblk -J -b -o NAME,SERIAL,SIZE,TYPE
       register: lsblk_output
       changed_when: false
 
     - name: Build serial→device mapping from host
+      tags: [always]
       ansible.builtin.set_fact:
         serial_to_device: "{{ _serial_map }}"
       vars:
@@ -106,10 +111,12 @@
           {{ result }}
 
     - name: Filter inventory to storage drives (exclude ZFS)
+      tags: [always]
       ansible.builtin.set_fact:
         storage_drive_bays: "{{ r730xd_drive_bays | rejectattr('role', 'equalto', 'zfs') | list }}"
 
     - name: Resolve storage drive bays to OS devices
+      tags: [always]
       ansible.builtin.set_fact:
         resolved_drives: "{{ _resolved }}"
       vars:
@@ -134,6 +141,7 @@
           {{ result }}
 
     - name: Validate all storage bays were resolved
+      tags: [always]
       ansible.builtin.assert:
         that:
           - resolved_drives | length == storage_drive_bays | length
@@ -145,6 +153,7 @@
           Host serial→device map: {{ serial_to_device }}
 
     - name: Display resolved drive mapping
+      tags: [always]
       ansible.builtin.debug:
         msg: "Bay {{ item.bay }} ({{ item.role }}): serial={{ item.serial }} → /dev/{{ item.device }}"
       loop: "{{ resolved_drives }}"
