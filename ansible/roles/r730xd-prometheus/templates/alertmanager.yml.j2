@@ -22,7 +22,7 @@ receivers:
       - webhook_url: '{{ monitoring_discord_webhook_url }}'
         send_resolved: true
         title: '{% raw %}{{ if eq .Status "firing" }}🔥{{ else }}✅{{ end }} [{{ .Status | toUpper }}] {{ .GroupLabels.SortedPairs.Values | join " " }}{% endraw %}'
-        message: '{% raw %}{{ range .Alerts }}**{{ .Labels.alertname }}** ({{ .Labels.severity }}){{ "\n" }}{{ .Annotations.description }}{{ "\n" }}{{ end }}{% endraw %}'
+        message: '{% raw %}{{ range .Alerts }}• {{ if .Annotations.summary }}{{ .Annotations.summary }}{{ else if .Annotations.description }}{{ .Annotations.description }}{{ else }}{{ .Labels.alertname }} on {{ .Labels.instance }}{{ end }}{{ "\n" }}{{ end }}{% endraw %}'
 {% elif monitoring_alert_webhook_url is defined and monitoring_alert_webhook_url %}
   - name: 'default'
     webhook_configs:

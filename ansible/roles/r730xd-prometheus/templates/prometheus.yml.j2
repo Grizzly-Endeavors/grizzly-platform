@@ -12,7 +12,11 @@ alerting:
   alertmanagers:
     - static_configs:
         - targets:
-            - "localhost:{{ alertmanager_port }}"
+            # Compose service name — Prometheus and Alertmanager run as
+            # separate containers on the bridge network, so "localhost" inside
+            # this container is NOT Alertmanager. The internal listen port is
+            # always 9093 regardless of the published host port.
+            - "alertmanager:9093"
 
 scrape_configs:
   - job_name: "node"
