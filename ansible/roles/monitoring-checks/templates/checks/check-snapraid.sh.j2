@@ -61,17 +61,18 @@ else
     write_metric "monitoring_snapraid_sync_needed" "0" "Whether SnapRAID needs sync" "gauge"
 fi
 
-# Check last scrub date
-scrub_date=$(echo "$status_output" | grep -oP 'scrubbed at \K[0-9-]+' | tail -1 || true)
-if [[ -n "$scrub_date" ]]; then
-    scrub_epoch=$(date -d "$scrub_date" +%s 2>/dev/null || echo 0)
-    now=$(date +%s)
-    days_since=$(( (now - scrub_epoch) / 86400 ))
-
-    write_metric "monitoring_snapraid_last_scrub_days" "$days_since" "Days since last SnapRAID scrub" "gauge"
+# Check scrub recency. snapraid status reports relative ages, not absolute
+# dates, e.g. "The oldest block was scrubbed 88 days ago, the median 36, the
+# newest 0." The "newest" figure is how many days since scrub last touched any
+# block; if the scrub timer stops, it climbs. (The previous regex looked for a
+# "scrubbed at <date>" line that this snapraid version never prints, so the
+# metric was never emitted and SnapRAIDScrubOverdue had no data to fire on.)
+days_since=$(echo "$status_output" | grep -oP 'the newest \K[0-9]+' | tail -1 || true)
+if [[ -n "$days_since" ]]; then
+    write_metric "monitoring_snapraid_last_scrub_days" "$days_since" "Days since SnapRAID last scrubbed any block" "gauge"
 
     if (( days_since > SCRUB_MAX_DAYS )); then
-        alert "warning" "$CHECK" "scrub_overdue" "SnapRAID scrub is ${days_since} days old (threshold: ${SCRUB_MAX_DAYS} days)"
+        alert "warning" "$CHECK" "scrub_overdue" "SnapRAID has not scrubbed in ${days_since} days (threshold: ${SCRUB_MAX_DAYS} days)"
     else
         clear_alert "$CHECK" "scrub_overdue"
     fi
