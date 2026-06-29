@@ -11,7 +11,7 @@ alloy_image: "grafana/alloy:v1.9.0"
 alloy_compose_dir: "/opt/observability/alloy"
 
 # Memory limit
-alloy_memory_limit: "256m"
+alloy_memory_limit: "512m"
 
 # Loki endpoint
 alloy_loki_url: "http://{{ r730xd_ip }}:3100/loki/api/v1/push"

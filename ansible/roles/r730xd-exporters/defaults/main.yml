@@ -21,7 +21,7 @@ exporters_compose_dir: "/opt/observability/exporters"
 
 cadvisor_image: "gcr.io/cadvisor/cadvisor:v0.54.1"
 cadvisor_port: 8080
-cadvisor_memory_limit: "128m"
+cadvisor_memory_limit: "512m"
 
 # Memory limits
 postgres_exporter_memory_limit: "64m"
