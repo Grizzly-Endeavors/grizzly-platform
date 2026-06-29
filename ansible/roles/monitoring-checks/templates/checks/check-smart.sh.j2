@@ -7,6 +7,18 @@ source "{{ monitoring_lib_dir }}/lib/alert.sh"
 init_metrics "check_smart"
 
 CHECK="check-smart"
+
+# No SMART tooling (e.g. virtualized VPS disks where smartmontools isn't
+# installed) — there is nothing to check. Without this guard, `smartctl -H`
+# below fails to run, the PASSED/OK grep matches nothing, and every disk is
+# reported unhealthy (false-critical SmartUnhealthy). Emit a clean metric set
+# so any prior `monitoring_smart_healthy 0` series goes stale and exit.
+if ! command -v smartctl >/dev/null 2>&1; then
+    write_metric "monitoring_smart_check_time" "$(date +%s)" "Timestamp of last SMART check" "gauge"
+    flush_metrics
+    exit 0
+fi
+
 REALLOCATED_WARN={{ monitoring_smart_reallocated_warn }}
 TEMP_WARN={{ monitoring_temp_warn_drive }}
 TEMP_CRIT={{ monitoring_temp_crit_drive }}
