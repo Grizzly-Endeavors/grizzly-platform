@@ -1,10 +1,11 @@
-# Managed by Ansible — r730xd-prometheus role (seed file)
-# Additional targets added dynamically by worker setup playbooks
+# Managed by Ansible — r730xd-prometheus role
+# Static node_exporter targets (prometheus_node_targets). Per-worker targets
+# live in separate node-*.yml files written by setup-k8s-worker.yml.
 {% for target in prometheus_node_targets %}
 - targets:
     - "{{ target.target }}"
   labels:
-    env: "grizzly-platform"
+    env: "homelab"
 {% for key, value in target.labels.items() %}
     {{ key }}: "{{ value }}"
 {% endfor %}
