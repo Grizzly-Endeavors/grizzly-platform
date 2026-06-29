@@ -1,0 +1,60 @@
+version: 1
+metadata:
+  name: grizzly-nextcloud-oidc
+# First app integration + first secret-bearing blueprint (ADR-037 follow-up).
+# Registers Nextcloud as an OIDC client of Authentik: a confidential OAuth2
+# provider, an application bound to it, and a `groups` scope mapping so the
+# Nextcloud user_oidc app can provision Authentik group membership.
+#
+# The client_id/client_secret are NOT in git: they are injected into the worker
+# (which applies blueprints) via global.env as AUTHENTIK_NEXTCLOUD_CLIENT_ID /
+# AUTHENTIK_NEXTCLOUD_CLIENT_SECRET, sourced from OpenBao
+# secret/grizzly-platform/platform/authentik (oidc_nextcloud_client_id,
+# oidc_nextcloud_client_secret) by the authentik ExternalSecret. The same two
+# OpenBao keys feed Nextcloud's own ExternalSecret in lab-apps, so both sides of
+# the OIDC contract share one source of truth.
+entries:
+  # Groups scope mapping — emits a `groups` claim (list of the user's Authentik
+  # group names) so user_oidc can mirror Authentik groups into Nextcloud.
+  - model: authentik_providers_oauth2.scopemapping
+    id: nextcloud-groups-scope
+    identifiers:
+      name: "Nextcloud OIDC: groups"
+    attrs:
+      scope_name: groups
+      description: "Authentik group names, for Nextcloud group provisioning"
+      expression: |
+        return [group.name for group in request.user.ak_groups.all()]
+
+  - model: authentik_providers_oauth2.oauth2provider
+    id: nextcloud-provider
+    identifiers:
+      name: nextcloud
+    attrs:
+      client_type: confidential
+      client_id: !Env [AUTHENTIK_NEXTCLOUD_CLIENT_ID, ""]
+      client_secret: !Env [AUTHENTIK_NEXTCLOUD_CLIENT_SECRET, ""]
+      # user_oidc's redirect endpoint on the Nextcloud host.
+      redirect_uris:
+        - matching_mode: strict
+          url: https://nextcloud.bearflinn.com/apps/user_oidc/code
+      sub_mode: hashed_user_id
+      include_claims_in_id_token: true
+      authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-explicit-consent]]
+      invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
+      signing_key: !Find [authentik_crypto.certificatekeypair, [name, "authentik Self-signed Certificate"]]
+      property_mappings:
+        - !Find [authentik_providers_oauth2.scopemapping, [scope_name, openid]]
+        - !Find [authentik_providers_oauth2.scopemapping, [scope_name, email]]
+        - !Find [authentik_providers_oauth2.scopemapping, [scope_name, profile]]
+        - !KeyOf nextcloud-groups-scope
+
+  - model: authentik_core.application
+    identifiers:
+      slug: nextcloud
+    attrs:
+      name: Nextcloud
+      provider: !KeyOf nextcloud-provider
+      meta_launch_url: https://nextcloud.bearflinn.com
+      meta_description: "Files, calendar, and contacts"
+      policy_engine_mode: any
