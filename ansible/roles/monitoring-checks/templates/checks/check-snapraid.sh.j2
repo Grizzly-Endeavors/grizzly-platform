@@ -38,10 +38,14 @@ fi
 # Check sync status
 status_output=$(snapraid status 2>&1 || true)
 
-# Check for sync errors
-if echo "$status_output" | grep -qi "error"; then
-    error_count=$(echo "$status_output" | grep -ci "error" || true)
-    alert "critical" "$CHECK" "sync_errors" "SnapRAID reports errors (${error_count} error lines in status output)"
+# Check for sync errors. A clean array prints "No error detected." — a naive
+# grep for "error" matches that very line, so we look for real error/danger
+# indicators instead: snapraid's "DANGER!" banner or an "<n> errors" count with
+# n >= 1 (never matches "No error detected." or "0 errors").
+if echo "$status_output" | grep -qiE "DANGER|silent error|[1-9][0-9]* errors"; then
+    error_count=$(echo "$status_output" | grep -ciE "DANGER|[1-9][0-9]* errors" || true)
+    error_line=$(echo "$status_output" | grep -iE "DANGER|[1-9][0-9]* errors" | head -1)
+    alert "critical" "$CHECK" "sync_errors" "SnapRAID reports errors: ${error_line}"
     write_metric "monitoring_snapraid_errors" "$error_count" "SnapRAID error count from status" "gauge"
 else
     clear_alert "$CHECK" "sync_errors"
