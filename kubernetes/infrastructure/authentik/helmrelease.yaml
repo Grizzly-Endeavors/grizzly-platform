@@ -5,6 +5,12 @@ metadata:
   namespace: flux-system
 spec:
   interval: 30m
+  # Pin the release name. Without this, Flux defaults to
+  # <targetNamespace>-<name> ("authentik-authentik"), which the chart's
+  # fullname helper turns into "authentik-authentik-server" etc. — breaking the
+  # ingress backend (authentik-server) and the metrics selector. "authentik"
+  # already contains the chart name, so the helper does not double it.
+  releaseName: authentik
   chart:
     spec:
       chart: authentik
