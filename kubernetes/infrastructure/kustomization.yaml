@@ -12,3 +12,4 @@ resources:
   - storage
   - kyverno
   - metrics-server
+  - authentik

@@ -1,0 +1,26 @@
+# Plain-HTTP ingress — external TLS terminates at proxy-vps (Caddy + wildcard
+# *.bearflinn.com), which already routes any unmatched subdomain to this
+# cluster ingress, so no VPS/Caddy/DNS change is needed for sso.bearflinn.com.
+# Long timeouts + larger buffers suit OAuth/SAML redirects and flow POSTs.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: authentik
+  namespace: authentik
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "32m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: sso.bearflinn.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: authentik-server
+                port:
+                  number: 80

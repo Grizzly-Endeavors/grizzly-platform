@@ -448,6 +448,17 @@ groups:
             Certificate {{ '{{' }} $labels.namespace {{ '}}' }}/{{ '{{' }} $labels.name {{ '}}' }}
             is not Ready (stuck in a failed state)
 
+      # --- authentik: central identity provider ---
+      # SSO/OIDC single point of failure — when down, every app wired to
+      # authentik loses login. Critical so it pages rather than just warns.
+      - alert: AuthentikDown
+        expr: up{job="authentik"} == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "authentik is unreachable — SSO/OIDC login broken for all integrated apps"
+
   - name: observability
     rules:
       - alert: TargetDown

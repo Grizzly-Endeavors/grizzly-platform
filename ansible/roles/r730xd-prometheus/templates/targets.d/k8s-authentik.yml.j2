@@ -1,0 +1,8 @@
+# Managed by Ansible — r730xd-prometheus role
+# authentik server metrics exposed via NodePort (kubernetes/infrastructure/authentik)
+- targets:
+    - "{{ hostvars[groups['k8s_control_plane'][0]]['ansible_host'] }}:30891"
+  labels:
+    env: "grizzly-platform"
+    instance: "authentik-server"
+    component: "authentik"
