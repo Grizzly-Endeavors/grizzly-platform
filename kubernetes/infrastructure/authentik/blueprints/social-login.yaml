@@ -103,10 +103,12 @@ entries:
       enabled: true
       consumer_key: !Env [AUTHENTIK_DISCORD_CLIENT_ID, ""]
       consumer_secret: !Env [AUTHENTIK_DISCORD_CLIENT_SECRET, ""]
-      # Match returning logins by the provider's stable subject id, not by
-      # trusting a provider-supplied email. (email_link would auto-merge across
-      # providers by email — not wanted here.)
-      user_matching_mode: identifier
+      # Link a new provider login to an existing user with the same (verified)
+      # email instead of creating a duplicate — so one person using both Discord
+      # and GitHub lands on a single account. Safe here: both providers supply
+      # verified emails, and enrollment is invitation-gated, so this can't be
+      # used to take over an account.
+      user_matching_mode: email_link
       authentication_flow: !Find [authentik_flows.flow, [slug, default-source-authentication]]
       enrollment_flow: !KeyOf invite-enrollment-flow
 
@@ -120,7 +122,25 @@ entries:
       enabled: true
       consumer_key: !Env [AUTHENTIK_GITHUB_CLIENT_ID, ""]
       consumer_secret: !Env [AUTHENTIK_GITHUB_CLIENT_SECRET, ""]
-      user_matching_mode: identifier
+      # See the Discord source above: link-by-verified-email so both providers
+      # resolve to one account rather than creating duplicates.
+      user_matching_mode: email_link
+      authentication_flow: !Find [authentik_flows.flow, [slug, default-source-authentication]]
+      enrollment_flow: !KeyOf invite-enrollment-flow
+
+  - model: authentik_sources_oauth.oauthsource
+    id: google-source
+    identifiers:
+      slug: google
+    attrs:
+      name: Google
+      provider_type: google
+      enabled: true
+      consumer_key: !Env [AUTHENTIK_GOOGLE_CLIENT_ID, ""]
+      consumer_secret: !Env [AUTHENTIK_GOOGLE_CLIENT_SECRET, ""]
+      # Link-by-verified-email, same as the other sources. Google emails are
+      # verified; enrollment stays invitation-gated.
+      user_matching_mode: email_link
       authentication_flow: !Find [authentik_flows.flow, [slug, default-source-authentication]]
       enrollment_flow: !KeyOf invite-enrollment-flow
 
@@ -135,6 +155,7 @@ entries:
         - !Find [authentik_core.source, [slug, authentik-built-in]]
         - !KeyOf discord-source
         - !KeyOf github-source
+        - !KeyOf google-source
 
   # --- Flow stage bindings: code prompt -> gate -> user write -> login -------
   - model: authentik_flows.flowstagebinding
