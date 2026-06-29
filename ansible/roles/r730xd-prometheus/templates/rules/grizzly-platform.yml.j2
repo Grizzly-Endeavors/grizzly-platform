@@ -609,7 +609,12 @@ groups:
             Container {{ '{{' }} $labels.name {{ '}}' }} CPU usage above 90%
 
       - alert: ContainerMemoryHigh
-        expr: container_memory_usage_bytes{name!=""} / container_spec_memory_limit_bytes{name!=""} > 0.9
+        # Guard against unlimited containers: limit=0 makes the ratio +Inf and
+        # the alert false-fires. Only evaluate containers with a real limit set.
+        expr: >-
+          container_memory_usage_bytes{name!=""}
+          / container_spec_memory_limit_bytes{name!=""} > 0.9
+          and container_spec_memory_limit_bytes{name!=""} > 0
         for: 5m
         labels:
           severity: warning
