@@ -22,55 +22,13 @@ metadata:
 # SECRET}, sourced from OpenBao secret/grizzly-platform/platform/authentik by the
 # authentik ExternalSecret. See docs/decisions/039-...-invitation-enrollment.md.
 #
-# Everything is one blueprint (not split) so the source<->flow cross-references
-# resolve via !KeyOf in a single atomic transaction; a two-file split would force
-# cross-file !Find and risk a second 60m reconcile before converging.
+# ENTRY ORDER MATTERS: `!KeyOf` resolves to an already-applied entry, so every
+# target must appear *above* its references. Order here is therefore:
+# flow -> enrollment stages -> sources -> login-page stage -> stage bindings.
+# Everything is one blueprint (not split) so these cross-references resolve in a
+# single atomic transaction rather than needing cross-file !Find + a reconcile.
 entries:
-  # --- OAuth sources --------------------------------------------------------
-  - model: authentik_sources_oauth.oauthsource
-    id: discord-source
-    identifiers:
-      slug: discord
-    attrs:
-      name: Discord
-      provider_type: discord
-      enabled: true
-      consumer_key: !Env [AUTHENTIK_DISCORD_CLIENT_ID, ""]
-      consumer_secret: !Env [AUTHENTIK_DISCORD_CLIENT_SECRET, ""]
-      # Match returning logins by the provider's stable subject id, not by
-      # trusting a provider-supplied email. (email_link would auto-merge across
-      # providers by email — not wanted here.)
-      user_matching_mode: identifier
-      authentication_flow: !Find [authentik_flows.flow, [slug, default-source-authentication]]
-      enrollment_flow: !KeyOf invite-enrollment-flow
-
-  - model: authentik_sources_oauth.oauthsource
-    id: github-source
-    identifiers:
-      slug: github
-    attrs:
-      name: GitHub
-      provider_type: github
-      enabled: true
-      consumer_key: !Env [AUTHENTIK_GITHUB_CLIENT_ID, ""]
-      consumer_secret: !Env [AUTHENTIK_GITHUB_CLIENT_SECRET, ""]
-      user_matching_mode: identifier
-      authentication_flow: !Find [authentik_flows.flow, [slug, default-source-authentication]]
-      enrollment_flow: !KeyOf invite-enrollment-flow
-
-  # --- Show the source buttons on the main login page -----------------------
-  # Authoritative on this stage's `sources` list: keep the built-in source so
-  # local username/password still works, plus the two OAuth sources.
-  - model: authentik_stages_identification.identificationstage
-    identifiers:
-      name: default-authentication-identification
-    attrs:
-      sources:
-        - !Find [authentik_core.source, [slug, authentik-built-in]]
-        - !KeyOf discord-source
-        - !KeyOf github-source
-
-  # --- Invitation-gated enrollment flow -------------------------------------
+  # --- Enrollment flow (referenced by the sources + bindings below) ---------
   - model: authentik_flows.flow
     id: invite-enrollment-flow
     identifiers:
@@ -83,6 +41,7 @@ entries:
       # enrollment fallback after social auth.
       authentication: none
 
+  # --- Enrollment stages ----------------------------------------------------
   # Prompt that collects the invitation code. field_key must be `token` so the
   # invitation stage reads it from the flow context.
   - model: authentik_stages_prompt.prompt
@@ -127,7 +86,51 @@ entries:
     identifiers:
       name: grizzly-enrollment-login
 
-  # Bindings: code prompt -> invitation gate -> user write -> login.
+  # --- OAuth sources (reference the enrollment flow above) ------------------
+  - model: authentik_sources_oauth.oauthsource
+    id: discord-source
+    identifiers:
+      slug: discord
+    attrs:
+      name: Discord
+      provider_type: discord
+      enabled: true
+      consumer_key: !Env [AUTHENTIK_DISCORD_CLIENT_ID, ""]
+      consumer_secret: !Env [AUTHENTIK_DISCORD_CLIENT_SECRET, ""]
+      # Match returning logins by the provider's stable subject id, not by
+      # trusting a provider-supplied email. (email_link would auto-merge across
+      # providers by email — not wanted here.)
+      user_matching_mode: identifier
+      authentication_flow: !Find [authentik_flows.flow, [slug, default-source-authentication]]
+      enrollment_flow: !KeyOf invite-enrollment-flow
+
+  - model: authentik_sources_oauth.oauthsource
+    id: github-source
+    identifiers:
+      slug: github
+    attrs:
+      name: GitHub
+      provider_type: github
+      enabled: true
+      consumer_key: !Env [AUTHENTIK_GITHUB_CLIENT_ID, ""]
+      consumer_secret: !Env [AUTHENTIK_GITHUB_CLIENT_SECRET, ""]
+      user_matching_mode: identifier
+      authentication_flow: !Find [authentik_flows.flow, [slug, default-source-authentication]]
+      enrollment_flow: !KeyOf invite-enrollment-flow
+
+  # --- Show the source buttons on the main login page -----------------------
+  # Authoritative on this stage's `sources` list: keep the built-in source so
+  # local username/password still works, plus the two OAuth sources.
+  - model: authentik_stages_identification.identificationstage
+    identifiers:
+      name: default-authentication-identification
+    attrs:
+      sources:
+        - !Find [authentik_core.source, [slug, authentik-built-in]]
+        - !KeyOf discord-source
+        - !KeyOf github-source
+
+  # --- Flow stage bindings: code prompt -> gate -> user write -> login -------
   - model: authentik_flows.flowstagebinding
     identifiers:
       target: !KeyOf invite-enrollment-flow
