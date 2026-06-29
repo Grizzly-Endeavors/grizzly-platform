@@ -149,6 +149,16 @@ groups:
             SnapRAID scrub is {{ '{{' }} $value {{ '}}' }} days overdue
             on {{ '{{' }} $labels.instance {{ '}}' }}
 
+      - alert: SnapRAIDSyncFailed
+        expr: monitoring_snapraid_sync_failed > 0
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: >-
+            SnapRAID sync service failing on {{ '{{' }} $labels.instance {{ '}}' }}
+            — parity is going stale, new data is unprotected
+
   - name: zfs
     rules:
       - alert: ZFSPoolDegraded

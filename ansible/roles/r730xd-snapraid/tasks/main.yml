@@ -57,6 +57,12 @@
     dest: /etc/snapraid.conf
     mode: "0644"
 
+- name: Deploy snapraid-sync wrapper script
+  ansible.builtin.template:
+    src: snapraid-sync.sh.j2
+    dest: "{{ snapraid_sync_wrapper_path }}"
+    mode: "0755"
+
 - name: Deploy snapraid-sync systemd service
   ansible.builtin.template:
     src: snapraid-sync.service.j2

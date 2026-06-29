@@ -20,13 +20,32 @@ fi
 write_metric "monitoring_snapraid_installed" "1" "Whether SnapRAID is installed" "gauge"
 write_metric "monitoring_snapraid_check_time" "$(date +%s)" "Timestamp of last SnapRAID check" "gauge"
 
+# Check the result of the most recent snapraid-sync.service run.
+# `snapraid status` looks healthy even when the sync unit fails on every run
+# (e.g. a bad ExecStart), so parity can silently go stale for months. Catch a
+# failed unit directly. Result is "success" for a clean oneshot (or one that
+# never ran), and "exit-code"/"signal"/etc. on failure.
+sync_result=$(systemctl show -p Result --value snapraid-sync.service 2>/dev/null || echo "unknown")
+sync_exit=$(systemctl show -p ExecMainStatus --value snapraid-sync.service 2>/dev/null || echo "")
+if [[ "$sync_result" != "success" && "$sync_result" != "unknown" ]]; then
+    alert "critical" "$CHECK" "sync_failed" "snapraid-sync.service last run failed (result=${sync_result}, exit=${sync_exit}) — parity is not being updated"
+    write_metric "monitoring_snapraid_sync_failed" "1" "Whether the last snapraid-sync run failed" "gauge"
+else
+    clear_alert "$CHECK" "sync_failed"
+    write_metric "monitoring_snapraid_sync_failed" "0" "Whether the last snapraid-sync run failed" "gauge"
+fi
+
 # Check sync status
 status_output=$(snapraid status 2>&1 || true)
 
-# Check for sync errors
-if echo "$status_output" | grep -qi "error"; then
-    error_count=$(echo "$status_output" | grep -ci "error" || true)
-    alert "critical" "$CHECK" "sync_errors" "SnapRAID reports errors (${error_count} error lines in status output)"
+# Check for sync errors. A clean array prints "No error detected." — a naive
+# grep for "error" matches that very line, so we look for real error/danger
+# indicators instead: snapraid's "DANGER!" banner or an "<n> errors" count with
+# n >= 1 (never matches "No error detected." or "0 errors").
+if echo "$status_output" | grep -qiE "DANGER|silent error|[1-9][0-9]* errors"; then
+    error_count=$(echo "$status_output" | grep -ciE "DANGER|[1-9][0-9]* errors" || true)
+    error_line=$(echo "$status_output" | grep -iE "DANGER|[1-9][0-9]* errors" | head -1)
+    alert "critical" "$CHECK" "sync_errors" "SnapRAID reports errors: ${error_line}"
     write_metric "monitoring_snapraid_errors" "$error_count" "SnapRAID error count from status" "gauge"
 else
     clear_alert "$CHECK" "sync_errors"
@@ -42,17 +61,18 @@ else
     write_metric "monitoring_snapraid_sync_needed" "0" "Whether SnapRAID needs sync" "gauge"
 fi
 
-# Check last scrub date
-scrub_date=$(echo "$status_output" | grep -oP 'scrubbed at \K[0-9-]+' | tail -1 || true)
-if [[ -n "$scrub_date" ]]; then
-    scrub_epoch=$(date -d "$scrub_date" +%s 2>/dev/null || echo 0)
-    now=$(date +%s)
-    days_since=$(( (now - scrub_epoch) / 86400 ))
-
-    write_metric "monitoring_snapraid_last_scrub_days" "$days_since" "Days since last SnapRAID scrub" "gauge"
+# Check scrub recency. snapraid status reports relative ages, not absolute
+# dates, e.g. "The oldest block was scrubbed 88 days ago, the median 36, the
+# newest 0." The "newest" figure is how many days since scrub last touched any
+# block; if the scrub timer stops, it climbs. (The previous regex looked for a
+# "scrubbed at <date>" line that this snapraid version never prints, so the
+# metric was never emitted and SnapRAIDScrubOverdue had no data to fire on.)
+days_since=$(echo "$status_output" | grep -oP 'the newest \K[0-9]+' | tail -1 || true)
+if [[ -n "$days_since" ]]; then
+    write_metric "monitoring_snapraid_last_scrub_days" "$days_since" "Days since SnapRAID last scrubbed any block" "gauge"
 
     if (( days_since > SCRUB_MAX_DAYS )); then
-        alert "warning" "$CHECK" "scrub_overdue" "SnapRAID scrub is ${days_since} days old (threshold: ${SCRUB_MAX_DAYS} days)"
+        alert "warning" "$CHECK" "scrub_overdue" "SnapRAID has not scrubbed in ${days_since} days (threshold: ${SCRUB_MAX_DAYS} days)"
     else
         clear_alert "$CHECK" "scrub_overdue"
     fi
