@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# Managed by Ansible — r730xd-snapraid
+# SnapRAID sync wrapper with a deletion safety net.
+#
+# `snapraid` has no built-in "abort on mass deletion" flag (the previous unit
+# passed a non-existent --force-threshold, which made every nightly sync fail
+# instantly while parity silently went stale). So we run `snapraid diff` first,
+# count the files removed since the last sync, and refuse to sync if that count
+# exceeds DELETE_THRESHOLD. This stops an accidental mass deletion — e.g. a data
+# disk that failed to mount — from propagating into parity and destroying
+# recoverability. A real, intended bulk deletion is synced manually:
+#   sudo snapraid sync
+set -euo pipefail
+
+DELETE_THRESHOLD={{ snapraid_delete_threshold }}
+LOG=/var/log/snapraid-sync.log
+
+# snapraid diff exit codes: 0 = no differences, 2 = differences present,
+# anything else = error. Capture output either way to count removals.
+diff_rc=0
+diff_out=$(snapraid diff 2>&1) || diff_rc=$?
+if (( diff_rc != 0 && diff_rc != 2 )); then
+    printf 'snapraid diff failed (rc=%s)\n%s\n' "$diff_rc" "$diff_out" >&2
+    exit "$diff_rc"
+fi
+
+# The diff summary has a right-aligned "<n> removed" line; per-file lines start
+# with the verb "remove" ($2 is a path), so matching $2 == "removed" is safe.
+removed=$(printf '%s\n' "$diff_out" | awk '$2 == "removed" { print $1; exit }')
+removed=${removed:-0}
+
+if (( DELETE_THRESHOLD > 0 && removed > DELETE_THRESHOLD )); then
+    printf 'ABORT: %s files removed since last sync exceeds threshold of %s.\n' \
+        "$removed" "$DELETE_THRESHOLD" >&2
+    printf 'Verify no data disk is unmounted, then sync manually if intended: sudo snapraid sync\n' >&2
+    exit 1
+fi
+
+exec snapraid sync -l "$LOG"

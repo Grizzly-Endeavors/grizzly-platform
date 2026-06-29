@@ -20,6 +20,21 @@ fi
 write_metric "monitoring_snapraid_installed" "1" "Whether SnapRAID is installed" "gauge"
 write_metric "monitoring_snapraid_check_time" "$(date +%s)" "Timestamp of last SnapRAID check" "gauge"
 
+# Check the result of the most recent snapraid-sync.service run.
+# `snapraid status` looks healthy even when the sync unit fails on every run
+# (e.g. a bad ExecStart), so parity can silently go stale for months. Catch a
+# failed unit directly. Result is "success" for a clean oneshot (or one that
+# never ran), and "exit-code"/"signal"/etc. on failure.
+sync_result=$(systemctl show -p Result --value snapraid-sync.service 2>/dev/null || echo "unknown")
+sync_exit=$(systemctl show -p ExecMainStatus --value snapraid-sync.service 2>/dev/null || echo "")
+if [[ "$sync_result" != "success" && "$sync_result" != "unknown" ]]; then
+    alert "critical" "$CHECK" "sync_failed" "snapraid-sync.service last run failed (result=${sync_result}, exit=${sync_exit}) — parity is not being updated"
+    write_metric "monitoring_snapraid_sync_failed" "1" "Whether the last snapraid-sync run failed" "gauge"
+else
+    clear_alert "$CHECK" "sync_failed"
+    write_metric "monitoring_snapraid_sync_failed" "0" "Whether the last snapraid-sync run failed" "gauge"
+fi
+
 # Check sync status
 status_output=$(snapraid status 2>&1 || true)
 

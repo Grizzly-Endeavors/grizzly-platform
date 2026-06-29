@@ -8,7 +8,7 @@ RequiresMountsFor={{ drive.path }}
 
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/snapraid sync{% if snapraid_delete_threshold > 0 %} --force-threshold {{ snapraid_delete_threshold }}{% endif %} -l /var/log/snapraid-sync.log
+ExecStart={{ snapraid_sync_wrapper_path }}
 Nice=19
 IOSchedulingClass=idle
 OOMScoreAdjust=-200
