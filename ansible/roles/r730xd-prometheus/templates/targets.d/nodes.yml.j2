@@ -5,7 +5,7 @@
 - targets:
     - "{{ target.target }}"
   labels:
-    env: "homelab"
+    env: "grizzly-platform"
 {% for key, value in target.labels.items() %}
     {{ key }}: "{{ value }}"
 {% endfor %}
