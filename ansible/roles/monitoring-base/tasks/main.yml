@@ -78,6 +78,42 @@
   when: smartd_enabled
   tags: [monitoring]
 
+# --- openipmi.service on non-IPMI hosts ---
+# The `openipmi` package ships an LSB init script that loads the IPMI kernel
+# driver. Lab nodes with no BMC/IPMI hardware can't start it, so it sits in a
+# failed state and trips the SystemdFailedUnits alert (issue #44). Mask it where
+# IPMI is disabled; on real IPMI hosts the driver load is wanted, so leave it.
+
+- name: Check for openipmi.service init script
+  ansible.builtin.stat:
+    path: /etc/init.d/openipmi
+  register: openipmi_initscript
+  when: not ipmi_exporter_enabled
+  tags: [monitoring]
+
+- name: Clear lingering failed state of openipmi.service
+  # Masking does not reset an already-failed unit, so it would still show in
+  # `systemctl --failed` and keep tripping SystemdFailedUnits. reset-failed is a
+  # no-op once clean, so it stays idempotent (changed_when: false).
+  ansible.builtin.command: systemctl reset-failed openipmi.service
+  when:
+    - not ipmi_exporter_enabled
+    - openipmi_initscript.stat.exists | default(false)
+  changed_when: false
+  failed_when: false
+  tags: [monitoring]
+
+- name: Mask and stop openipmi.service on non-IPMI hosts
+  ansible.builtin.systemd:
+    name: openipmi.service
+    state: stopped
+    enabled: false
+    masked: true
+  when:
+    - not ipmi_exporter_enabled
+    - openipmi_initscript.stat.exists | default(false)
+  tags: [monitoring]
+
 # --- IPMI Exporter ---
 
 - name: Install IPMI exporter
