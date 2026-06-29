@@ -16,12 +16,16 @@ snapraid_boot_content_path: "/var/lib/snapraid/snapraid.content"
 snapraid_excludes:
   - "*.unrecoverable"
   # Unanchored (no leading slash) so it matches any directory named "tmp" at
-  # any depth — covers root /tmp and, importantly, MinIO's volatile
-  # .minio.sys/tmp/ (incl. .trash/). MinIO churns those files mid-sync, which
-  # otherwise causes "file errors" / "cannot modify data disk during sync" and
-  # a non-zero exit on every run. They are MinIO-managed and regenerable, so
-  # they don't belong in parity.
+  # any depth — covers root /tmp as well as transient tmp dirs anywhere.
   - "tmp/"
+  # MinIO's internal bookkeeping directory. It continuously rewrites volatile
+  # files (tmp/.trash/, per-bucket .usage-cache.bin, heal/scanner state), which
+  # change mid-sync and cause "file errors" / "cannot modify data disk during
+  # sync" non-zero exits on every run. It is MinIO-managed and regenerable, so
+  # it is excluded from parity. Actual bucket object data lives outside
+  # .minio.sys/ (e.g. <bucket>/<object>/) and stays protected. Trade-off:
+  # bucket-level config (versioning/lifecycle/policy) is not parity-covered.
+  - ".minio.sys/"
   - "/lost+found/"
   - ".Thumbs.db"
   - ".DS_Store"
