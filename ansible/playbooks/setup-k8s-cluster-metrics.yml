@@ -103,6 +103,15 @@
             verbs:
               - get
               - list
+          # Pod discovery for kubernetes_sd (e.g. the cilium-operator scrape,
+          # which floats across nodes). List/watch only — no pod read/exec.
+          - apiGroups:
+              - ""
+            resources:
+              - pods
+            verbs:
+              - list
+              - watch
         EOF
       delegate_to: localhost
       become: no
@@ -147,11 +156,12 @@
         mode: "0644"
       become: yes
 
-    - name: Template Cilium operator targets
-      ansible.builtin.template:
-        src: "{{ playbook_dir }}/../roles/r730xd-prometheus/templates/targets.d/k8s-cilium-operator.yml.j2"
-        dest: "{{ prometheus_compose_dir }}/targets.d/k8s-cilium-operator.yml"
-        mode: "0644"
+    # Cilium operator is now discovered via kubernetes_sd in prometheus.yml
+    # (it floats across nodes); no static file_sd target. Remove any stale one.
+    - name: Remove obsolete static Cilium operator target
+      ansible.builtin.file:
+        path: "{{ prometheus_compose_dir }}/targets.d/k8s-cilium-operator.yml"
+        state: absent
       become: yes
 
     - name: Template Hubble targets
