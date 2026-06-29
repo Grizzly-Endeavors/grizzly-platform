@@ -46,7 +46,11 @@ repos:
         files: ^ansible/
         exclude: ^archive/
         additional_dependencies:
-          - ansible-core>=2.15
+          # Cap below 2.19: ansible-core 2.19 dropped
+          # ansible.parsing.yaml.constructor, which ansible-lint v24.10.0
+          # imports — an unpinned upper bound let an incompatible core in and
+          # broke the hook repo-wide. Bump both together when upgrading.
+          - ansible-core>=2.15,<2.19
 
   # Shell script linting
   - repo: https://github.com/shellcheck-py/shellcheck-py
