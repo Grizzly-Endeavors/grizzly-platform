@@ -15,7 +15,9 @@ Never leave a removed object orphaned in the running instance. A blueprint disap
 
 ## Cross-references: `!KeyOf` is same-file only
 
-`!KeyOf <id>` resolves the PK of another entry's `id:` **within the same blueprint file**; it cannot reach an entry in a different file. For references across files, use `!Find [model, [field, value]]`, which resolves lazily against the DB at apply time. Beware: if file A `!Find`s an object that file B creates, and B hasn't applied yet, the `!Find` returns null that pass and only converges on a later reconcile (up to 60 min). When two objects reference each other (e.g. a source's `enrollment_flow` and that flow's stages referencing the source), keep them in **one file** so every link is `!KeyOf` and resolves in a single atomic transaction. This is why `social-login.yaml` is one file rather than split.
+`!KeyOf <id>` resolves the PK of another entry's `id:` **within the same blueprint file**; it cannot reach an entry in a different file. For references across files, use `!Find [model, [field, value]]`, which resolves lazily against the DB at apply time.
+
+**Order matters within a file:** `!KeyOf` resolves to an *already-applied* entry, so the target entry must appear **above** every entry that references it. Entries are applied top-to-bottom in one transaction; a forward reference fails with `KeyOf: failed to find entry with id ...` and rolls the whole blueprint back. Arrange dependencies-first (e.g. flow + stages → sources that reference the flow → bindings that reference both). Beware: if file A `!Find`s an object that file B creates, and B hasn't applied yet, the `!Find` returns null that pass and only converges on a later reconcile (up to 60 min). When two objects reference each other (e.g. a source's `enrollment_flow` and that flow's stages referencing the source), keep them in **one file** so every link is `!KeyOf` and resolves in a single atomic transaction. This is why `social-login.yaml` is one file rather than split.
 
 ## User identity & access (`social-login.yaml`)
 
