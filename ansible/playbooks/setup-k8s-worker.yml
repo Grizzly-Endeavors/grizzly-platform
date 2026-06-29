@@ -366,6 +366,15 @@
         mode: "0644"
       register: alloy_download
 
+    - name: Ensure Alloy extract directory exists
+      # unarchive requires dest to exist; /tmp is cleared on reboot, so the
+      # download re-triggers and extraction fails without this.
+      ansible.builtin.file:
+        path: /tmp/alloy-extract
+        state: directory
+        mode: "0755"
+      when: alloy_download.changed
+
     - name: Extract Alloy binary
       ansible.builtin.unarchive:
         src: "/tmp/alloy-{{ alloy_version }}.zip"
