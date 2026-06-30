@@ -3,6 +3,15 @@ metadata:
   name: grizzly-baseline-groups
 # Baseline RBAC groups. akadmin is folded into grizzly-admins via !Find so the
 # superuser group has a member without hardcoding a primary key.
+#
+# Below the two baseline groups: the membership taxonomy — two households and
+# two friend circles. Membership is kept ORTHOGONAL to power (admin/tier groups
+# are deferred and added separately), so a person is e.g. "Big Bear Hollow" plus
+# a future "household-admin", never an exploded "big-bear-hollow-admin". The
+# `name` doubles as identifier and label and propagates verbatim into the OIDC
+# `groups` claim (and thus the Nextcloud group name). Enrollees land here via a
+# group-scoped invite (the invite carries the group; the enrollment gate policy
+# in social-login.yaml adds it). See ADR-041.
 entries:
   - model: authentik_core.group
     identifiers:
@@ -14,3 +23,15 @@ entries:
   - model: authentik_core.group
     identifiers:
       name: grizzly-users
+  - model: authentik_core.group
+    identifiers:
+      name: Big Bear Hollow
+  - model: authentik_core.group
+    identifiers:
+      name: Fliguntons
+  - model: authentik_core.group
+    identifiers:
+      name: Rainy Tree Society
+  - model: authentik_core.group
+    identifiers:
+      name: Nerds
