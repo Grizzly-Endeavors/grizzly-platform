@@ -43,6 +43,13 @@ entries:
       client_type: confidential
       client_id: !Env [AUTHENTIK_NEXTCLOUD_CLIENT_ID, ""]
       client_secret: !Env [AUTHENTIK_NEXTCLOUD_CLIENT_SECRET, ""]
+      # Required since Authentik 2026.x made grant types explicit: without this
+      # the provider's grant_types is [] and the authorize endpoint rejects every
+      # code request as "invalid_request" (SSO never completes). user_oidc uses
+      # the authorization-code flow and refreshes tokens.
+      grant_types:
+        - authorization_code
+        - refresh_token
       # user_oidc's redirect endpoint on the Nextcloud host.
       redirect_uris:
         - matching_mode: strict
