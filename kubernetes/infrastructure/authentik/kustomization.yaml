@@ -17,6 +17,7 @@ configMapGenerator:
     files:
       - blueprints/brand.yaml
       - blueprints/groups.yaml
+      - blueprints/grizzly-invite-admin.yaml
       - blueprints/nextcloud.yaml
       - blueprints/social-login.yaml
 generatorOptions:
