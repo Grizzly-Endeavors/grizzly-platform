@@ -33,9 +33,17 @@ entries:
   # Bind the provider to the default embedded outpost so it serves
   # /outpost.goauthentik.io for invite.bearflinn.com. Only this provider is set;
   # it is currently the sole proxy provider, so replacing the list is safe.
+  #
+  # authentik_host MUST be set or the outpost builds its sign-in redirect against
+  # http://localhost (the internal API URL) and the browser 404s. A partial config
+  # is fine: OutpostConfig fills every other field from its dataclass defaults
+  # (which match the embedded outpost's current values, e.g. namespace via the
+  # running pod), so only authentik_host changes.
   - model: authentik_outposts.outpost
     identifiers:
       name: authentik Embedded Outpost
     attrs:
       providers:
         - !KeyOf invite-admin-provider
+      config:
+        authentik_host: https://sso.bearflinn.com/
