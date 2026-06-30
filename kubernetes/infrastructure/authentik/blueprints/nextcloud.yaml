@@ -24,7 +24,7 @@ entries:
       scope_name: groups
       description: "Authentik group names, for Nextcloud group provisioning"
       expression: |
-        return [group.name for group in request.user.ak_groups.all()]
+        return [group.name for group in request.user.groups.all()]
 
   - model: authentik_providers_oauth2.oauth2provider
     id: nextcloud-provider
