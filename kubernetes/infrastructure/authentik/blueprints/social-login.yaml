@@ -72,10 +72,17 @@ entries:
             ak_logger.warning("invite verify request failed", exc=str(exc))
             ak_message("Sign-up service is unavailable. Please try again shortly.")
             return False
-        if res.status_code == 200 and res.json().get("allow") is True:
-            return True
-        ak_message("Your invitation is invalid or has already been used.")
-        return False
+        if res.status_code != 200 or res.json().get("allow") is not True:
+            ak_message("Your invitation is invalid or has already been used.")
+            return False
+        # Some sources (e.g. Google) provide a verified email but no username,
+        # which makes the user-write stage abort with "empty username". Derive
+        # the username from the email so any provider can enroll seamlessly.
+        # (Writing request.context here persists into the flow plan.)
+        prompt_data = request.context.setdefault("prompt_data", {})
+        if not prompt_data.get("username"):
+            prompt_data["username"] = prompt_data.get("email", "")
+        return True
 
   # Bind the gate to the enrollment flow. failure_result:false => a policy error
   # denies (fail closed); timeout > the in-policy /verify timeout. This is the
