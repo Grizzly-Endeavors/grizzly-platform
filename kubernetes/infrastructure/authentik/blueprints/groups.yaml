@@ -1,8 +1,12 @@
 version: 1
 metadata:
   name: grizzly-baseline-groups
-# Baseline RBAC groups. akadmin is folded into grizzly-admins via !Find so the
-# superuser group has a member without hardcoding a primary key.
+# Baseline RBAC groups. The blueprint owns each group's existence and its power
+# flag (is_superuser) but deliberately does NOT manage grizzly-admins membership:
+# a group's `users` attr is replace-semantics, so pinning it would revert anyone
+# added out-of-band, and human accounts can't live in this public repo anyway (no
+# PII in git — see the directory CLAUDE.md). akadmin is superuser independently;
+# additional admins are added in the Authentik UI/API (a documented manual step).
 #
 # Below the two baseline groups: the membership taxonomy — two households and
 # two friend circles. Membership is kept ORTHOGONAL to power (admin/tier groups
@@ -18,8 +22,6 @@ entries:
       name: grizzly-admins
     attrs:
       is_superuser: true
-      users:
-        - !Find [authentik_core.user, [username, akadmin]]
   - model: authentik_core.group
     identifiers:
       name: grizzly-users

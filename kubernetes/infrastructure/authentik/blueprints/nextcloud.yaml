@@ -16,6 +16,12 @@ metadata:
 entries:
   # Groups scope mapping — emits a `groups` claim (list of the user's Authentik
   # group names) so user_oidc can mirror Authentik groups into Nextcloud.
+  #
+  # Nextcloud admin == membership in the built-in `admin` group, so we append
+  # `admin` to the claim for grizzly-admins members; user_oidc (group
+  # provisioning on) then adds them to Nextcloud's `admin` group on login and
+  # drops it again once they leave grizzly-admins. This makes the role — not a
+  # hand-picked user — confer Nextcloud admin.
   - model: authentik_providers_oauth2.scopemapping
     id: nextcloud-groups-scope
     identifiers:
@@ -24,7 +30,10 @@ entries:
       scope_name: groups
       description: "Authentik group names, for Nextcloud group provisioning"
       expression: |
-        return [group.name for group in request.user.groups.all()]
+        groups = [group.name for group in request.user.groups.all()]
+        if "grizzly-admins" in groups:
+            groups.append("admin")
+        return groups
 
   - model: authentik_providers_oauth2.oauth2provider
     id: nextcloud-provider
