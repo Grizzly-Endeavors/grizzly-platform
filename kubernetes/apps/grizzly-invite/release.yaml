@@ -1,0 +1,23 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: grizzly-invite
+  namespace: flux-system
+spec:
+  interval: 5m
+  releaseName: grizzly-invite
+  targetNamespace: grizzly-invite
+  chart:
+    spec:
+      chart: ./deploy
+      sourceRef:
+        kind: GitRepository
+        name: grizzly-invite
+        namespace: flux-system
+      reconcileStrategy: Revision
+  install:
+    remediation:
+      retries: 2
+  upgrade:
+    remediation:
+      retries: 2
