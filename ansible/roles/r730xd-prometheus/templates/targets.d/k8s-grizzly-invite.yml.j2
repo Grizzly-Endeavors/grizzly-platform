@@ -1,0 +1,8 @@
+# Managed by Ansible — r730xd-prometheus role
+# grizzly-invite broker metrics exposed via NodePort (kubernetes/apps/grizzly-invite)
+- targets:
+    - "{{ hostvars[groups['k8s_control_plane'][0]]['ansible_host'] }}:30892"
+  labels:
+    env: "grizzly-platform"
+    instance: "grizzly-invite"
+    component: "grizzly-invite"

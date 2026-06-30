@@ -211,6 +211,15 @@ scrape_configs:
           - "/etc/prometheus/targets.d/k8s-authentik.yml"
         refresh_interval: 30s
 
+  # grizzly-invite — invitation broker on the Authentik enrollment path. If it's
+  # down, NEW sign-ups fail (existing logins are unaffected); this scrape feeds
+  # the InviteBrokerDown alert. Metrics on the http :8080 port, NodePort 30892.
+  - job_name: "grizzly-invite"
+    file_sd_configs:
+      - files:
+          - "/etc/prometheus/targets.d/k8s-grizzly-invite.yml"
+        refresh_interval: 30s
+
 {% if prometheus_blackbox_targets is defined and prometheus_blackbox_targets | length > 0 %}
   - job_name: "blackbox"
     metrics_path: /probe

@@ -1,0 +1,13 @@
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: GitRepository
+metadata:
+  name: grizzly-invite
+  namespace: flux-system
+spec:
+  interval: 1m
+  url: https://github.com/Grizzly-Endeavors/grizzly-invite
+  ref:
+    branch: main
+  provider: github
+  secretRef:
+    name: github-app-credentials
