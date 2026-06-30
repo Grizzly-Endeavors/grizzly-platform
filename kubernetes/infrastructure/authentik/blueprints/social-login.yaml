@@ -1,21 +1,25 @@
 version: 1
 metadata:
   name: grizzly-social-login
-# Social federation (Discord + GitHub) with invitation-gated closed enrollment.
+# Social federation (Discord + GitHub + Google) with invitation-gated closed
+# enrollment. The invitation is carried in a browser cookie planted by the
+# grizzly-invite broker — it survives the OAuth round-trip that Authentik flow
+# context does NOT — and validated by an expression policy on the enrollment
+# flow. See docs/decisions/040-invite-broker-cookie-bridged-enrollment.md.
 #
-# Login: returning users click a Discord/GitHub button on the sso.bearflinn.com
-# login page (the default identification stage, updated below to show the
-# sources) and are matched to their existing linked account.
+# Login: returning users click a Discord/GitHub/Google button on the
+# sso.bearflinn.com login page and are matched to their existing linked account.
 #
 # Enrollment (closed): a NEW social login has no match, so Authentik runs the
-# source's enrollment_flow -> grizzly-invite-enrollment. That flow prompts for
-# an invitation code and a missing/invalid code halts it (the invitation stage's
-# continue_flow_without_invitation:false is the gate). A valid code -> the user
-# is created from the provider's identity and auto-added to grizzly-users.
+# source's enrollment_flow -> grizzly-invite-enrollment. The grizzly-invite-gate
+# expression policy bound to that flow reads the `grizzly_invite` cookie and
+# POSTs it to the broker's /verify; a missing/invalid/used invitation denies the
+# flow (no account). A valid one -> the user is created from the provider's
+# identity and auto-added to grizzly-users.
 #
-# Per-user onboarding = create an invitation (Admin UI / API) and hand the
-# person the code; they sign in with Discord/GitHub and paste it. No user object
-# is pre-provisioned, so no human PII lives in git or OpenBao.
+# Per-user onboarding = mint an invite in the broker and send the link; the
+# person clicks it, signs in with any provider, and is enrolled — no code to
+# paste. No user object is pre-provisioned, so no human PII lives in git/OpenBao.
 #
 # Source client_id/client_secret are NOT in git: injected into the worker (which
 # applies blueprints) via global.env as AUTHENTIK_{DISCORD,GITHUB}_CLIENT_{ID,
@@ -41,37 +45,55 @@ entries:
       # enrollment fallback after social auth.
       authentication: none
 
-  # --- Enrollment stages ----------------------------------------------------
-  # Prompt that collects the invitation code. field_key must be `token` so the
-  # invitation stage reads it from the flow context.
-  - model: authentik_stages_prompt.prompt
-    id: invitation-token-field
+  # --- Invitation gate (expression policy on the flow) ----------------------
+  # Replaces the old paste-a-code prompt + invitation stage. The broker plants a
+  # signed `grizzly_invite` cookie at invite.bearflinn.com/i/<token>; that cookie
+  # survives the OAuth round-trip (Authentik flow context does not), so this
+  # policy reads it on the enrollment callback and consumes it via /verify.
+  # Fail closed: no cookie, a bad/used invite, or a broker error all deny.
+  - model: authentik_policies_expression.expressionpolicy
+    id: invite-gate-policy
     identifiers:
-      name: grizzly-invitation-token
+      name: grizzly-invite-gate
     attrs:
-      field_key: token
-      label: Invitation code
-      type: text
-      required: true
-      placeholder: Paste the invitation code you were given
+      execution_logging: true
+      expression: |
+        cookie = request.http_request.COOKIES.get("grizzly_invite")
+        if not cookie:
+            ak_message("No invitation found. Open your invite link to sign up.")
+            return False
+        try:
+            res = requests.post(
+                "http://grizzly-invite.grizzly-invite.svc.cluster.local:8080/verify",
+                json={"cookie": cookie},
+                timeout=5,
+            )
+        except Exception as exc:
+            ak_logger.warning("invite verify request failed", exc=str(exc))
+            ak_message("Sign-up service is unavailable. Please try again shortly.")
+            return False
+        if res.status_code == 200 and res.json().get("allow") is True:
+            return True
+        ak_message("Your invitation is invalid or has already been used.")
+        return False
+
+  # Bind the gate to the enrollment flow. failure_result:false => a policy error
+  # denies (fail closed); timeout > the in-policy /verify timeout. This is the
+  # cutover from the removed invitation stage; if live testing shows a flow-level
+  # binding can't see the cookie after the source redirect, move this binding
+  # onto the user-write stage (re_evaluate_policies) instead — see ADR-040.
+  - model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf invite-enrollment-flow
+      policy: !KeyOf invite-gate-policy
       order: 0
-
-  - model: authentik_stages_prompt.promptstage
-    id: invitation-prompt-stage
-    identifiers:
-      name: grizzly-invitation-prompt
     attrs:
-      fields:
-        - !KeyOf invitation-token-field
+      enabled: true
+      negate: false
+      timeout: 6
+      failure_result: false
 
-  # The gate: an invalid/absent token halts the flow (no account created).
-  - model: authentik_stages_invitation.invitationstage
-    id: invitation-stage
-    identifiers:
-      name: grizzly-invitation
-    attrs:
-      continue_flow_without_invitation: false
-
+  # --- Enrollment stages ----------------------------------------------------
   # Creates the user from the source-provided identity, active, in grizzly-users.
   # user_type: internal so enrolled users can reach their dashboard/app launcher
   # and manage their account — the stage default (external) is a B2C/app-only
@@ -157,17 +179,12 @@ entries:
         - !KeyOf github-source
         - !KeyOf google-source
 
-  # --- Flow stage bindings: code prompt -> gate -> user write -> login -------
-  - model: authentik_flows.flowstagebinding
-    identifiers:
-      target: !KeyOf invite-enrollment-flow
-      stage: !KeyOf invitation-prompt-stage
-      order: 10
-  - model: authentik_flows.flowstagebinding
-    identifiers:
-      target: !KeyOf invite-enrollment-flow
-      stage: !KeyOf invitation-stage
-      order: 20
+  # --- Flow stage bindings: user write -> login -----------------------------
+  # The invitation gate is now a flow-level expression policy (above), not a
+  # stage — so the flow has no interactive steps after OAuth: it just writes the
+  # user and logs them in. (The old prompt/invitation stage bindings at order
+  # 10/20 are removed; their now-orphaned objects are deleted from the running
+  # instance during the cutover — see ADR-040 / the deploy runbook.)
   - model: authentik_flows.flowstagebinding
     identifiers:
       target: !KeyOf invite-enrollment-flow
