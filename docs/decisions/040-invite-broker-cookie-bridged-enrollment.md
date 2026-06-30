@@ -1,7 +1,7 @@
 # 040: Invite broker — cookie-bridged Authentik enrollment
 
 **Date:** 2026-06-29
-**Status:** accepted
+**Status:** accepted (single-use invariant generalized by [ADR-042](042-multi-use-invites.md))
 **Relates to:** [ADR-039](039-authentik-social-federation-invitation-enrollment.md), [ADR-037](037-authentik-config-as-code-blueprints.md), [ADR-033](033-central-identity-authentik.md), [ADR-003](003-foundation-stores-on-r730xd.md), [ADR-019](019-ingress-and-tls-termination.md)
 
 ## Context
