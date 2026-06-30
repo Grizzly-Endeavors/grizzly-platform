@@ -1,0 +1,143 @@
+---
+# setup-invite-stores.yml — R730xd-side wiring for the grizzly-invite broker.
+#
+# grizzly-invite itself is deployed to Kubernetes via Flux
+# (kubernetes/apps/grizzly-invite). This playbook handles the two pieces that
+# live on the R730xd foundation host:
+#
+#   Play 1  Provision the `grizzly_invite` database + login role on the
+#           foundation PostgreSQL (the K8s ExternalSecret and this role share one
+#           password, sourced from OpenBao secret/grizzly-platform/platform/invite).
+#   Play 2  Register the broker's metrics NodePort (30892) as a Prometheus scrape
+#           target and load the InviteBrokerDown alert.
+#
+# Prerequisites:
+#   - Foundation Postgres running (deploy-foundation-stores.yml).
+#   - OpenBao seeded: secret/grizzly-platform/platform/invite with keys
+#     db_password, signing_key, admin_token. The db_password value becomes the
+#     grizzly_invite role password below — generate it WITHOUT single quotes
+#     (e.g. `openssl rand -base64 36`).
+#
+# Usage (use the DEFAULT inventory — play 2 templates the control-plane IP from
+# the k8s_control_plane group in inventory/lab-nodes.yml, so do NOT scope this
+# to -i inventory/r730xd.yml):
+#   ansible-playbook ansible/playbooks/setup-invite-stores.yml \
+#     --vault-password-file .vault_pass -v
+#
+# Run just the DB or just the metrics half:
+#   ... --tags db
+#   ... --tags metrics
+
+- name: Provision grizzly-invite database on foundation Postgres
+  hosts: r730xd
+  become: yes
+  gather_facts: no
+  tags: [db]
+
+  # The grizzly_invite role password lives only in OpenBao (no static vault.yml
+  # fallback), so this play always reads from OpenBao.
+  vars:
+    openbao_read_enabled: true
+
+  vars_files:
+    - "{{ playbook_dir }}/../vars/openbao_auth.yml"
+
+  pre_tasks:
+    - name: Load OpenBao-sourced platform secrets
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/../vars/openbao_secrets.yml"
+
+    - name: Verify foundation Postgres container is running
+      ansible.builtin.command: docker exec foundation-postgres pg_isready -U postgres
+      changed_when: false
+
+  tasks:
+    # psql -U postgres connects over the container's local socket (trust auth) —
+    # no superuser password needed. The role password is passed via psql's :'pw'
+    # literal (safe quoting); the SQL is fed on stdin (docker exec -i), because
+    # psql only interpolates variables for stdin/-f input, NOT for -c strings.
+    - name: Check whether the grizzly_invite role exists
+      ansible.builtin.command: >-
+        docker exec foundation-postgres
+        psql -U postgres -tAc
+        "SELECT 1 FROM pg_roles WHERE rolname='grizzly_invite'"
+      register: invite_role
+      changed_when: false
+
+    - name: Create the grizzly_invite login role
+      ansible.builtin.shell:
+        cmd: >-
+          set -o pipefail;
+          printf "CREATE ROLE grizzly_invite LOGIN PASSWORD :'pw';\n"
+          | docker exec -i foundation-postgres
+          psql -U postgres -v ON_ERROR_STOP=1 -v pw="$PGPW"
+        executable: /bin/bash
+      environment:
+        PGPW: "{{ vault_invite_db_password }}"
+      when: invite_role.stdout != "1"
+      no_log: true
+
+    - name: Keep the grizzly_invite role password in sync with OpenBao
+      ansible.builtin.shell:
+        cmd: >-
+          set -o pipefail;
+          printf "ALTER ROLE grizzly_invite LOGIN PASSWORD :'pw';\n"
+          | docker exec -i foundation-postgres
+          psql -U postgres -v ON_ERROR_STOP=1 -v pw="$PGPW"
+        executable: /bin/bash
+      environment:
+        PGPW: "{{ vault_invite_db_password }}"
+      no_log: true
+      changed_when: false
+
+    - name: Check whether the grizzly_invite database exists
+      ansible.builtin.command: >-
+        docker exec foundation-postgres
+        psql -U postgres -tAc
+        "SELECT 1 FROM pg_database WHERE datname='grizzly_invite'"
+      register: invite_db
+      changed_when: false
+
+    - name: Create the grizzly_invite database owned by the grizzly_invite role
+      ansible.builtin.command: >-
+        docker exec foundation-postgres
+        psql -U postgres -v ON_ERROR_STOP=1
+        -c "CREATE DATABASE grizzly_invite OWNER grizzly_invite"
+      when: invite_db.stdout != "1"
+
+- name: Deploy grizzly-invite Prometheus target and alert
+  hosts: r730xd
+  become: yes
+  gather_facts: no
+  tags: [metrics]
+
+  vars_files:
+    - "{{ playbook_dir }}/../roles/r730xd-prometheus/defaults/main.yml"
+    - "{{ playbook_dir }}/../inventory/group_vars/all/network.yml"
+
+  tasks:
+    - name: Template grizzly-invite Prometheus targets
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../roles/r730xd-prometheus/templates/targets.d/k8s-grizzly-invite.yml.j2"
+        dest: "/opt/observability/prometheus/targets.d/k8s-grizzly-invite.yml"
+        mode: "0644"
+
+    - name: Re-template Prometheus configuration
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../roles/r730xd-prometheus/templates/prometheus.yml.j2"
+        dest: "/opt/observability/prometheus/prometheus.yml"
+        mode: "0644"
+      register: prom_config
+
+    - name: Re-template alert rules
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../roles/r730xd-prometheus/templates/rules/grizzly-platform.yml.j2"
+        dest: "/opt/observability/prometheus/rules/grizzly-platform.yml"
+        mode: "0644"
+      register: prom_rules
+
+    - name: Recreate Prometheus container if config changed
+      ansible.builtin.command: docker compose up -d --force-recreate prometheus
+      args:
+        chdir: /opt/observability/prometheus
+      when: prom_config is changed or prom_rules is changed

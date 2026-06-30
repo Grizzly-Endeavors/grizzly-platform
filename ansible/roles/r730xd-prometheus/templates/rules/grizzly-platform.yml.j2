@@ -459,6 +459,18 @@ groups:
         annotations:
           summary: "authentik is unreachable — SSO/OIDC login broken for all integrated apps"
 
+      # --- grizzly-invite: invitation broker ---
+      # On the Authentik enrollment path: when down, NEW user sign-ups fail
+      # (existing logins keep working). Warning, not critical — onboarding is
+      # interruptible, not a live-traffic outage.
+      - alert: InviteBrokerDown
+        expr: up{job="grizzly-invite"} == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "grizzly-invite is unreachable — new invitation sign-ups will fail"
+
   - name: observability
     rules:
       - alert: TargetDown
