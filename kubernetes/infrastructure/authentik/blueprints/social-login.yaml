@@ -15,7 +15,9 @@ metadata:
 # expression policy bound to that flow reads the `grizzly_invite` cookie and
 # POSTs it to the broker's /verify; a missing/invalid/used invitation denies the
 # flow (no account). A valid one -> the user is created from the provider's
-# identity and auto-added to grizzly-users.
+# identity and auto-added to grizzly-users, plus any groups the invite carried
+# (the /verify response returns them; the gate policy injects them into the flow
+# plan's `groups` context for the user-write stage). See ADR-041.
 #
 # Per-user onboarding = mint an invite in the broker and send the link; the
 # person clicks it, signs in with any provider, and is enrolled — no code to
@@ -72,7 +74,8 @@ entries:
             ak_logger.warning("invite verify request failed", exc=str(exc))
             ak_message("Sign-up service is unavailable. Please try again shortly.")
             return False
-        if res.status_code != 200 or res.json().get("allow") is not True:
+        result = res.json() if res.status_code == 200 else {}
+        if result.get("allow") is not True:
             ak_message("Your invitation is invalid or has already been used.")
             return False
         # Some sources (e.g. Google) provide a verified email but no username,
@@ -82,6 +85,14 @@ entries:
         prompt_data = request.context.setdefault("prompt_data", {})
         if not prompt_data.get("username"):
             prompt_data["username"] = prompt_data.get("email", "")
+        # Scope the enrollee to the invite's groups (returned by /verify). The
+        # user-write stage adds any Group objects under the plan's `groups`
+        # context key, on top of its static create_users_group (grizzly-users).
+        # Unknown names filter to empty — fail-soft, the user just isn't added.
+        from authentik.core.models import Group
+        group_names = result.get("groups") or []
+        if group_names:
+            request.context["groups"] = list(Group.objects.filter(name__in=group_names))
         return True
 
   # Bind the gate to the enrollment flow. failure_result:false => a policy error
@@ -101,7 +112,9 @@ entries:
       failure_result: false
 
   # --- Enrollment stages ----------------------------------------------------
-  # Creates the user from the source-provided identity, active, in grizzly-users.
+  # Creates the user from the source-provided identity, active, in grizzly-users
+  # (static below) plus any invite-scoped groups the gate policy staged in the
+  # flow plan's `groups` context.
   # user_type: internal so enrolled users can reach their dashboard/app launcher
   # and manage their account — the stage default (external) is a B2C/app-only
   # type that's barred from the authentik interface. Internal users are free and
