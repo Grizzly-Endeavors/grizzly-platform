@@ -1,17 +1,16 @@
 # VLAN Redesign (exploration)
 
-> **Status: not implemented.** Gated on an off-the-shelf router purchase ([ADR-021](../decisions/021-off-the-shelf-router-tower-pc-as-worker.md)). For the live topology, see [../network.md](../network.md).
+> **Status: not implemented, but no longer gated on hardware.** The router has been acquired (Digi EX50, [ADR-044](../decisions/044-digi-ex50-as-off-the-shelf-router.md)) and segmentation is now scheduled as part of the garage cutover. The authoritative plan is [../runbooks/garage-relocation-cutover.md](../runbooks/garage-relocation-cutover.md) (Checkpoint D) and [ADR-046](../decisions/046-platform-network-segmentation-via-home-eviction.md), which **supersedes the dual-homing scheme** originally sketched below. For the live topology, see [../network.md](../network.md).
 
-Last updated: 2026-04-17
+Last updated: 2026-04-17 (revised 2026-07-02 for the EX50 + evict-home approach)
 
 ## Why this isn't live yet
 
-The lab runs on a **flat SR2024 network** today with the Xfinity gateway upstream. The target architecture below is gated on two purchases:
+The lab runs on a **flat SR2024 network** today with the Xfinity gateway upstream. Segmentation was gated on an off-the-shelf router; that router (Digi EX50) is now in hand, and the VLAN work rides the garage relocation window rather than a separate effort.
 
-1. An **off-the-shelf router** ([ADR-021](../decisions/021-off-the-shelf-router-tower-pc-as-worker.md)) to replace the Xfinity gateway's routing role. Until it's in place, configuring VLANs buys little — inter-VLAN routing would have to live somewhere, and we've explicitly decided not to run it ourselves.
-2. **UPS battery replacement** (not network-blocking, tracked separately).
+The key refinement since this doc was first written ([ADR-046](../decisions/046-platform-network-segmentation-via-home-eviction.md)): rather than renumber the platform or dual-home every machine, **the platform stays on `10.0.0.0/24` and home devices are evicted to their own subnet.** Same L3 boundary, none of the cluster-PKI / PV-rebinding cost. A full platform renumber (onto a non-default range for a future multi-home mesh) is deferred to its own project.
 
-Nothing below is time-pressured — everything still operates on the current flat network until then.
+Nothing below is time-pressured — everything still operates on the current flat network until the cutover.
 
 ## Physical Layout (current)
 
@@ -68,14 +67,16 @@ Home drops (bedroom, garage, workshop) stay on the legacy consumer switch chain 
 - Local DNS — lab-internal resolution without `/etc/hosts` hacks.
 - Full router-side config, no Xfinity gateway feature limits.
 
-## VLAN Design (deferred — target state)
+## VLAN Design (target state — per ADR-046)
 
-Start with 2 VLANs, expand only if warranted.
+Start with 2 VLANs, expand only if warranted. **The platform keeps `10.0.0.0/24`; home is evicted to `10.20.0.0/24`** (proposed) — so no platform IP changes.
 
-| VLAN | ID | Purpose | Members |
-|------|----|---------|---------|
-| Default (Home) | 1 (untagged) | Home network — DHCP from new router, personal devices, internet | Router uplink, bedroom drop, garage drop, WiFi APs (home SSID), lab machines' internet-facing port |
-| Lab | 10 (tagged) | Lab-internal — K8s, storage, observability | Inspiron, Quanta, Intel NUC, Optiplex, Tower PC (once joined), R730xd |
+| VLAN | Subnet | Purpose | Members |
+|------|--------|---------|---------|
+| Platform | `10.0.0.0/24`, gw `10.0.0.1` (EX50) | Platform-internal — K8s, storage, observability, foundation stores | Inspiron, Quanta, Intel NUC, Optiplex, Tower PC (once joined), R730xd, jumpbox |
+| Home | `10.20.0.0/24`, gw `10.20.0.1` (EX50) | Home network — DHCP, personal devices, internet | Home/guest WiFi SSIDs (via APs), bedroom + other home drops, legacy consumer switch chain |
+
+The EX50 routes and firewalls between the two: **default-deny `home → platform`**, with only the specific flows the platform needs; `platform → internet` allowed. Because the EX50 stays in IaC ([ADR-044](../decisions/044-digi-ex50-as-off-the-shelf-router.md)), those firewall rules are version-controlled.
 
 ### Optional: Storage Sub-VLAN
 
@@ -85,14 +86,14 @@ Start with 2 VLANs, expand only if warranted.
 
 Worth doing **if** storage I/O noticeably contends with other lab traffic on the flat network. No pressure to commit up front — the R730xd 4-port NIC makes this trivial to add when needed.
 
-### How lab machines handle tagging
+### How platform machines connect (dual-homing retired)
 
-Each lab machine gets:
+The original sketch dual-homed every machine on both the home and lab subnets (two IPs each) to get internet + lab access on a *flat* network. With real L3 routing on the EX50 that is unnecessary and is **retired** ([ADR-046](../decisions/046-platform-network-segmentation-via-home-eviction.md)):
 
-- **Untagged on VLAN 1** for internet / general access (default gateway via the new router).
-- **Tagged VLAN 10** on the same port (802.1Q trunk) for lab-internal traffic.
+- Each platform machine sits on the **platform VLAN only** (single IP, its existing `10.0.0.x`), on an SR2024 access port.
+- It reaches the internet via the platform subnet's gateway on the EX50 — no second interface, no VLAN tagging on the host.
 
-Result: two IPs per machine — one on the home subnet (for internet), one on the lab subnet (for everything K8s / storage). Works cleanly with Linux's VLAN support (`ip link add link eth0 name eth0.10 type vlan id 10`).
+The SR2024 carries the platform VLAN as access ports to the machines and trunks the home/guest SSIDs up to the APs; only the router uplink and AP ports are trunks.
 
 ## WiFi Architecture
 
@@ -117,9 +118,7 @@ Unchanged by the router purchase:
 
 ## DNS
 
-- **Today:** `/etc/hosts` managed by Ansible on lab machines + Xfinity upstream.
-- **Target (post-router):** local DNS on the new router for lab-internal names. Eliminates the `/etc/hosts` pattern.
-- **Alternative:** CoreDNS / Pi-hole on K8s — rejected for now because it creates a chicken-and-egg between K8s health and DNS availability. Router-side DNS is simpler.
+Superseded by [ADR-036](../decisions/036-internal-dns-zone.md): the internal naming scheme is a private `.internal` zone (`grizzly-platform.internal`), records managed declaratively (external-dns for cluster Services/Ingresses, Ansible zone files for bare-metal hosts), LAN clients pointed at the internal resolver via DHCP. ADR-036 also fixes the resolver's **long-term home as the off-the-shelf router** — i.e. the EX50 — running interim on R730xd until the EX50 lands. So the EX50 cutover unblocks moving the resolver to the router; the `.internal` naming and `/etc/hosts` retirement are the same decision, tracked in ADR-036, not here.
 
 ## Cable Runs
 
@@ -135,9 +134,11 @@ Unchanged by the router purchase:
 - [x] ~~SR2024 PoE~~ — confirmed (802.3at, powers all APs without injectors).
 - [x] ~~Aerohive standalone mode~~ — confirmed (`no capwap client enable`).
 - [x] ~~Custom router vs. off-the-shelf~~ — decided off-the-shelf ([ADR-021](../decisions/021-off-the-shelf-router-tower-pc-as-worker.md)).
-- [ ] **Router model selection** — UniFi, OPNsense appliance, or similar. Decide when ready to buy.
-- [ ] **Storage VLAN worth it?** — revisit once router is in and we have traffic baselines.
-- [ ] **Xfinity gateway bridge-mode compatibility** — verify with the chosen router before cutover.
+- [x] ~~Router model selection~~ — Digi EX50 ([ADR-044](../decisions/044-digi-ex50-as-off-the-shelf-router.md)).
+- [x] ~~Xfinity gateway bridge-mode compatibility~~ — confirmed on the same gateway model at another location.
+- [ ] **DAL feature-verify (bench, before cutover)** — confirm the EX50 does multi-VLAN interfaces + inter-VLAN firewall, DHCP reservations, WireGuard peer + DNAT (firmware ≥ 24.3.28.88), and optional local DNS records. See the cutover runbook prerequisites.
+- [ ] **Home subnet range** — `10.20.0.0/24` proposed; confirm no collision with the planned multi-home mesh.
+- [ ] **Storage VLAN worth it?** — revisit once the EX50 is in and we have traffic baselines.
 
 ## Available but Unused Network Hardware
 

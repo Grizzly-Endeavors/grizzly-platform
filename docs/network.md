@@ -4,9 +4,11 @@ The live lab network. Flat L2 today on the SR2024, with a dedicated point-to-poi
 
 > **IP addresses:** Authoritative values are in `ansible/group_vars/all/network.yml`. This doc renders the Jinja vars literally.
 
-For the pending VLAN redesign (gated on off-the-shelf router purchase), see [exploration/network-vlans.md](exploration/network-vlans.md).
+For the pending VLAN redesign, see [exploration/network-vlans.md](exploration/network-vlans.md).
 
-Last updated: 2026-04-17
+> **Cutover planned (not yet executed).** The router has been acquired (Digi EX50) and the platform is moving to the garage. The two jobs are one staged maintenance window — see [runbooks/garage-relocation-cutover.md](runbooks/garage-relocation-cutover.md) and ADRs [044](decisions/044-digi-ex50-as-off-the-shelf-router.md) (EX50 as router), [045](decisions/045-platform-relocation-to-garage.md) (garage relocation), [046](decisions/046-platform-network-segmentation-via-home-eviction.md) (segmentation), [047](decisions/047-ingress-tunnel-relocation-to-ex50.md) (ingress move). The topology below is still the *live* flat network until then.
+
+Last updated: 2026-04-17 (cutover plan added 2026-07-02)
 
 ## Physical Topology
 
@@ -88,4 +90,5 @@ Out-of-band management (iDRAC, BMC/IPMI) lives on the lab subnet and is reachabl
 | 1× Aerohive AP230 | Spare (mount pending) | PoE, standalone-mode confirmed. Higher performance than AP130s. |
 | 1× Aerohive AP630 | Spare (mount pending) | Stock HiveOS restored 2026-04-03 ([ADR-011](decisions/011-ap630-restored-to-stock-wifi-ap.md)). Highest-performance AP. |
 | R730 4-port NIC | In R730xd | Could dedicate ports to a storage VLAN once VLANs are enabled. |
-| Xfinity gateway | Living room | WAN uplink; still the router until the off-the-shelf router lands. Goes into bridge mode at that point. |
+| Xfinity gateway | Living room (→ garage at cutover) | WAN uplink; still the router today. Goes into bridge mode when the Digi EX50 is cut in ([ADR-044](decisions/044-digi-ex50-as-off-the-shelf-router.md)); relocates to the garage with the platform ([ADR-045](decisions/045-platform-relocation-to-garage.md)). |
+| Digi EX50 | Acquired (bench) | Chosen off-the-shelf router — 2× 2.5 GbE, WiFi 6, scriptable DAL (stays in IaC). Cutover pending. See [ADR-044](decisions/044-digi-ex50-as-off-the-shelf-router.md). |
