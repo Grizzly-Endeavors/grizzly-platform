@@ -20,6 +20,13 @@ dell_inspiron_ip: "10.0.0.226"
 intel_nuc_ip: "10.0.0.46"
 tower_pc_ip: "10.0.0.249"
 optiplex_ip: "10.0.0.187"
+
+# Aerohive SR2024 lab-backbone switch management interface.
+# NOTE: currently a DHCP lease from the Xfinity gateway, not a reservation —
+# discovered via ARP (08:ea:44 OUI = Aerohive). Give it a reservation at the
+# EX50 cutover (see issue #80). CLI access needs legacy SSH algorithms; default
+# creds admin/aerohive. See docs/aerohive-cli-reference.md.
+sr2024_ip: "10.0.0.153"
 # staging_vm_ip removed 2026-04-09 — staging VM decommissioned after
 # Phase 7b migration; see ADR-002 (Superseded) and archive/staging-vm/.
 

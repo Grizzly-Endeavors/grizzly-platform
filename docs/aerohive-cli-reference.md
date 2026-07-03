@@ -258,6 +258,36 @@ show mac-address-table          # NOTE: requires subcommand, bare form errors
 
 Note: `show vlan` is incomplete on its own — it requires a subcommand. Use `show run` to see VLAN assignments.
 
+### PoE / PSE Commands
+
+The PoE subsystem is spelled **`pse`** (Power Sourcing Equipment), not `poe` — `show poe` and friends error with "unknown keyword".
+
+```
+show pse port-brief             # Per-port: Status, Priority, Consumption(W), Profile
+show pse profile                # Power profiles: priority, mode (802.3af/at), power limit
+pse ?                           # Global PSE config: enable, guard-band, max-power-source,
+                                #   power-management-type, legacy, reset, restart
+```
+
+A port with nothing plugged in reads `Status: unknown` / `0.000 W` — that's **normal for an empty port**. It only means trouble on a port that has a powered device attached (see the wedge below).
+
+### PoE Troubleshooting — the PSE wedge
+
+**Symptom:** Nothing powers on. `show pse port-brief` shows **every** port `unknown` / `0.000 W`, including ports with a PD (AP or downstream PoE switch) plugged in. But the config looks completely healthy: `pse enable` reports "already enabled", profiles are `802.3 AT` at `32.0 W`, `max-power-source`/`guard-band` are at defaults. It's not a config or power-budget problem and **not** the PD's draw — the PSE controller chip has silently latched into a bad state and is reporting garbage.
+
+**Recovery ladder — what does NOT work, in order tried:**
+
+1. `pse reset` — rewrites PSE *parameters* to default (config-level). **Did nothing.**
+2. `pse restart` — restarts the PSE *chip firmware* without touching config. **Did nothing.**
+3. Warm `reboot` from the CLI. **Did nothing** — the wedge survives a software reboot; the PoE rail/chip stays latched through it.
+4. **Physical power-pull (unplug the switch, wait, plug back in). This is the only thing that recovered it.**
+
+**Implications:**
+
+- Because only a hard power-cycle clears it, **nothing over the network can auto-recover this** — remote monitoring can notify, but a human has to pull the plug (or the switch needs a smart PDU we can cycle).
+- Firmware is HiveOS 6.5r8 (2017) — an old-firmware PSE hang is a prime suspect. If it recurs near a repeatable *uptime*, that fingerprints a firmware aging bug (mitigation: scheduled reboot — **but note a warm reboot did NOT clear this instance**, so a power-cycle via PDU would be needed).
+- Monitoring + alerting design (canary-AP liveness poll + persistent switch syslog to capture the pre-failure cause) is written up in [exploration/sr2024-poe-monitoring.md](exploration/sr2024-poe-monitoring.md), deferred until after the garage migration.
+
 ---
 
 ## Common Pitfalls
@@ -267,5 +297,5 @@ Note: `show vlan` is incomplete on its own — it requires a subcommand. Use `sh
 - **Save config:** Changes are not persistent until `save config` is run. Get in the habit of saving after each logical block.
 - **CAPWAP:** If left enabled, the AP will try to find a controller and may override local config. Always `no capwap client enable` first.
 - **Channel width vs. stability:** Start at 40MHz and work up. 160MHz is tempting but causes drops on many units.
-- **PoE:** The SR2024 does provide PoE (802.3at/PoE+) despite not being the "P" model. All three APs confirmed powered by the switch.
+- **PoE:** The SR2024 does provide PoE (802.3at/PoE+) despite not being the "P" model. All three APs confirmed powered by the switch. The subsystem is spelled `pse`, not `poe`. **It can wedge** — all ports `unknown`/0 W despite a healthy config, recoverable only by a physical power-pull (`pse reset`/`restart` and a warm reboot don't clear it). See [PoE Troubleshooting — the PSE wedge](#poe-troubleshooting--the-pse-wedge).
 - **Firmware association:** Used APs may be locked to a previous cloud account. Contact Extreme support to release them before setup.
