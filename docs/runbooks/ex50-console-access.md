@@ -2,7 +2,7 @@
 
 How to get onto the EX50's scriptable **DAL Admin CLI** before/during the garage cutover. Companion to [garage-relocation-cutover.md](garage-relocation-cutover.md) (the "Bench-configure the EX50" / "Capture the DAL shell config commands into the IaC" prerequisites) and [ADR-044](../decisions/044-digi-ex50-as-off-the-shelf-router.md).
 
-Last updated: 2026-07-03 · Status: **bench bring-up in progress.** Network SSH path proven; serial console blocked (see discrepancy below).
+Last updated: 2026-07-03 · Status: **bench bring-up in progress.** Network SSH path proven and key-auth enrolled; full interface mapped in [../reference/ex50-dal-interface.md](../reference/ex50-dal-interface.md); serial console blocked on cable pinout (see discrepancy below).
 
 ---
 
@@ -31,17 +31,14 @@ Login for all local surfaces: user `admin`, the **unique factory password on the
 
 The EX50 is already cabled to the flat `10.0.0.0/24` LAN, but it presents **no IPv4 address on that subnet** — it is still on its factory-default LAN subnet (check the label / user guide for the exact default; Digi DAL default LAN is typically `192.168.2.1`), which is not routable from `10.0.0.0/24`. It *is* directly reachable over **IPv6 link-local**, which needs no recabling and no matching subnet.
 
-Discovery (how it was found):
-- ARP/ND neighbor table showed MAC `00:40:9d:e0:80:81` — OUI `00:40:9D` = **Digi International** — emitting IPv6 router advertisements on `enp6s0`.
-- Link-local address: `fe80::240:9dff:fee0:8081` (derived from the MAC via EUI-64).
-- `nmap -6` confirmed 22/80/443 open.
+Discovery (how it was found): the IPv6 neighbor table showed a device with the **Digi International** OUI (`00:40:9D`) emitting router advertisements on the LAN interface; its EUI-64 link-local address was derived from that, and `nmap -6` confirmed 22/80/443 open. (The unit's specific MAC / link-local are kept out of this public repo — the EX50 is the border device.)
 
-Connect (replace the interface if not `enp6s0`):
+Find it and connect (replace `<iface>` with your LAN interface, e.g. `enp6s0`):
 ```
-ssh admin@fe80::240:9dff:fee0:8081%enp6s0
-# web UI: https://[fe80::240:9dff:fee0:8081%25enp6s0]/   (%25 = URL-encoded % in a browser)
+ip -6 neigh | grep -i '00:40:9d'          # Digi OUI -> fe80::…%<iface>
+ssh admin@fe80::…%<iface>
+# web UI: https://[fe80::…%25<iface>]/     (%25 = URL-encoded % in a browser)
 ```
-To rediscover the link-local address after a reboot/relabel: `ip -6 neigh | grep -i '00:40:9d'`.
 
 Alternative (cleaner IPv4): put a laptop on the EX50's default LAN subnet (static IP in that range) and SSH to the default gateway, or set the EX50's LAN to `10.0.0.1/24` during bench config so it joins the platform range.
 
@@ -49,7 +46,11 @@ Alternative (cleaner IPv4): put a laptop on the EX50's default LAN subnet (stati
 
 ## Discrepancy: serial console is silent
 
-**Symptom:** With the USB↔RS-232 adapter on `/dev/ttyUSB0` (FTDI FT232R), the console returns **zero bytes at every standard baud rate** (9600 → 460800), with or without DTR/RTS asserted.
+**Symptom:** With the USB↔serial cable on `/dev/ttyUSB0` (FTDI FT232R), the console returns **zero bytes at every standard baud rate** (9600 → 460800), with or without DTR/RTS asserted.
+
+**Device side is fine — confirmed over SSH.** `show serial` reports the console port `port1` in **Mode `login`** at **`9600` baud** (signals RTS/DTR/DSR). So the port is enabled, in login mode, and at a baud the sweep covered — the silence is **not** a device-config or baud problem. That isolates the fault to the **physical cable/pinout**.
+
+**Root cause — pinout mismatch.** The cable is a **generic direct USB-to-RJ45 console cable** (no DB9/adapter in between). Those are wired to the **Cisco "rollover" console pinout**, which does not match Digi's RJ45 serial pinout — so the EX50's TXD (pin 6) never lands on the adapter's RX, and we get nothing even at the correct 9600 baud.
 
 **EX50 serial port spec** ([Digi docs](https://docs.digi.com/resources/documentation/digidocs/90002435/device/enterprise/enterprise-serial-port-pinout-and-use.htm)): female **RJ45** jack, **RS-232** levels, **DTE**. Pinout:
 
@@ -65,31 +66,27 @@ Alternative (cleaner IPv4): put a laptop on the EX50's default LAN subnet (stati
 
 (RI and DSR are not implemented.)
 
-**Leading suspect (electrical/wiring, not software):** the operator's cable is a store-bought **USB-to-RS-232 DB9/DB25** lead — true RS-232 levels, so the *level* layer is fine. But a DB9 cannot reach the EX50's **RJ45** jack without an RJ45↔DB9 adapter, and **both ends are DTE**, so that adapter must implement a **TX/RX crossover** matching Digi's pinout:
-
-```
-EX50 RJ45 pin 6 (TXD) ──► DB9 pin 2 (RXD, into PC)
-EX50 RJ45 pin 3 (RXD) ◄── DB9 pin 3 (TXD, out of PC)
-EX50 RJ45 pin 4/5 (GND) ─ DB9 pin 5 (GND)
-```
-A **generic (Cisco-style) RJ45↔DB9 rollover adapter uses a different pinout and will not work** with the Digi jack. Secondary possibilities if the wiring is later confirmed correct: the serial port not being in **Login/console access mode**, or the unit being powered off during the test.
+(RI and DSR are not implemented.) A cable wired for the EX50 must cross EX50 TXD (pin 6) → adapter RX and EX50 RXD (pin 3) ← adapter TX, with GND on 4/5. A Cisco-rollover console cable does not do this.
 
 ### Audit trail (what was tried / ruled out)
 
 | Check | Result | Conclusion |
 |---|---|---|
-| Baud sweep 9600–460800 | 0 bytes at all | Not a baud mismatch |
+| Baud sweep 9600–460800 | 0 bytes at all | Not a baud mismatch (device is at 9600) |
 | DTR/RTS toggled through all 4 states | 0 bytes at all | Console not gated on modem control lines |
 | FTDI kernel enumeration + open + line-status | Healthy; `ttyUSB0` attached; control lines respond | Adapter USB side is fine |
-| Level-mismatch (TTL-vs-RS-232) hypothesis | **Discarded** — cable is a true USB↔RS-232 DB9, not a bare TTL breakout | Blocker is the RJ45↔DB9 interface, not signal levels |
+| `show serial` over SSH | `port1` Mode `login` @ 9600 | Device-side console is enabled and correct — fault is off-device |
+| Level-mismatch (TTL-vs-RS-232) hypothesis | **Discarded** — cable is a real store-bought USB↔RS-232, not a bare TTL breakout | Not a signal-level problem |
+| RJ45↔DB9-adapter hypothesis | **Discarded** — cable is direct USB-to-RJ45, no adapter | Fault is the cable's internal (Cisco-rollover) pinout, not a missing adapter |
 
-**To resume serial:** verify the RJ45↔DB9 adapter follows the Digi pinout above (crossover), confirm the EX50 is powered and its serial port is in Login mode, then re-test with `picocom -b 115200 /dev/ttyUSB0` (or the `serctl.py` helper used during bring-up). Not on the critical path — the network SSH surface above is sufficient to map and automate the device.
+**To resume serial (optional, off critical path):** get a console cable/adapter wired to Digi's RJ45 pinout above (not a Cisco rollover), keep 9600 baud, and re-test with `picocom -b 9600 /dev/ttyUSB0` (or the `serctl.py` helper used during bring-up, pointed at 9600). The network SSH surface above already gives the full CLI, so serial is only worth fixing for true out-of-band access.
 
 ---
 
 ## Next steps
 
-- [ ] Log into the Admin CLI over SSH (device-label password) and map the scriptable surface: config schema (`show config`), export/import format for IaC, WireGuard support (firmware ≥ 24.3.28.88, [ADR-047](../decisions/047-ingress-tunnel-relocation-to-ex50.md)), VLAN/DHCP/DNS/firewall/DNAT primitives ([ADR-046](../decisions/046-platform-network-segmentation-via-home-eviction.md)).
-- [ ] Enroll an SSH public key for the future Ansible role (SSH already advertises `publickey`).
-- [ ] Confirm firmware version against the ≥ 24.3.28.88 WireGuard gate.
+- [x] Enroll an SSH public key (`bearflinn@gmail.com`) on `auth user admin` — key auth working over link-local.
+- [x] Confirm firmware against the WireGuard gate — **25.11.10.42 ≥ 24.3.28.88**, satisfied.
+- [x] Map the scriptable surface (config model, domains, cutover paths) → [../reference/ex50-dal-interface.md](../reference/ex50-dal-interface.md).
+- [ ] Bench-config per the cutover runbook (LAN → `10.0.0.1/24`, home DHCP/VLAN, zone firewall, remove the "Allow all for testing" rule, tighten the SSH `wan` ACL) and template it into the future EX50 Ansible role.
 - [ ] (Optional) Fix the serial console per the discrepancy section, for true out-of-band access.
