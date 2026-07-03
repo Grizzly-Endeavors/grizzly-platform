@@ -48,7 +48,7 @@ Last updated: 2026-07-02 · Status: **planned, not yet executed.**
 ## Prerequisites (do ahead — zero downtime)
 
 - [ ] **EX50 firmware ≥ 24.3.28.88** (required for WireGuard, Checkpoint E). Update if lower.
-- [ ] **Bench-configure the EX50** with WAN unplugged: LAN `10.0.0.1/24`, DHCP scope for home on `10.20.0.0/24` (keep the platform range static/reserved), DNS forwarding, firewall default-deny home→platform. Flat first — do **not** enable the home VLAN yet.
+- [ ] **Bench-configure the EX50** with WAN unplugged: LAN `10.0.0.1/24`, DHCP scope for home on `10.20.0.0/24` (keep the platform range static/reserved), DNS forwarding, firewall default-deny home→platform. Flat first — do **not** enable the home VLAN yet. Getting onto the Admin CLI to do this: [ex50-console-access.md](ex50-console-access.md).
 - [ ] **Verify on the bench** that DAL supports what later steps rely on: a WireGuard peer + DNAT from the wg interface to a LAN host (E), multiple VLAN interfaces + inter-VLAN firewall (D), DHCP reservations, and (optionally) local DNS records. Capture the DAL shell config commands into the IaC now.
 - [ ] **Garage physical prep — operator-handled:** sturdy shelving is already in place (gear sits off the slab); the garage dehumidifier (hosed outside) holds ~43% RH year-round, with a closet-specific unit as contingency; 20 A circuit near the panel with headroom to add another. **These environmental logistics are settled (ADR-045) — do not relitigate.** Remaining prep for the window: PDU sizing, confirm ventilation, small UPS for the network core (Xfinity + EX50 + SR2024 + APs), and place humidity + leak sensors (as verification signals, not gating decisions).
 - [ ] **Extend the coax** to the garage (available slack).
