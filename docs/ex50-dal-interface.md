@@ -80,6 +80,7 @@ Captured facts, not yet-final config — the box is mid bench setup:
 - **WiFi AP1** is a mixed-PSK bench placeholder (SSID + PSK redacted).
 - **Clock skewed** (`show system` ~1 day off) — no WAN → no NTP sync yet. Resolves once WAN/`service ntp` reaches the internet.
 - **DRM enabled but Disconnected**. Decide whether DRM stays enabled post-cutover (operator: not the primary interface).
+- **Cellular modem disabled** — SIM slot 1 is physically empty; firmware reported `SIM 1 (Not found)` / `failed`, and the lit **SIM1 LED only meant slot 1 was the *selected* slot, not that a card was present**. The modem shipped with **TELUS carrier firmware** (`03.14.10.00_TELUS`), suggesting an ex-carrier unit — relevant only if cellular is ever wanted (carrier-locked images can need reflashing). Disabled at both layers to stop the futile ~5s SIM-slot probing (and its LED), matching ADR-044's "cellular not enabled for now": `network interface modem enable false` + `network modem modem enable false`.
 
 ## How this was captured (reproducible)
 
