@@ -182,14 +182,17 @@ Tracked here rather than in the active sections so the active tables stay truthf
 | Planned role | Standalone inference host (Ollama / vLLM / text-generation-inference TBD). Consumed over the LAN by cluster workloads and developer tools. |
 | Status | Hardware in progress; specs / IP / ADR reserved until the machine lands. Kept out of the cluster intentionally so inference workloads don't share a drain/reboot cadence with cluster workers. |
 
-### Off-the-shelf router — To Be Purchased
+### Digi EX50 — Acquired, Deployment Pending
 
 | Spec | Value |
 |------|-------|
-| Model | TBD (UniFi / OPNsense appliance / similar) |
-| Planned role | Replace Xfinity gateway's routing role; handle NAT, DHCP, DNS, VLANs, firewall rules. Xfinity gateway goes into bridge mode on arrival. |
-| Status | Purchase pending. See [ADR-021](decisions/021-off-the-shelf-router-tower-pc-as-worker.md). |
-| Unblocks | VLAN configuration (see [exploration/network-vlans.md](exploration/network-vlans.md)). |
+| Model | Digi EX50 (5G enterprise cellular router; runs scriptable Digi Accelerated Linux / DAL) |
+| Ports | 2× 2.5 GbE (one WAN, one LAN — no built-in switch fabric), WiFi 6, dual-SIM 5G/LTE |
+| Power | PoE+ (from SR2024) or DC barrel |
+| Planned role | Replace Xfinity gateway's routing role; NAT, DHCP, DNS, VLANs, firewall. Xfinity gateway → bridge mode. 5G not enabled (no cellular plan). Config stays in IaC via the DAL shell. |
+| Status | Acquired; cutover planned, not executed. See [ADR-044](decisions/044-digi-ex50-as-off-the-shelf-router.md) and [runbooks/garage-relocation-cutover.md](runbooks/garage-relocation-cutover.md). |
+| Unblocks | L3 segmentation ([ADR-046](decisions/046-platform-network-segmentation-via-home-eviction.md)), ingress-tunnel relocation ([ADR-047](decisions/047-ingress-tunnel-relocation-to-ex50.md)), internal DNS resolver move off R730xd ([ADR-036](decisions/036-internal-dns-zone.md)). |
+| Firmware gate | WireGuard needs DAL ≥ 24.3.28.88 (required before ingress relocation). |
 
 ### APC Back-UPS RS 1500 — Batteries Dead
 
@@ -244,6 +247,7 @@ Not infrastructure: the operator's on-the-go dev laptop (GS66 Stealth) is a pers
 
 - [ ] UPS: replace batteries, wire NUT.
 - [ ] Finish GPU inference host build; assign IP + hostname and write its ADR.
-- [ ] Purchase off-the-shelf router; configure VLANs on SR2024 once in place (see [exploration/network-vlans.md](exploration/network-vlans.md)).
+- [ ] Deploy the Digi EX50 as router + relocate the platform to the garage (one staged window). See [runbooks/garage-relocation-cutover.md](runbooks/garage-relocation-cutover.md), [ADR-044](decisions/044-digi-ex50-as-off-the-shelf-router.md), [ADR-045](decisions/045-platform-relocation-to-garage.md).
+- [ ] Configure L3 segmentation on the EX50/SR2024 (evict home to its own subnet — [ADR-046](decisions/046-platform-network-segmentation-via-home-eviction.md)).
 - [ ] Mount remaining APs; verify coverage.
 - [ ] Join Tower PC to the cluster (see [ADR-021](decisions/021-off-the-shelf-router-tower-pc-as-worker.md)).
