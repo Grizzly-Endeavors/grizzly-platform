@@ -124,9 +124,11 @@ Decisions: [ADR-003](decisions/003-foundation-stores-on-r730xd.md) (foundation s
 | Model | Aerohive SR2024 |
 | Ports | 24× 1GbE + 2× SFP (+ 2× combo GbE/SFP) |
 | PoE | 802.3at (PoE+), powering APs |
-| Firmware | HiveOS 6.5r8 |
+| Firmware | HiveOS 6.5r8 (2017) |
+| Mgmt access | `{{ sr2024_ip }}` (currently a DHCP lease); SSH/web, default creds `admin`/`aerohive`. Modern SSH clients need legacy algorithms — see [aerohive-cli-reference.md](aerohive-cli-reference.md). |
 | Role | Lab backbone — all lab machines connect here. Xfinity gateway upstream. Flat L2 today (VLANs deferred until off-the-shelf router arrives, per [ADR-021](decisions/021-off-the-shelf-router-tower-pc-as-worker.md)). |
 | Capabilities | 802.1Q VLANs, LACP, trunk/access ports — all verified |
+| Known quirk | PSE (PoE) subsystem can **wedge** — all ports `unknown`/0 W despite healthy config; only a physical power-pull recovers it. Monitoring deferred to post-migration. See [PSE wedge](aerohive-cli-reference.md#poe-troubleshooting--the-pse-wedge) + [monitoring plan](exploration/sr2024-poe-monitoring.md). |
 
 ### Aerohive WiFi APs
 
