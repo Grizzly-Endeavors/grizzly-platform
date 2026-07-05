@@ -1,0 +1,58 @@
+version: 1
+metadata:
+  name: grizzly-career-scanner-oidc
+# Registers career-scanner (first-party job finder, kubernetes/apps/) as a
+# confidential OIDC client of Authentik: an OAuth2 provider + a bound
+# application. career-scanner delegates all login to Authentik (auth-code flow
+# with PKCE) and JIT-provisions a tenant per Authentik user on first login.
+#
+# The client_id/client_secret are NOT in git: they are injected into the worker
+# (which applies blueprints) via global.env as AUTHENTIK_CAREER_SCANNER_CLIENT_ID
+# / AUTHENTIK_CAREER_SCANNER_CLIENT_SECRET, sourced from OpenBao
+# secret/grizzly-platform/platform/authentik (oidc_career_scanner_client_id,
+# oidc_career_scanner_client_secret) by the authentik ExternalSecret. The same
+# two OpenBao keys feed career-scanner's own ExternalSecret in its deploy/
+# chart, so both sides of the OIDC contract share one source of truth.
+#
+# v1 requests only openid/email/profile — any enrolled grizzly-users member may
+# use the app. Group-gating (a `groups` scope mapping + app-side claim check) is
+# an optional later add, modeled on nextcloud.yaml.
+entries:
+  - model: authentik_providers_oauth2.oauth2provider
+    id: career-scanner-provider
+    identifiers:
+      name: career-scanner
+    attrs:
+      client_type: confidential
+      client_id: !Env [AUTHENTIK_CAREER_SCANNER_CLIENT_ID, ""]
+      client_secret: !Env [AUTHENTIK_CAREER_SCANNER_CLIENT_SECRET, ""]
+      # Required since Authentik 2026.x made grant types explicit: without this
+      # the provider's grant_types is [] and the authorize endpoint rejects every
+      # code request as "invalid_request" (SSO never completes). career-scanner
+      # uses the authorization-code flow and refreshes tokens.
+      grant_types:
+        - authorization_code
+        - refresh_token
+      # The backend's OIDC callback on the career-scanner host.
+      redirect_uris:
+        - matching_mode: strict
+          url: https://career-scanner.bearflinn.com/auth/callback
+      sub_mode: hashed_user_id
+      include_claims_in_id_token: true
+      authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-explicit-consent]]
+      invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
+      signing_key: !Find [authentik_crypto.certificatekeypair, [name, "authentik Self-signed Certificate"]]
+      property_mappings:
+        - !Find [authentik_providers_oauth2.scopemapping, [scope_name, openid]]
+        - !Find [authentik_providers_oauth2.scopemapping, [scope_name, email]]
+        - !Find [authentik_providers_oauth2.scopemapping, [scope_name, profile]]
+
+  - model: authentik_core.application
+    identifiers:
+      slug: career-scanner
+    attrs:
+      name: career-scanner
+      provider: !KeyOf career-scanner-provider
+      meta_launch_url: https://career-scanner.bearflinn.com
+      meta_description: "Ranked, continuously-refreshed job matches"
+      policy_engine_mode: any

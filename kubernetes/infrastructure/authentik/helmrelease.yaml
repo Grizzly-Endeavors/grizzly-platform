@@ -105,6 +105,19 @@ spec:
             secretKeyRef:
               name: authentik-secrets
               key: oidc_nextcloud_client_secret
+        # OIDC client creds for the career-scanner provider, consumed by
+        # blueprints/career-scanner.yaml via !Env. Same worker-applies-blueprints
+        # rationale as the Nextcloud pair above.
+        - name: AUTHENTIK_CAREER_SCANNER_CLIENT_ID
+          valueFrom:
+            secretKeyRef:
+              name: authentik-secrets
+              key: oidc_career_scanner_client_id
+        - name: AUTHENTIK_CAREER_SCANNER_CLIENT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: authentik-secrets
+              key: oidc_career_scanner_client_secret
         # OAuth client creds for the Discord + GitHub social sources, consumed by
         # blueprints/social-login.yaml via !Env. The worker (which applies
         # blueprints) reads these; injecting on every Deployment is harmless.

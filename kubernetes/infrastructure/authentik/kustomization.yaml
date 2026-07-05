@@ -19,6 +19,7 @@ configMapGenerator:
       - blueprints/groups.yaml
       - blueprints/grizzly-invite-admin.yaml
       - blueprints/nextcloud.yaml
+      - blueprints/career-scanner.yaml
       - blueprints/social-login.yaml
 generatorOptions:
   disableNameSuffixHash: true
