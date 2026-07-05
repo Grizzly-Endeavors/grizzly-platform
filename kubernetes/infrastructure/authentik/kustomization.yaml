@@ -7,6 +7,8 @@ resources:
   - externalsecret.yaml
   - ingress.yaml
   - metrics-service.yaml
+  - brand-assets-deployment.yaml
+  - brand-assets-service.yaml
 # File-based blueprints, mounted by the chart's blueprints.configMaps into
 # server + worker at /blueprints/custom/ (only .yaml keys are discovered). The
 # worker auto-applies them. Fixed name (no hash suffix) so the HelmRelease can
@@ -21,5 +23,13 @@ configMapGenerator:
       - blueprints/nextcloud.yaml
       - blueprints/career-scanner.yaml
       - blueprints/social-login.yaml
+  # Brand images served by authentik-brand-assets (nginx) and mounted at
+  # /usr/share/nginx/html/brand/. Binary files land in the ConfigMap's
+  # binaryData. Fixed name (no hash) so the Deployment volume can reference it.
+  - name: authentik-brand-assets
+    namespace: authentik
+    files:
+      - brand-assets/logo.webp
+      - brand-assets/favicon.png
 generatorOptions:
   disableNameSuffixHash: true
