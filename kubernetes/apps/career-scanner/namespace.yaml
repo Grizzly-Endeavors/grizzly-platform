@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: career-scanner
+  labels:
+    app.kubernetes.io/name: career-scanner
+    app.kubernetes.io/managed-by: flux
+    # First-party, gate-signed image: Kyverno verifies the cosign signature at
+    # admission in gated namespaces (Audit until the enforce cutover). ADR-028.
+    grizzly.io/gated: "true"

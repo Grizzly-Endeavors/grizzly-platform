@@ -9,3 +9,4 @@ resources:
   - feedback-ingest
   - grizzly-gameservers
   - grizzly-invite
+  - career-scanner
