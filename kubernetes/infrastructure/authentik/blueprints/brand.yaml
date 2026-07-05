@@ -138,16 +138,29 @@ entries:
           color: #04141c;
         }
 
-        /* Secondary / social-source buttons: outlined cyan. */
-        .pf-c-button.pf-m-secondary {
-          background-color: rgba(34, 211, 238, 0.06);
-          color: var(--gb-cyan-bright);
-          border: 1px solid rgba(34, 211, 238, 0.4);
-          border-radius: 8px;
+        /* Social-source buttons (Discord/GitHub/Google). authentik renders these as
+           icon-only <button class="source-button"> with a monochrome <img part=
+           "source-icon"> — dark glyphs that vanish on the dark card. Give each a
+           near-white chip (provider logos are drawn for light backgrounds) with a cyan
+           hover glow so all three read crisply. */
+        .pf-c-button.source-button {
+          background-color: #eef4f8;
+          border: 1px solid rgba(34, 211, 238, 0.35);
+          border-radius: 10px;
+          padding: 8px 10px;
+          transition: box-shadow 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
         }
-        .pf-c-button.pf-m-secondary:hover {
-          background-color: rgba(34, 211, 238, 0.14);
+        .pf-c-button.source-button:hover,
+        .pf-c-button.source-button:focus {
+          background-color: #ffffff;
           border-color: var(--gb-cyan);
+          box-shadow: 0 0 16px -3px rgba(34, 211, 238, 0.55);
+          transform: translateY(-1px);
+        }
+        .source-button img[part="source-icon"],
+        .source-button .pf-c-button__icon img {
+          width: 22px;
+          height: 22px;
         }
 
         /* Links. */
@@ -166,3 +179,11 @@ entries:
         ak-library-impl::part(card-header-icon) {
           color: var(--gb-cyan);
         }
+
+  # Replace the built-in "Welcome to authentik!" heading on the login flow with
+  # our own. Only `title` is patched; the flow's other attrs are left untouched.
+  - model: authentik_flows.flow
+    identifiers:
+      slug: default-authentication-flow
+    attrs:
+      title: "Welcome to Grizzly Endeavors"
