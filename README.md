@@ -8,7 +8,7 @@ Self-hosted infrastructure for Grizzly Endeavors projects. Bare-metal IaC on rep
 
 - **K8s cluster** — v1.33.10. `dell-inspiron-15` (control plane) + `quanta`, `intel-nuc`, `optiplex` (workers). Cilium CNI, Flux GitOps, democratic-csi for storage, cert-manager, ingress-nginx, ARC v2 runners, Argo Workflows, in-cluster OCI registry. See [docs/k8s-cluster-standup.md](docs/k8s-cluster-standup.md).
 - **Dell R730xd** — Storage server (Debian 13, 32 GB ECC, 14 drive bays). Two storage tiers: ZFS raidz1 for latency-sensitive services (Postgres, Redis, MinIO Obs, Prometheus, Loki, Tempo, Grafana), MergerFS + SnapRAID for bulk (MinIO Bulk, NFS for K8s PVCs). Also terminates the VPS → home ingress WireGuard tunnel.
-- **Hetzner VPS** — Caddy reverse proxy with wildcard TLS (`*.bearflinn.com` via Cloudflare DNS-01). Routes to the cluster through the WG tunnel.
+- **Hetzner VPS** — Caddy reverse proxy with per-domain wildcard TLS (`*.grizzly-endeavors.com` for platform services, `*.bearflinn.com` for personal apps — both via Cloudflare DNS-01). Routes to the cluster through the WG tunnel.
 
 Full machine list with specs in [docs/hardware.md](docs/hardware.md). Network topology in [docs/network.md](docs/network.md).
 
