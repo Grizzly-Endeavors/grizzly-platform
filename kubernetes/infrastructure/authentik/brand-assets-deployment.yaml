@@ -1,0 +1,63 @@
+# Tiny static-file server that hosts the brand images (logo + favicon) referenced
+# by the authentik brand. authentik 2026.5's file backends only accept these
+# brand image fields as a built-in /static path, an uploaded media file, or an
+# external http(s):// URL (PassthroughBackend) — data URIs are rejected by the
+# upload-filename validator. We take the external-URL route: serve the assets
+# here and point branding_logo/branding_favicon at sso.bearflinn.com/brand/*
+# (see blueprints/brand.yaml + ingress.yaml). Version-independent of authentik,
+# so it survives chart upgrades untouched. Namespace is intentionally un-gated
+# (see namespace.yaml), so this external image runs without a cosign signature.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: authentik-brand-assets
+  namespace: authentik
+  labels:
+    app.kubernetes.io/name: authentik-brand-assets
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: authentik-brand-assets
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: authentik-brand-assets
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: nginx
+          # nginx-unprivileged: non-root, listens on 8080. Stable branch, pinned;
+          # verified current at pin time via the Docker Hub tag list.
+          image: nginxinc/nginx-unprivileged:1.30.3-alpine
+          ports:
+            - name: http
+              containerPort: 8080
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          readinessProbe:
+            httpGet:
+              path: /brand/favicon.png
+              port: http
+            initialDelaySeconds: 2
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 20m
+              memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 64Mi
+          volumeMounts:
+            - name: brand
+              mountPath: /usr/share/nginx/html/brand
+              readOnly: true
+      volumes:
+        - name: brand
+          configMap:
+            name: authentik-brand-assets
