@@ -3,7 +3,7 @@
 # brand image fields as a built-in /static path, an uploaded media file, or an
 # external http(s):// URL (PassthroughBackend) — data URIs are rejected by the
 # upload-filename validator. We take the external-URL route: serve the assets
-# here and point branding_logo/branding_favicon at sso.bearflinn.com/brand/*
+# here and point branding_logo/branding_favicon at sso.grizzly-endeavors.com/brand/*
 # (see blueprints/brand.yaml + ingress.yaml). Version-independent of authentik,
 # so it survives chart upgrades untouched. Namespace is intentionally un-gated
 # (see namespace.yaml), so this external image runs without a cosign signature.
