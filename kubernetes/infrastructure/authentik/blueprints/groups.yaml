@@ -37,3 +37,6 @@ entries:
   - model: authentik_core.group
     identifiers:
       name: Nerds
+  - model: authentik_core.group
+    identifiers:
+      name: Boardgame Bros
