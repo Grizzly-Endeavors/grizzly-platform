@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: authentik-brand-assets
+  namespace: authentik
+  labels:
+    app.kubernetes.io/name: authentik-brand-assets
+spec:
+  selector:
+    app.kubernetes.io/name: authentik-brand-assets
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

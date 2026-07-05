@@ -17,6 +17,18 @@ spec:
     - host: sso.bearflinn.com
       http:
         paths:
+          # Brand assets (logo/favicon) served by the static authentik-brand-assets
+          # deployment. Longer prefix than "/", so nginx routes /brand/* here and
+          # everything else to authentik. The authentik brand references these at
+          # https://sso.bearflinn.com/brand/* (PassthroughBackend) — see
+          # brand-assets-deployment.yaml and blueprints/brand.yaml.
+          - path: /brand
+            pathType: Prefix
+            backend:
+              service:
+                name: authentik-brand-assets
+                port:
+                  number: 80
           - path: /
             pathType: Prefix
             backend:
