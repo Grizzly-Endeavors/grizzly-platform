@@ -36,7 +36,7 @@ entries:
       # The backend's OIDC callback on the career-scanner host.
       redirect_uris:
         - matching_mode: strict
-          url: https://career-scanner.bearflinn.com/auth/callback
+          url: https://career-scanner.grizzly-endeavors.com/auth/callback
       sub_mode: hashed_user_id
       include_claims_in_id_token: true
       authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-explicit-consent]]
@@ -53,6 +53,6 @@ entries:
     attrs:
       name: career-scanner
       provider: !KeyOf career-scanner-provider
-      meta_launch_url: https://career-scanner.bearflinn.com
+      meta_launch_url: https://career-scanner.grizzly-endeavors.com
       meta_description: "Ranked, continuously-refreshed job matches"
       policy_engine_mode: any
