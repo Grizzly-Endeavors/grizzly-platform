@@ -86,12 +86,14 @@ All platform secrets live under `secret/grizzly-platform/<domain>/<name>` (KV v2
 | `secret/grizzly-platform/platform/idrac` | `password` |
 | `secret/grizzly-platform/platform/github-app` | `app_id`, `installation_id`, `private_key` |
 | `secret/grizzly-platform/platform/github-runner` | `pat` |
-| `secret/grizzly-platform/platform/authentik` | `secret_key`, `db_password`, `bootstrap_password`, `bootstrap_token`, `oidc_nextcloud_client_id`, `oidc_nextcloud_client_secret` |
+| `secret/grizzly-platform/platform/authentik` | `secret_key`, `db_password`, `bootstrap_password`, `bootstrap_token`, `oidc_nextcloud_client_id`, `oidc_nextcloud_client_secret`, `oidc_career_scanner_client_id`, `oidc_career_scanner_client_secret` |
 | `secret/grizzly-platform/stores/postgres` | `password` |
 | `secret/grizzly-platform/stores/redis` | `password` |
 | `secret/grizzly-platform/stores/minio-obs` | `root_user`, `root_password` |
 | `secret/grizzly-platform/stores/minio-bulk` | `root_user`, `root_password` |
 | `secret/grizzly-platform/stores/nextcloud` | `db_password`, `s3_access_key`, `s3_secret_key` (foundation grants for the Nextcloud lab app; provisioned by `setup-nextcloud-stores.yml`, read cross-domain by Nextcloud's ExternalSecret) |
+| `secret/grizzly-platform/stores/career-scanner` | `db_password`, `s3_access_key`, `s3_secret_key` (foundation grants for the career-scanner first-party app; provisioned by `setup-career-scanner-stores.yml`, read cross-domain by career-scanner's ExternalSecret) |
+| `secret/grizzly-platform/apps/career-scanner` | `session_secret`, `serper_api_key`, `ollama_api_key`, `db_username` (app-owned secrets for the career-scanner first-party app; K8s-consumed only, via its own ExternalSecret. First consumer of the `apps/` domain — see ADR-048) |
 | `secret/grizzly-platform/observability/grafana` | `admin_password` |
 | `secret/grizzly-platform/observability/minio-client` | `access_key`, `secret_key` |
 | `secret/grizzly-platform/observability/discord-webhook` | `url` |
