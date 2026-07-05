@@ -63,7 +63,17 @@ all:
           type: "posthog_proxy"
           comment: "PostHog analytics reverse proxy (avoids ad blockers)"
 
-      # Root domain redirect
+      # Wildcard roots served to the K8s ingress. Each gets its own
+      # `*.<domain>` vhost + DNS-01 wildcard cert. bearflinn.com is the
+      # legacy domain; grizzly-endeavors.com is the platform-service domain
+      # (migration in progress). The Cloudflare ACME token must have
+      # DNS-edit scope on every zone listed here.
+      caddy_wildcard_domains:
+        - "bearflinn.com"
+        - "grizzly-endeavors.com"
+
+      # Root domain redirect (bearflinn apex -> landing). grizzly-endeavors.com
+      # apex handling is deferred (landing-page stays on bearflinn).
       caddy_root_domain: "bearflinn.com"
       caddy_root_redirect_target: "landing.bearflinn.com"
 
