@@ -200,9 +200,13 @@
 # =============================================================================
 # WILDCARD K8S PROXY - All other subdomains routed to K8s Ingress
 # Endpoint: {{ caddy_k8s_ingress_endpoint }}
+# One vhost (+ its own DNS-01 wildcard cert) per entry in
+# caddy_wildcard_domains; falls back to [caddy_root_domain] when unset.
 # =============================================================================
 
-*.{{ caddy_root_domain | default('example.com') }} {
+{% set wildcard_roots = caddy_wildcard_domains if (caddy_wildcard_domains | default([]) | length > 0) else [caddy_root_domain | default('example.com')] %}
+{% for wildcard_root in wildcard_roots %}
+*.{{ wildcard_root }} {
     reverse_proxy http://{{ caddy_k8s_ingress_endpoint }} {
         header_up Host {host}
         header_up X-Real-IP {remote}
@@ -222,3 +226,5 @@
         format json
     }
 }
+
+{% endfor %}

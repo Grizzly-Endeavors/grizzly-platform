@@ -186,6 +186,7 @@
 
     - name: Install and configure Caddy
       when: enable_caddy | default(true) | bool
+      tags: [caddy]
       block:
         - name: Validate Caddy email is set
           ansible.builtin.assert:
@@ -198,6 +199,8 @@
         - name: Include Caddy role
           ansible.builtin.include_role:
             name: caddy
+            apply:
+              tags: [caddy]
 
     # --- Monitoring ---
     - name: Install monitoring base (node-exporter)

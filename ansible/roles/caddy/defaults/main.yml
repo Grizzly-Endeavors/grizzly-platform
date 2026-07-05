@@ -60,6 +60,12 @@ caddy_services: []
 # External domains to proxy to K8s ingress (non-root-domain sites)
 caddy_k8s_domains: []
 
+# Wildcard roots to serve to the K8s ingress. Each entry gets its own
+# `*.<domain>` reverse-proxy vhost and its own DNS-01 wildcard cert.
+# When empty, falls back to [caddy_root_domain] for backward compatibility.
+# Example: ["bearflinn.com", "grizzly-endeavors.com"]
+caddy_wildcard_domains: []
+
 # Root domain redirect (e.g., example.com -> www.example.com)
 # caddy_root_domain: "example.com"
 # caddy_root_redirect_target: "www.example.com"
