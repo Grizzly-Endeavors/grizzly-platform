@@ -53,7 +53,7 @@ entries:
       # user_oidc's redirect endpoint on the Nextcloud host.
       redirect_uris:
         - matching_mode: strict
-          url: https://nextcloud.bearflinn.com/apps/user_oidc/code
+          url: https://nextcloud.grizzly-endeavors.com/apps/user_oidc/code
       sub_mode: hashed_user_id
       include_claims_in_id_token: true
       authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-explicit-consent]]
@@ -71,6 +71,6 @@ entries:
     attrs:
       name: Nextcloud
       provider: !KeyOf nextcloud-provider
-      meta_launch_url: https://nextcloud.bearflinn.com
+      meta_launch_url: https://nextcloud.grizzly-endeavors.com
       meta_description: "Files, calendar, and contacts"
       policy_engine_mode: any
