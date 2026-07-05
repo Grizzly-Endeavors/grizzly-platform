@@ -1,7 +1,11 @@
-# Plain-HTTP ingress — external TLS terminates at proxy-vps (Caddy + wildcard
-# *.bearflinn.com), which already routes any unmatched subdomain to this
-# cluster ingress, so no VPS/Caddy/DNS change is needed for sso.bearflinn.com.
-# Long timeouts + larger buffers suit OAuth/SAML redirects and flow POSTs.
+# Plain-HTTP ingress — external TLS terminates at proxy-vps (Caddy + wildcards
+# *.bearflinn.com and *.grizzly-endeavors.com), which already route any unmatched
+# subdomain to this cluster ingress, so no VPS/Caddy change is needed for either
+# sso host. Long timeouts + larger buffers suit OAuth/SAML redirects and flow POSTs.
+#
+# DOMAIN MIGRATION (in progress): sso.grizzly-endeavors.com is the target host;
+# sso.bearflinn.com is served in parallel during the cutover window and dropped
+# once every app's OIDC issuer/redirect has moved to the new host.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -14,14 +18,30 @@ metadata:
 spec:
   ingressClassName: nginx
   rules:
+    # Target host (grizzly-endeavors.com). Brand assets on /brand (longer prefix
+    # than "/"), everything else to authentik. Brand refs point here — see
+    # brand-assets-deployment.yaml and blueprints/brand.yaml.
+    - host: sso.grizzly-endeavors.com
+      http:
+        paths:
+          - path: /brand
+            pathType: Prefix
+            backend:
+              service:
+                name: authentik-brand-assets
+                port:
+                  number: 80
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: authentik-server
+                port:
+                  number: 80
+    # Legacy host — kept only for the migration window; remove after all apps move.
     - host: sso.bearflinn.com
       http:
         paths:
-          # Brand assets (logo/favicon) served by the static authentik-brand-assets
-          # deployment. Longer prefix than "/", so nginx routes /brand/* here and
-          # everything else to authentik. The authentik brand references these at
-          # https://sso.bearflinn.com/brand/* (PassthroughBackend) — see
-          # brand-assets-deployment.yaml and blueprints/brand.yaml.
           - path: /brand
             pathType: Prefix
             backend:

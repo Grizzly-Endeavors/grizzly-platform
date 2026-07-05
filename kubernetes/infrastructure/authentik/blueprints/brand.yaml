@@ -19,8 +19,8 @@ entries:
       domain: authentik-default
     attrs:
       branding_title: "Grizzly Endeavors"
-      branding_logo: "https://sso.bearflinn.com/brand/logo.webp"
-      branding_favicon: "https://sso.bearflinn.com/brand/favicon.png"
+      branding_logo: "https://sso.grizzly-endeavors.com/brand/logo.webp"
+      branding_favicon: "https://sso.grizzly-endeavors.com/brand/favicon.png"
       branding_custom_css: |
         /* Grizzly Endeavors — cyber-bear theme. Palette taken from the logo:
            deep navy backdrop, electric-cyan glow, steel-blue panels. Overriding
@@ -28,7 +28,7 @@ entries:
            is the upgrade-safe lever; direct .pf-c-login* selectors work because
            authentik adopts this stylesheet into the flow executor's shadow root.
            Logo + favicon are real served files (branding_logo/branding_favicon point
-           at sso.bearflinn.com/brand/*); this file only styles + paints the flow
+           at sso.grizzly-endeavors.com/brand/*); this file only styles + paints the flow
            background as a pure CSS gradient, so no image is embedded here. */
         :root,
         :host {
