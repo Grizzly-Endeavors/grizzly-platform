@@ -47,12 +47,29 @@ entries:
       # enrollment fallback after social auth.
       authentication: none
 
-  # --- Invitation gate (expression policy on the flow) ----------------------
+  # --- Invitation gate (expression policy, re-evaluated on the user-write stage)
   # Replaces the old paste-a-code prompt + invitation stage. The broker plants a
   # signed `grizzly_invite` cookie at invite.grizzly-endeavors.com/i/<token>; that cookie
   # survives the OAuth round-trip (Authentik flow context does not), so this
-  # policy reads it on the enrollment callback and consumes it via /verify.
-  # Fail closed: no cookie, a bad/used invite, or a broker error all deny.
+  # policy reads it and consumes it via /verify. Fail closed: no cookie, a
+  # bad/used invite, or a broker error all deny.
+  #
+  # CRITICAL — where this policy is bound and how it writes to the plan:
+  # This is bound as a RE-EVALUATED policy on the user-write flowstagebinding
+  # (evaluate_on_plan:false + re_evaluate_policies:true — see that binding
+  # below), NOT on the flow. That matters for two reasons the planner enforces:
+  #   1. A flow-level policy runs during *planning*, before the FlowPlan object
+  #      exists, so it has no plan to write into.
+  #   2. Mutating `request.context` does NOT persist. The planner and the
+  #      re-evaluate marker copy the context INTO a throwaway per-engine dict
+  #      (planner.py `engine.request.context.update(context)`) and never copy it
+  #      back out. The ONLY context that reaches the user-write stage is the live
+  #      FlowPlan's `.context`, reachable here as `request.context["flow_plan"]`.
+  # So we resolve the plan and mutate `plan.context[...]` directly. The earlier
+  # flow-level binding writing `request.context["groups"]` silently dropped every
+  # group — it only looked like it worked because the OAuth source populates the
+  # username independently, masking the discarded prompt_data write. See ADR-041
+  # (Correction 2026-07-05).
   - model: authentik_policies_expression.expressionpolicy
     id: invite-gate-policy
     identifiers:
@@ -78,11 +95,16 @@ entries:
         if result.get("allow") is not True:
             ak_message("Your invitation is invalid or has already been used.")
             return False
+        # The live flow plan — the ONLY context that persists to the user-write
+        # stage (see the header comment). Writes to request.context are discarded.
+        plan = request.context.get("flow_plan")
+        if plan is None:
+            ak_logger.warning("invite gate ran with no flow_plan; not on a stage binding?")
+            return False
         # Some sources (e.g. Google) provide a verified email but no username,
         # which makes the user-write stage abort with "empty username". Derive
         # the username from the email so any provider can enroll seamlessly.
-        # (Writing request.context here persists into the flow plan.)
-        prompt_data = request.context.setdefault("prompt_data", {})
+        prompt_data = plan.context.setdefault("prompt_data", {})
         if not prompt_data.get("username"):
             prompt_data["username"] = prompt_data.get("email", "")
         # Scope the enrollee to the invite's groups (returned by /verify). The
@@ -92,24 +114,15 @@ entries:
         from authentik.core.models import Group
         group_names = result.get("groups") or []
         if group_names:
-            request.context["groups"] = list(Group.objects.filter(name__in=group_names))
+            plan.context["groups"] = list(Group.objects.filter(name__in=group_names))
         return True
 
-  # Bind the gate to the enrollment flow. failure_result:false => a policy error
-  # denies (fail closed); timeout > the in-policy /verify timeout. This is the
-  # cutover from the removed invitation stage; if live testing shows a flow-level
-  # binding can't see the cookie after the source redirect, move this binding
-  # onto the user-write stage (re_evaluate_policies) instead — see ADR-040.
-  - model: authentik_policies.policybinding
-    identifiers:
-      target: !KeyOf invite-enrollment-flow
-      policy: !KeyOf invite-gate-policy
-      order: 0
-    attrs:
-      enabled: true
-      negate: false
-      timeout: 6
-      failure_result: false
+  # NOTE: the gate is bound to the user-write flowstagebinding further down (as a
+  # re-evaluated policy), NOT to the flow — see that binding and the policy
+  # header comment for why flow-level binding cannot inject into the plan. The
+  # old flow-level binding is deleted from the running instance during deploy
+  # (blueprints are stateless upsert: removing an entry does not delete the
+  # object — see the blueprints CLAUDE.md).
 
   # --- Enrollment stages ----------------------------------------------------
   # Creates the user from the source-provided identity, active, in grizzly-users
@@ -200,18 +213,39 @@ entries:
         - !KeyOf google-source
 
   # --- Flow stage bindings: user write -> login -----------------------------
-  # The invitation gate is now a flow-level expression policy (above), not a
-  # stage — so the flow has no interactive steps after OAuth: it just writes the
-  # user and logs them in. (The old prompt/invitation stage bindings at order
-  # 10/20 are removed; their now-orphaned objects are deleted from the running
-  # instance during the cutover — see ADR-040 / the deploy runbook.)
+  # The flow has no interactive steps after OAuth: it writes the user and logs
+  # them in. The invitation gate rides the user-write binding as a re-evaluated
+  # policy (below): evaluate_on_plan:false + re_evaluate_policies:true means it
+  # runs exactly once, at *execution* time when the executor reaches this
+  # binding — the point at which the live FlowPlan exists (so the policy can
+  # write groups + username into plan.context) and the invite is consumed once.
+  # A denied invite removes this binding, so no user is written (fail closed).
+  # Setting evaluate_on_plan:true here would run the gate at plan time AND
+  # execution — consuming the single-use invite twice, the second as "used".
   - model: authentik_flows.flowstagebinding
+    id: enrollment-write-binding
     identifiers:
       target: !KeyOf invite-enrollment-flow
       stage: !KeyOf enrollment-write-stage
       order: 30
+    attrs:
+      evaluate_on_plan: false
+      re_evaluate_policies: true
   - model: authentik_flows.flowstagebinding
     identifiers:
       target: !KeyOf invite-enrollment-flow
       stage: !KeyOf enrollment-login-stage
       order: 40
+
+  # Bind the gate to the user-write binding above. failure_result:false => a
+  # policy error denies (fail closed); timeout > the in-policy /verify timeout.
+  - model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf enrollment-write-binding
+      policy: !KeyOf invite-gate-policy
+      order: 0
+    attrs:
+      enabled: true
+      negate: false
+      timeout: 6
+      failure_result: false
