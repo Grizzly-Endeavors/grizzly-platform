@@ -1,11 +1,7 @@
-# Plain-HTTP ingress — external TLS terminates at proxy-vps (Caddy + wildcards
-# *.bearflinn.com and *.grizzly-endeavors.com), which already route any unmatched
-# subdomain to this cluster ingress, so no VPS/Caddy change is needed for either
-# sso host. Long timeouts + larger buffers suit OAuth/SAML redirects and flow POSTs.
-#
-# DOMAIN MIGRATION (in progress): sso.grizzly-endeavors.com is the target host;
-# sso.bearflinn.com is served in parallel during the cutover window and dropped
-# once every app's OIDC issuer/redirect has moved to the new host.
+# Plain-HTTP ingress — external TLS terminates at proxy-vps (Caddy + wildcard
+# *.grizzly-endeavors.com), which already routes any unmatched subdomain to this
+# cluster ingress, so no VPS/Caddy change is needed for sso.grizzly-endeavors.com.
+# Long timeouts + larger buffers suit OAuth/SAML redirects and flow POSTs.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -18,28 +14,10 @@ metadata:
 spec:
   ingressClassName: nginx
   rules:
-    # Target host (grizzly-endeavors.com). Brand assets on /brand (longer prefix
-    # than "/"), everything else to authentik. Brand refs point here — see
-    # brand-assets-deployment.yaml and blueprints/brand.yaml.
+    # Brand assets on /brand (longer prefix than "/"), everything else to
+    # authentik. Brand refs point here — see brand-assets-deployment.yaml and
+    # blueprints/brand.yaml.
     - host: sso.grizzly-endeavors.com
-      http:
-        paths:
-          - path: /brand
-            pathType: Prefix
-            backend:
-              service:
-                name: authentik-brand-assets
-                port:
-                  number: 80
-          - path: /
-            pathType: Prefix
-            backend:
-              service:
-                name: authentik-server
-                port:
-                  number: 80
-    # Legacy host — kept only for the migration window; remove after all apps move.
-    - host: sso.bearflinn.com
       http:
         paths:
           - path: /brand
