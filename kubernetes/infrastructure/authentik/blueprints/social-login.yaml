@@ -8,7 +8,7 @@ metadata:
 # flow. See docs/decisions/040-invite-broker-cookie-bridged-enrollment.md.
 #
 # Login: returning users click a Discord/GitHub/Google button on the
-# sso.bearflinn.com login page and are matched to their existing linked account.
+# sso.grizzly-endeavors.com login page and are matched to their existing linked account.
 #
 # Enrollment (closed): a NEW social login has no match, so Authentik runs the
 # source's enrollment_flow -> grizzly-invite-enrollment. The grizzly-invite-gate
@@ -49,7 +49,7 @@ entries:
 
   # --- Invitation gate (expression policy on the flow) ----------------------
   # Replaces the old paste-a-code prompt + invitation stage. The broker plants a
-  # signed `grizzly_invite` cookie at invite.bearflinn.com/i/<token>; that cookie
+  # signed `grizzly_invite` cookie at invite.grizzly-endeavors.com/i/<token>; that cookie
   # survives the OAuth round-trip (Authentik flow context does not), so this
   # policy reads it on the enrollment callback and consumes it via /verify.
   # Fail closed: no cookie, a bad/used invite, or a broker error all deny.
