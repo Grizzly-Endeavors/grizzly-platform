@@ -1,0 +1,8 @@
+# Extends Flux source-controller's default ignore rules. The defaults strip
+# image/binary extensions (*.png, *.jpg, *.gif, ...) from the build artifact to
+# keep it small — which also drops legitimate assets that a kustomization needs.
+# Re-include (negate) the authentik brand images, which a kustomize
+# configMapGenerator reads to build the authentik-brand-assets ConfigMap served
+# by the brand-assets nginx deployment.
+!kubernetes/infrastructure/authentik/brand-assets/*.png
+!kubernetes/infrastructure/authentik/brand-assets/*.webp
