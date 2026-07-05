@@ -4,14 +4,14 @@ metadata:
 entries:
   # Forward-auth (single application) proxy provider fronting the invite broker's
   # /admin provisioning UI. The first proxy provider in the homelab — it turns the
-  # embedded outpost into an nginx external-auth backend for invite.bearflinn.com.
+  # embedded outpost into an nginx external-auth backend for invite.grizzly-endeavors.com.
   - model: authentik_providers_proxy.proxyprovider
     id: invite-admin-provider
     identifiers:
       name: grizzly-invite-admin
     attrs:
       mode: forward_single
-      external_host: https://invite.bearflinn.com
+      external_host: https://invite.grizzly-endeavors.com
       authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
       invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
 
@@ -19,7 +19,7 @@ entries:
   # broker's own friendly "not allowed" page instead of the outpost's generic
   # deny (the broker still checks grizzly-admins from X-authentik-groups
   # in-app, as defense in depth). Superseded by ADR-049: the app library on
-  # sso.bearflinn.com shows every app any authenticated user can reach, so
+  # sso.grizzly-endeavors.com shows every app any authenticated user can reach, so
   # leaving this unbound meant friends saw an admin-only provisioning tool in
   # their launcher. The group binding below scopes both library visibility and
   # access to grizzly-admins; a non-admin now gets the outpost's generic 403 if
@@ -32,7 +32,7 @@ entries:
     attrs:
       name: Grizzly Invite — provisioning
       provider: !KeyOf invite-admin-provider
-      meta_launch_url: https://invite.bearflinn.com/admin
+      meta_launch_url: https://invite.grizzly-endeavors.com/admin
       meta_description: "Mint and manage invitations (grizzly-admins only)"
       policy_engine_mode: any
 
@@ -46,7 +46,7 @@ entries:
       negate: false
 
   # Bind the provider to the default embedded outpost so it serves
-  # /outpost.goauthentik.io for invite.bearflinn.com. Only this provider is set;
+  # /outpost.goauthentik.io for invite.grizzly-endeavors.com. Only this provider is set;
   # it is currently the sole proxy provider, so replacing the list is safe.
   #
   # authentik_host MUST be set or the outpost builds its sign-in redirect against
@@ -61,4 +61,4 @@ entries:
       providers:
         - !KeyOf invite-admin-provider
       config:
-        authentik_host: https://sso.bearflinn.com/
+        authentik_host: https://sso.grizzly-endeavors.com/
