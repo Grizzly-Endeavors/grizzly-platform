@@ -1,7 +1,7 @@
 # 043: Invite admin UI gated by Authentik forward-auth, group enforced in-app
 
 **Date:** 2026-06-30
-**Status:** accepted
+**Status:** partially superseded by [ADR-049](049-app-visibility-scoped-via-group-policy-bindings.md) (the "no policy binding" call in the Decision and the second Alternative below)
 **Relates to:** [ADR-033](033-central-identity-authentik.md) (deferred forward-auth outposts — this is the first one), [ADR-040](040-invite-broker-cookie-bridged-enrollment.md), [ADR-041](041-group-scoped-invites.md), [ADR-042](042-multi-use-invites.md), [ADR-037](037-authentik-config-as-code-blueprints.md)
 
 ## Context
