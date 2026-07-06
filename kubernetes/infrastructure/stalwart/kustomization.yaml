@@ -3,6 +3,7 @@ kind: Kustomization
 namespace: stalwart
 resources:
   - namespace.yaml
+  - externalsecret.yaml
   - certificate.yaml
   - deployment.yaml
   - service.yaml
