@@ -75,12 +75,14 @@ Per-consumer this is an endpoint + bucket + credential swap (all consumers are S
 
 Consumers to move (ADR-055): **hot (`:9000`→`:7070`)** — Loki (`r730xd-loki` defaults/template), Tempo (`r730xd-tempo`), Stalwart blob store (via Stalwart CLI + `setup-stalwart-stores.yml`). **bulk (`:9002`→`:7072`)** — zot registry (`kubernetes/infrastructure/registry/configmap.yaml`), Argo artifacts (`kubernetes/infrastructure/argo-workflows/helmrelease.yaml`), sccache, Nextcloud (manifests in the **lab-apps** repo). Each has an OpenBao path + (for k8s) an ExternalSecret `remoteRef.key` to re-point.
 
-After all consumers are migrated and verified:
+After all consumers are migrated and verified — **done 2026-07-06, this is the record of how**:
 
-- Remove the MinIO roles/creds and the `minio-obs`/`minio-bulk` Prometheus scrape jobs.
-- Destroy the drained `tank/foundation/minio-obs` dataset (s3-hot is already its own dataset — no rename needed) and remove the MinIO bulk data dir.
+- Remove the MinIO roles/creds and the `minio-obs`/`minio-bulk` Prometheus scrape jobs. (Loki/Tempo keep the `observability/minio-client` account — only its backing engine moved.)
+- Stop + remove the containers: `docker compose down` in `/opt/foundation/minio-{obs,bulk}`, then remove those compose dirs.
+- Destroy the drained `tank/foundation/minio-obs` dataset (`zfs destroy -r`; s3-hot is its own dataset — no rename needed) and remove the MinIO bulk data dir (`rm -rf /mnt/pool/foundation/minio-bulk` — be precise, the sibling `s3-bulk` dir stays).
 - Drop the `.minio.sys/` SnapRAID exclude (keep `.sgwtmp/`).
-- Retire the OpenBao `stores/minio-obs` / `stores/minio-bulk` paths.
+- Retire the OpenBao `stores/minio-obs` / `stores/minio-bulk` paths (`bao kv metadata delete`).
+- **SnapRAID resync (do this manually — the nightly wrapper will abort):** removing the bulk data deletes thousands of files, tripping `snapraid-sync.sh`'s `DELETE_THRESHOLD=40`, and if a whole pool disk's tracked files vanish (here minio-bulk lived entirely on `d2`/`/mnt/data/bay2`) plain `snapraid sync` refuses with *"files … now missing or rewritten … use `--force-empty`"*. **Before forcing, verify the disk is mounted and its emptiness is the intended deletion** (`findmnt /mnt/data/bay2`; it should now hold the new `foundation/s3-bulk` data), *not* a failed mount — then `sudo snapraid --force-empty sync`.
 
 ## Troubleshooting
 
