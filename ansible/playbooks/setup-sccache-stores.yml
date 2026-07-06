@@ -1,0 +1,67 @@
+---
+# setup-sccache-stores.yml — foundation-side provisioning for the sccache
+# Rust build cache used by the ARC self-hosted runners (ADR-055 cutover).
+#
+# Extracted from setup-k8s-cicd.yml (which now only deploys the ARC/Argo Flux
+# stack): the S3 bucket + account belong with the other per-consumer store
+# playbooks (setup-{stalwart,nextcloud,career-scanner}-stores.yml), and moving
+# off MinIO onto versitygw makes the old `mc admin` block obsolete anyway.
+#
+# One scoped `userplus` account + a `build-cache` bucket it owns, on the
+# s3-bulk versitygw gateway. The runner Deployment reads the same keys via the
+# ESO-managed `sccache-s3-credentials` secret
+# (external-secrets-stores/github-runners.yaml → cicd/sccache-minio).
+# Provisioning runs in-container on the r730xd via the shared versitygw admin
+# task; there is no Postgres side for sccache.
+#
+# Credentials: secret/grizzly-platform/cicd/sccache-minio (access_key,
+# secret_key) — the same values reused as the versitygw account creds so only
+# the consumer endpoint changes at cutover. s3-bulk root creds (admin) come
+# from secret/grizzly-platform/stores/s3-bulk.
+#
+# Prerequisites:
+#   - s3-bulk versitygw gateway running (deploy-foundation-stores.yml --tags s3-bulk).
+#   - OpenBao seeded: cicd/sccache-minio + stores/s3-bulk.
+#
+# Usage:
+#   ansible-playbook -i ansible/inventory ansible/playbooks/setup-sccache-stores.yml \
+#     --vault-password-file .vault_pass -v
+
+- name: Provision sccache build-cache bucket + account on s3-bulk
+  hosts: r730xd
+  become: yes
+  gather_facts: no
+
+  vars:
+    openbao_read_enabled: true
+
+  vars_files:
+    - "{{ playbook_dir }}/../vars/openbao_auth.yml"
+
+  pre_tasks:
+    - name: Load OpenBao-sourced platform secrets
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/../vars/openbao_secrets.yml"
+
+    - name: Verify sccache + s3-bulk credentials are present in OpenBao
+      ansible.builtin.assert:
+        that:
+          - vault_sccache_minio_access_key | default('') | length > 0
+          - vault_sccache_minio_secret_key | default('') | length > 0
+          - vault_s3_bulk_root_access_key | default('') | length > 0
+          - vault_s3_bulk_root_secret_key | default('') | length > 0
+        fail_msg: >
+          cicd/sccache-minio (access_key, secret_key) and stores/s3-bulk
+          (root_access_key, root_secret_key) must be seeded in OpenBao.
+        success_msg: "sccache + s3-bulk credentials are set"
+
+  tasks:
+    - name: Provision the build-cache account + bucket on s3-bulk
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/versitygw-provision-account.yml"
+      vars:
+        vgw_instance: s3-bulk
+        vgw_root_access: "{{ vault_s3_bulk_root_access_key }}"
+        vgw_root_secret: "{{ vault_s3_bulk_root_secret_key }}"
+        vgw_access: "{{ vault_sccache_minio_access_key }}"
+        vgw_secret: "{{ vault_sccache_minio_secret_key }}"
+        vgw_bucket: build-cache
