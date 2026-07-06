@@ -53,6 +53,10 @@
     stalwart_cli_image: "ghcr.io/stalwartlabs/cli:1.0.10"
     stalwart_url: "https://mail.grizzly-endeavors.com"
     stalwart_domain: "grizzly-endeavors.com"
+    # Secondary receive-only domain: hosts the bearflinn@bearflinn.com alias
+    # (kept as a real address; also used to sign up for SMTP2GO with an
+    # aged domain). Registered in plan.json; its alias is attached below.
+    stalwart_domain_bearflinn: "bearflinn.com"
     stalwart_tls_san: "mail.grizzly-endeavors.com"
     stalwart_account_local: "bearflinn"
     stalwart_namespace: "stalwart"
@@ -188,9 +192,34 @@
       changed_when: false
       no_log: true
 
+    - name: Look up the secondary (bearflinn.com) domain object id
+      ansible.builtin.command:
+        argv:
+          - docker
+          - run
+          - --rm
+          - -e
+          - STALWART_URL
+          - -e
+          - STALWART_USER
+          - -e
+          - STALWART_PASSWORD
+          - "{{ stalwart_cli_image }}"
+          - -k
+          - query
+          - Domain
+          - --where
+          - "name={{ stalwart_domain_bearflinn }}"
+          - --json
+      environment: *cli_env
+      register: stalwart_domain_bearflinn_q
+      changed_when: false
+      no_log: true
+
     - name: Resolve the domain and certificate ids
       ansible.builtin.set_fact:
         stalwart_domain_id: "{{ (stalwart_domain_q.stdout_lines | select('match', '.+') | first | from_json).id }}"
+        stalwart_domain_bearflinn_id: "{{ (stalwart_domain_bearflinn_q.stdout_lines | select('match', '.+') | first | from_json).id }}"
         stalwart_cert_id: "{{ (stalwart_cert_q.stdout_lines | select('match', '.+') | first | from_json).id }}"
 
     - name: Set SystemSettings default hostname, domain, and certificate
@@ -337,9 +366,12 @@
       no_log: true
 
     # RFC 5321 requires postmaster@ to be deliverable; abuse@ (RFC 2142) is good
-    # hygiene. Attached as aliases on the bootstrap mailbox (EmailAlias =
-    # {name: <local-part>, domainId}). Idempotent — re-applies the same set.
-    - name: Ensure RFC role-address aliases (postmaster, abuse) on the mailbox
+    # hygiene. bearflinn@bearflinn.com is a cross-domain alias delivering to the
+    # same mailbox (a real address; also used for the SMTP2GO signup). Attached
+    # as aliases on the bootstrap mailbox (EmailAlias = {name, domainId} —
+    # domainId is per-alias, so aliases can span configured domains). Idempotent
+    # — re-applies the same index-keyed set.
+    - name: Ensure mailbox aliases (postmaster, abuse, bearflinn@bearflinn.com)
       ansible.builtin.command:
         argv:
           - docker
@@ -360,6 +392,8 @@
           - "aliases/0={{ {'name': 'postmaster', 'domainId': stalwart_domain_id} | to_json }}"
           - --field
           - "aliases/1={{ {'name': 'abuse', 'domainId': stalwart_domain_id} | to_json }}"
+          - --field
+          - "aliases/2={{ {'name': stalwart_account_local, 'domainId': stalwart_domain_bearflinn_id} | to_json }}"
       environment: *cli_env
       register: stalwart_account_aliases
       changed_when: "'Updated' in stalwart_account_aliases.stdout"
