@@ -44,7 +44,7 @@ data:
         "storageDriver": {
           "name": "s3",
           "region": "us-east-1",
-          "regionendpoint": "http://10.0.0.200:9002",
+          "regionendpoint": "http://10.0.0.200:7072",
           "bucket": "lab-registry",
           "forcepathstyle": true,
           "secure": false,

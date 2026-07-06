@@ -1,0 +1,69 @@
+---
+# setup-registry-stores.yml — foundation-side provisioning for the in-cluster
+# zot OCI registry's S3 object storage (ADR-027, ADR-055 cutover).
+#
+# Replaces the registry half of seed-app-secrets.yml. Two changes land together
+# here versus the MinIO era:
+#   1. Store moves from MinIO bulk to the s3-bulk versitygw gateway.
+#   2. The registry gets a dedicated scoped `userplus` account that owns only
+#      the lab-registry bucket, instead of being handed the MinIO-bulk *root*
+#      credentials (which the old registry ExternalSecret mapped directly).
+#
+# zot reads the account via the ESO-managed `registry-s3-creds` secret
+# (external-secrets-stores/registry.yaml → stores/registry). Provisioning runs
+# in-container on the r730xd via the shared versitygw admin task; there is no
+# Postgres side for the registry. The rootdirectory prefix (/lab-registry-v2)
+# is a key prefix *inside* the lab-registry bucket, handled by zot config — this
+# playbook only creates the bucket.
+#
+# Credentials: secret/grizzly-platform/stores/registry (access_key, secret_key)
+# — a fresh scoped account minted for the cutover. s3-bulk root creds (admin)
+# from secret/grizzly-platform/stores/s3-bulk.
+#
+# Prerequisites:
+#   - s3-bulk versitygw gateway running (deploy-foundation-stores.yml --tags s3-bulk).
+#   - OpenBao seeded: stores/registry + stores/s3-bulk.
+#
+# Usage:
+#   ansible-playbook -i ansible/inventory ansible/playbooks/setup-registry-stores.yml \
+#     --vault-password-file .vault_pass -v
+
+- name: Provision zot registry bucket + scoped account on s3-bulk
+  hosts: r730xd
+  become: yes
+  gather_facts: no
+
+  vars:
+    openbao_read_enabled: true
+
+  vars_files:
+    - "{{ playbook_dir }}/../vars/openbao_auth.yml"
+
+  pre_tasks:
+    - name: Load OpenBao-sourced platform secrets
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/../vars/openbao_secrets.yml"
+
+    - name: Verify registry + s3-bulk credentials are present in OpenBao
+      ansible.builtin.assert:
+        that:
+          - vault_registry_s3_access_key | default('') | length > 0
+          - vault_registry_s3_secret_key | default('') | length > 0
+          - vault_s3_bulk_root_access_key | default('') | length > 0
+          - vault_s3_bulk_root_secret_key | default('') | length > 0
+        fail_msg: >
+          secret/grizzly-platform/stores/registry (access_key, secret_key) and
+          stores/s3-bulk (root_access_key, root_secret_key) must be seeded in
+          OpenBao.
+        success_msg: "registry + s3-bulk credentials are set"
+
+  tasks:
+    - name: Provision the lab-registry account + bucket on s3-bulk
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/versitygw-provision-account.yml"
+      vars:
+        vgw_instance: s3-bulk
+        vgw_root_access: "{{ vault_s3_bulk_root_access_key }}"
+        vgw_root_secret: "{{ vault_s3_bulk_root_secret_key }}"
+        vgw_access: "{{ vault_registry_s3_access_key }}"
+        vgw_secret: "{{ vault_registry_s3_secret_key }}"
+        vgw_bucket: lab-registry

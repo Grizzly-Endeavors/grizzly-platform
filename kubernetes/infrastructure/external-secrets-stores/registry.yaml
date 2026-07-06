@@ -11,12 +11,15 @@ spec:
   target:
     name: registry-s3-creds
     creationPolicy: Owner
+  # Scoped s3-bulk versitygw account (ADR-055) that owns only the lab-registry
+  # bucket — replaces the former mapping of the MinIO-bulk *root* creds.
+  # Provisioned by setup-registry-stores.yml.
   data:
     - secretKey: accessKey
       remoteRef:
-        key: grizzly-platform/stores/minio-bulk
-        property: root_user
+        key: grizzly-platform/stores/registry
+        property: access_key
     - secretKey: secretKey
       remoteRef:
-        key: grizzly-platform/stores/minio-bulk
-        property: root_password
+        key: grizzly-platform/stores/registry
+        property: secret_key
