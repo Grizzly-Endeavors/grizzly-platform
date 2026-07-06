@@ -1,0 +1,105 @@
+# Stalwart mail server (ADR-050). Single replica — all durable state is external
+# (foundation Postgres + MinIO obs), so the pod is stateless and uses a Deployment
+# (Recreate) rather than a StatefulSet/PVC. The init container seeds the config
+# into the writable data dir at Stalwart's default config path; the main container
+# reads /opt/stalwart/etc/config.toml, loads secrets via envFrom, and mounts the
+# cert-manager TLS Secret.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: stalwart
+  namespace: stalwart
+  labels:
+    app.kubernetes.io/name: stalwart
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: stalwart
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: stalwart
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+        - name: render-config
+          image: busybox:1.37
+          securityContext:
+            runAsUser: 1000
+            runAsGroup: 1000
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          command: ["/bin/sh", "-ec"]
+          args:
+            - |
+              mkdir -p /opt/stalwart/etc
+              cp /config/config.toml /opt/stalwart/etc/config.toml
+          volumeMounts:
+            - name: config
+              mountPath: /config
+            - name: data
+              mountPath: /opt/stalwart
+      containers:
+        - name: stalwart
+          image: stalwartlabs/stalwart:v0.16.11
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            runAsUser: 1000
+            runAsGroup: 1000
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          ports:
+            - name: smtp
+              containerPort: 25
+            - name: submission
+              containerPort: 587
+            - name: smtps
+              containerPort: 465
+            - name: imaps
+              containerPort: 993
+            - name: http
+              containerPort: 8080
+          envFrom:
+            - secretRef:
+                name: stalwart-secrets
+          readinessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "2"
+              memory: 2Gi
+          volumeMounts:
+            - name: data
+              mountPath: /opt/stalwart
+            - name: tls
+              mountPath: /etc/stalwart/tls
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: stalwart-config
+        - name: tls
+          secret:
+            secretName: stalwart-tls
+        - name: data
+          emptyDir: {}

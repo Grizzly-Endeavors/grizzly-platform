@@ -1,0 +1,51 @@
+# HTTP surface (JMAP / webadmin / autoconfig / MTA-STS) — ClusterIP backend for
+# the ingress; Caddy -> ingress-nginx terminates/forwards to the http listener.
+apiVersion: v1
+kind: Service
+metadata:
+  name: stalwart
+  namespace: stalwart
+  labels:
+    app.kubernetes.io/name: stalwart
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: stalwart
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+---
+# Raw mail ports, exposed as fixed NodePorts. Fronted by HAProxy on the VPS
+# (TCP mode, PROXY protocol) via the WireGuard tunnel + R730xd DNAT (ADR-051);
+# the DNAT/tunnel forwards are added in the HAProxy phase. NodePort<->port map is
+# mnemonic (last 3 digits = mail port) so the HAProxy config is unambiguous.
+# See docs/nodeport-allocation.md.
+apiVersion: v1
+kind: Service
+metadata:
+  name: stalwart-mail
+  namespace: stalwart
+  labels:
+    app.kubernetes.io/name: stalwart
+spec:
+  type: NodePort
+  selector:
+    app.kubernetes.io/name: stalwart
+  ports:
+    - name: smtp
+      port: 25
+      targetPort: smtp
+      nodePort: 30025
+    - name: submissions
+      port: 465
+      targetPort: smtps
+      nodePort: 30465
+    - name: submission
+      port: 587
+      targetPort: submission
+      nodePort: 30587
+    - name: imaps
+      port: 993
+      targetPort: imaps
+      nodePort: 30993
