@@ -13,3 +13,4 @@ resources:
   - kyverno
   - metrics-server
   - authentik
+  - stalwart

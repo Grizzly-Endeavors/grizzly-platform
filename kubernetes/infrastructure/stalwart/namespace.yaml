@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: stalwart
+  labels:
+    kubernetes.io/metadata.name: stalwart
+  # NOTE: deliberately NOT labelled `grizzly.io/gated: "true"`. Stalwart runs the
+  # third-party stalwartlabs/stalwart image, which is not built or cosign-signed
+  # by our CI gate, so it must stay out of the Kyverno signature-enforcement
+  # scope (kubernetes/infrastructure/kyverno-policies) — same as authentik.

@@ -1,0 +1,21 @@
+# Browser-trusted cert for the mail SMTP/IMAP TLS, issued in-cluster by the
+# Let's Encrypt DNS-01 ClusterIssuer (ADR-052). Stalwart mounts the resulting
+# stalwart-tls Secret and terminates TLS itself (HAProxy passes the stream
+# through, ADR-051), so the cert must live in the cluster — Caddy's VPS wildcard
+# never touches the raw mail ports.
+#
+# Starts on letsencrypt-STAGING to validate the DNS-01 flow without burning the
+# LE prod rate limit; flip issuerRef to letsencrypt-prod before the MX cutover
+# (real IMAP/SMTP clients reject the staging CA).
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: stalwart-tls
+  namespace: stalwart
+spec:
+  secretName: stalwart-tls
+  issuerRef:
+    name: letsencrypt-staging
+    kind: ClusterIssuer
+  dnsNames:
+    - mail.grizzly-endeavors.com

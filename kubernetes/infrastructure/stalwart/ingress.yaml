@@ -1,0 +1,25 @@
+# Plain-HTTP ingress for the mail web surface (JMAP / webadmin / autoconfig /
+# MTA-STS). External TLS terminates at proxy-vps (Caddy + wildcard
+# *.grizzly-endeavors.com), which auto-routes any unmatched subdomain to this
+# cluster ingress — so no VPS/Caddy change is needed for mail.grizzly-endeavors.com.
+# The raw SMTP/IMAP ports do NOT go through here (see service.yaml NodePorts).
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: stalwart
+  namespace: stalwart
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: mail.grizzly-endeavors.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: stalwart
+                port:
+                  number: 8080

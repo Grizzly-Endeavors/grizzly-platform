@@ -1,0 +1,39 @@
+# Syncs Stalwart's runtime secrets from OpenBao into the stalwart namespace.
+# The Deployment loads these as environment variables (envFrom) and the config
+# TOML references them via %{env:...}% expansion.
+#
+#   POSTGRES_PASSWORD / S3_ACCESS_KEY / S3_SECRET_KEY  <- stores/stalwart
+#     (provisioned on the foundation Postgres + MinIO obs by
+#      ansible/playbooks/setup-stalwart-stores.yml)
+#   ADMIN_SECRET  <- platform/stalwart (the fallback-admin password the CLI
+#     authenticates with to apply the config plan)
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: stalwart-secrets
+  namespace: stalwart
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: openbao
+  target:
+    name: stalwart-secrets
+    creationPolicy: Owner
+  data:
+    - secretKey: POSTGRES_PASSWORD
+      remoteRef:
+        key: grizzly-platform/stores/stalwart
+        property: db_password
+    - secretKey: S3_ACCESS_KEY
+      remoteRef:
+        key: grizzly-platform/stores/stalwart
+        property: s3_access_key
+    - secretKey: S3_SECRET_KEY
+      remoteRef:
+        key: grizzly-platform/stores/stalwart
+        property: s3_secret_key
+    - secretKey: ADMIN_SECRET
+      remoteRef:
+        key: grizzly-platform/platform/stalwart
+        property: admin_password

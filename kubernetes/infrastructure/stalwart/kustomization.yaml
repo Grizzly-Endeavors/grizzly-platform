@@ -1,0 +1,15 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: stalwart
+resources:
+  - namespace.yaml
+  - certificate.yaml
+  - deployment.yaml
+  - service.yaml
+  - ingress.yaml
+# The static bootstrap config as a hashed ConfigMap — the hash suffix rolls the
+# Deployment automatically whenever config.toml changes.
+configMapGenerator:
+  - name: stalwart-config
+    files:
+      - config.toml
