@@ -1,0 +1,141 @@
+---
+# versitygw-provision-account.yml — idempotently provision one scoped S3
+# account + its owned bucket on a versitygw gateway (ADR-055).
+#
+# The MinIO-era equivalent was a `docker exec minio-* mc admin user add` +
+# `mc admin policy create/attach` block, repeated across every store-setup
+# playbook. versitygw has no per-bucket IAM *policies*: isolation is
+# ownership-based — a `userplus` account owns the buckets it creates and can't
+# see other accounts' buckets. So provisioning is just "create the account,
+# create its bucket owned by it". Both go through the gateway's admin API,
+# reached in-container over the (LAN-unpublished) admin port with the
+# instance root creds as admin creds.
+#
+# Runs on the r730xd host (the gateways are Docker containers there). Include
+# with `include_tasks` from a play with `hosts: r730xd` + `become: yes`, e.g.:
+#
+#   - name: Provision the stalwart account + bucket on s3-hot
+#     ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/versitygw-provision-account.yml"
+#     vars:
+#       vgw_instance:    s3-hot
+#       vgw_root_access: "{{ vault_s3_hot_root_access_key }}"
+#       vgw_root_secret: "{{ vault_s3_hot_root_secret_key }}"
+#       vgw_access:      "{{ vault_stalwart_s3_access_key }}"
+#       vgw_secret:      "{{ vault_stalwart_s3_secret_key }}"
+#       vgw_bucket:      stalwart
+#
+# Required vars: vgw_instance (s3-hot|s3-bulk), vgw_root_access, vgw_root_secret,
+#                vgw_access, vgw_secret, vgw_bucket.
+# Optional:      vgw_role (default userplus).
+#
+# Idempotency: the account is created only if its access key is absent from
+# `list-users`, the bucket only if absent from `list-buckets`. Re-running never
+# rotates an existing account's secret (use `versitygw admin update-user` for
+# that) — matches the create-once posture of the MinIO store-setup playbooks.
+#
+# See docs/runbooks/versitygw-cli.md (admin API) and versitygw-deploy.md.
+
+- name: "versitygw[{{ vgw_instance }}]: validate provisioning inputs"
+  ansible.builtin.assert:
+    that:
+      - vgw_instance in ['s3-hot', 's3-bulk']
+      - vgw_root_access | default('') | length > 0
+      - vgw_root_secret | default('') | length > 0
+      - vgw_access | default('') | length > 0
+      - vgw_secret | default('') | length > 0
+      - vgw_bucket | default('') | length > 0
+    fail_msg: >-
+      versitygw-provision-account requires vgw_instance (s3-hot|s3-bulk) plus
+      non-empty vgw_root_access/secret, vgw_access/secret and vgw_bucket.
+    quiet: true
+
+- name: "versitygw[{{ vgw_instance }}]: resolve container + admin endpoint"
+  ansible.builtin.set_fact:
+    _vgw_container: "foundation-{{ vgw_instance }}"
+    # Admin API is container-internal only (not LAN-published): s3-hot 7071,
+    # s3-bulk 7073 — see the r730xd-s3-* role defaults.
+    _vgw_admin_endpoint: "http://127.0.0.1:{{ {'s3-hot': 7071, 's3-bulk': 7073}[vgw_instance] }}"
+
+- name: "versitygw[{{ vgw_instance }}]: list existing IAM accounts"
+  ansible.builtin.command:
+    argv:
+      - docker
+      - exec
+      - -e
+      - "ADMIN_ACCESS_KEY_ID={{ vgw_root_access }}"
+      - -e
+      - "ADMIN_SECRET_KEY={{ vgw_root_secret }}"
+      - "{{ _vgw_container }}"
+      - versitygw
+      - admin
+      - --er
+      - "{{ _vgw_admin_endpoint }}"
+      - list-users
+  register: _vgw_users
+  changed_when: false
+  no_log: true
+
+- name: "versitygw[{{ vgw_instance }}]: create the {{ vgw_bucket }} account ({{ vgw_role | default('userplus') }})"
+  ansible.builtin.command:
+    argv:
+      - docker
+      - exec
+      - -e
+      - "ADMIN_ACCESS_KEY_ID={{ vgw_root_access }}"
+      - -e
+      - "ADMIN_SECRET_KEY={{ vgw_root_secret }}"
+      - "{{ _vgw_container }}"
+      - versitygw
+      - admin
+      - --er
+      - "{{ _vgw_admin_endpoint }}"
+      - create-user
+      - -a
+      - "{{ vgw_access }}"
+      - -s
+      - "{{ vgw_secret }}"
+      - -r
+      - "{{ vgw_role | default('userplus') }}"
+  when: vgw_access not in _vgw_users.stdout
+  no_log: true
+
+- name: "versitygw[{{ vgw_instance }}]: list existing buckets"
+  ansible.builtin.command:
+    argv:
+      - docker
+      - exec
+      - -e
+      - "ADMIN_ACCESS_KEY_ID={{ vgw_root_access }}"
+      - -e
+      - "ADMIN_SECRET_KEY={{ vgw_root_secret }}"
+      - "{{ _vgw_container }}"
+      - versitygw
+      - admin
+      - --er
+      - "{{ _vgw_admin_endpoint }}"
+      - list-buckets
+  register: _vgw_buckets
+  changed_when: false
+  no_log: true
+
+- name: "versitygw[{{ vgw_instance }}]: create the {{ vgw_bucket }} bucket owned by its account"
+  ansible.builtin.command:
+    argv:
+      - docker
+      - exec
+      - -e
+      - "ADMIN_ACCESS_KEY_ID={{ vgw_root_access }}"
+      - -e
+      - "ADMIN_SECRET_KEY={{ vgw_root_secret }}"
+      - "{{ _vgw_container }}"
+      - versitygw
+      - admin
+      - --er
+      - "{{ _vgw_admin_endpoint }}"
+      - create-bucket
+      - --owner
+      - "{{ vgw_access }}"
+      - --bucket
+      - "{{ vgw_bucket }}"
+  when: vgw_bucket not in _vgw_buckets.stdout
+  no_log: true
