@@ -31,10 +31,10 @@ Scope is the KV slot only. Postgres keeps its product name (no swap planned); Mi
 
 ## Consequences
 
-- **Near drop-in backend** — protocol/RDB/AOF compatibility means existing data files and clients carry over; the cutover is an image swap plus the slot rename.
+- **Drop-in at the wire/client level** — every consumer addresses the store as `host:port:password` over RESP, so no consumer config changes; the cutover is an image swap plus the slot rename.
 - **Cruft-proof identity** — the next KV backend swap touches only the image, not the role/dataset/secret/metric names.
 - **Maintained OSS with broad backing** (AWS, Google, Oracle, et al.) — removes the license/maintenance risk that prompted the move.
-- **One-time migration steps** (see the mail/secrets-style runbook ordering): pre-seed `stores/kv-cache`, land IaC, then on the R730xd stop the old container → `zfs rename` → redeploy → cut over monitoring → verify → delete `stores/redis` and `/opt/foundation/redis`.
-- Consumers verified to depend on no Redis-8-only feature (the store was pinned to `redis:7`); Valkey tracks Redis 7.2-era compatibility plus its own line.
+- **On-disk data does NOT carry over from Redis 7.4+.** Discovered at cutover (2026-07-06): the store had floated on `redis:7` → **7.4.8**, which writes **RDB format v12** (hash-field TTLs). Valkey forked at Redis **7.2** (RDB v11) and never adopted v12, so Valkey 9.1 **fails to load** a 7.4 RDB/AOF (`Can't handle RDB format version 12`) and crash-loops. "RDB-compatible" only holds up to Redis 7.2. Because the store held only ephemeral cache/session data (all TTL'd, non-load-bearing at the time — see [[services-not-yet-loadbearing]]), we **discarded the old data** and started Valkey clean; consumers repopulate. A future Redis-7.4+→Valkey move with precious data would need a **logical** migration (DUMP/RESTORE / `MIGRATE`), not a file copy.
+- **One-time cutover steps** (mail/secrets-style ordering): pre-seed `stores/kv-cache`, land IaC, then on the R730xd stop the old container → `zfs rename` → **clear the incompatible data dir** → redeploy → cut over monitoring → verify → delete `stores/redis` and `/opt/foundation/redis`.
 
-**Supersedes** the earlier draft of this ADR, which kept the `redis` dataset and secret path as-is — those are now renamed to `kv-cache`.
+**Supersedes** the earlier draft of this ADR, which kept the `redis` dataset and secret path as-is (now renamed to `kv-cache`) and claimed on-disk data carries over (it does not, from Redis 7.4+).
