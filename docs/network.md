@@ -6,23 +6,23 @@ The live lab network. Flat L2 today on the SR2024, with a dedicated point-to-poi
 
 For the pending VLAN redesign, see [exploration/network-vlans.md](exploration/network-vlans.md).
 
-> **Cutover planned (not yet executed).** The router has been acquired (Digi EX50) and the platform is moving to the garage. The two jobs are one staged maintenance window — see [runbooks/garage-relocation-cutover.md](runbooks/garage-relocation-cutover.md) and ADRs [044](decisions/044-digi-ex50-as-off-the-shelf-router.md) (EX50 as router), [045](decisions/045-platform-relocation-to-garage.md) (garage relocation), [046](decisions/046-platform-network-segmentation-via-home-eviction.md) (segmentation), [047](decisions/047-ingress-tunnel-relocation-to-ex50.md) (ingress move). The topology below is still the *live* flat network until then.
+> **Platform physically relocated to the garage (2026-07-05).** During an extended power outage the whole lab (SR2024 + all machines) was moved from the closet to the garage and came back up on the same flat 10.0.0.x network. This was a physical move only — the **Digi EX50 router cutover and L3 segmentation were not performed** and remain pending: see [runbooks/garage-relocation-cutover.md](runbooks/garage-relocation-cutover.md) and ADRs [044](decisions/044-digi-ex50-as-off-the-shelf-router.md) (EX50 as router), [046](decisions/046-platform-network-segmentation-via-home-eviction.md) (segmentation), [047](decisions/047-ingress-tunnel-relocation-to-ex50.md) (ingress move). ADR [045](decisions/045-platform-relocation-to-garage.md) (garage relocation) is now realized. The topology below is the *live* flat network — still Xfinity gateway upstream, still no VLANs.
 
-Last updated: 2026-04-17 (cutover plan added 2026-07-02)
+Last updated: 2026-07-05 (platform relocated to garage; EX50 cutover still pending)
 
 ## Physical Topology
 
-All lab machines are in the closet on the SR2024. Non-lab drops (bedroom, garage, workshop) continue to run through the legacy consumer switch chain — see [ADR-008](decisions/008-keep-existing-switch-chain-for-home.md).
+All lab machines are in the garage on the SR2024 (relocated from the closet 2026-07-05). Non-lab drops (bedroom, workshop, etc.) continue to run through the legacy consumer switch chain — see [ADR-008](decisions/008-keep-existing-switch-chain-for-home.md).
 
 ```
                 [Xfinity Gateway]
             Router / DHCP / DNS / WAN
                  Living Room
                       |
-                      | (cable to closet)
+                      | (cable to garage)
                       v
           +--------------------------+
-          |    SR2024 (Closet)       |
+          |    SR2024 (Garage)       |
           |    24-port managed GbE   |
           |    Lab backbone          |
           +--------------------------+
@@ -48,7 +48,7 @@ All lab machines are in the closet on the SR2024. Non-lab drops (bedroom, garage
 
 ### Switching
 
-- **SR2024** is the lab backbone in the closet. All lab machines (live cluster + R730xd + pending Tower PC) connect directly to it.
+- **SR2024** is the lab backbone in the garage. All lab machines (live cluster + R730xd + pending Tower PC) connect directly to it.
 - **Flat L2** — no VLANs configured yet. VLAN design lives in [exploration/network-vlans.md](exploration/network-vlans.md) and is deferred until the purchased router arrives, so inter-VLAN routing happens on the new router rather than being grafted onto the Xfinity gateway.
 - Legacy consumer switches still serve the bedroom / garage / workshop drops (ADR-008).
 
@@ -85,7 +85,7 @@ Out-of-band management (iDRAC, BMC/IPMI) lives on the lab subnet and is reachabl
 
 | Equipment | Location | Notes |
 |-----------|----------|-------|
-| SR2024 (24-port managed GbE + 2 SFP) | Closet (live) | VLAN-capable; flat today, VLANs deferred per [ADR-021](decisions/021-off-the-shelf-router-tower-pc-as-worker.md). |
+| SR2024 (24-port managed GbE + 2 SFP) | Garage (live) | VLAN-capable; flat today, VLANs deferred per [ADR-021](decisions/021-off-the-shelf-router-tower-pc-as-worker.md). |
 | 2× Aerohive AP130 | Spare (mount pending) | PoE, standalone-mode confirmed. |
 | 1× Aerohive AP230 | Spare (mount pending) | PoE, standalone-mode confirmed. Higher performance than AP130s. |
 | 1× Aerohive AP630 | Spare (mount pending) | Stock HiveOS restored 2026-04-03 ([ADR-011](decisions/011-ap630-restored-to-stock-wifi-ap.md)). Highest-performance AP. |
