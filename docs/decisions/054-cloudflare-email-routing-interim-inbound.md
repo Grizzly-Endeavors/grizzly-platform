@@ -1,7 +1,7 @@
 # ADR-054: Cloudflare Email Routing as Interim Inbound (Bootstrap)
 
 **Date:** 2026-07-05
-**Status:** Accepted (interim — to be superseded by the [ADR-050](050-stalwart-mail-server.md) own-MX cutover)
+**Status:** Superseded 2026-07-06 by the [ADR-050](050-stalwart-mail-server.md) own-MX cutover — Cloudflare Email Routing disabled, MX cut to `mail.grizzly-endeavors.com` → VPS → Stalwart. Retained for the historical rationale.
 **Relates to:** [ADR-050](050-stalwart-mail-server.md), [ADR-052](052-in-cluster-acme-cert-for-mail.md), [ADR-053](053-platform-services-domain-migration.md)
 
 ## Context
