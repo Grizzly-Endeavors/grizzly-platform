@@ -33,7 +33,23 @@ Stalwart 0.16 uses a **JSON, database-backed** config. The static file (`config.
 
 ## What is NOT done yet — Phase 5 (SMTP2GO-gated)
 
-Disable Cloudflare Email Routing; MX → VPS (grey `mail` A → 178.156.217.91); SPF → `include:spf.smtp2go.com`; SMTP2GO DKIM CNAMEs + return-path (or publish Stalwart's own auto-generated DKIM record); DMARC; MTA-STS; autoconfig. Wire SMTP2GO as the outbound smarthost via the CLI (an `MtaRoute`/outbound-strategy object). SMTP2GO signup should now succeed (its probe hits a real mailbox).
+Disable Cloudflare Email Routing; MX → VPS (grey `mail` A → 178.156.217.91); SPF → `include:spf.smtp2go.com`; SMTP2GO DKIM CNAMEs + return-path (or publish Stalwart's own auto-generated DKIM record); DMARC; MTA-STS; autoconfig. Wire SMTP2GO as the outbound smarthost via the CLI (an `MtaRoute`/outbound-strategy object).
+
+### ⚠ SMTP2GO signup blocker — do the inbound MX cutover FIRST (2026-07-06)
+
+SMTP2GO's signup form validates the account email in real time and **cannot be completed yet**. Two confirmed failures:
+
+- **Free/consumer addresses are rejected outright:** signing up with `bearflinn@gmail.com` returns **"Error code 6 — Please use an email at your own domain to sign up."** So a domain address is mandatory; the "just use Gmail" workaround does not exist here.
+- **`bearflinn@grizzly-endeavors.com` returns "Error code 6 — Service unavailable."** SMTP2GO does a live MX/SMTP probe of the address, and the **interim Cloudflare Email Routing MX** (`route1/2/3.mx.cloudflare.net`, forwarding to Gmail) does not satisfy it — it defers/rejects the probe rather than returning a clean `250` for `RCPT TO`.
+
+**Implication — the original Phase-5 ordering is inverted.** You cannot set up outbound (SMTP2GO) before inbound. Sequence must be:
+
+1. **Grey `mail` A → VPS** and **cut MX → VPS** so external mail (and SMTP2GO's probe) reaches the *real* Stalwart mailbox, which accepts `RCPT TO:<bearflinn@grizzly-endeavors.com>` with a clean `250`. (Note: greying `mail` also makes the mailbox client-reachable by hostname — see below.)
+2. **Verify** a real external message to `bearflinn@grizzly-endeavors.com` lands in the Stalwart INBOX (IMAP login already works over the VPS path — auth succeeds, INBOX currently empty because MX still → Cloudflare).
+3. **Then** retry SMTP2GO signup with `bearflinn@grizzly-endeavors.com` — the probe should now get a clean `250`.
+4. Add `grizzly-endeavors.com` as a verified sender in SMTP2GO (DNS: SPF/DKIM/return-path), publish DMARC/MTA-STS, and wire SMTP2GO as the outbound smarthost.
+
+Open question for the next session: whether the CF-routing probe fails because of greylisting/deferral or an outright reject, and whether a temporary direct-MX (skip CF routing) is enough to unblock signup before the full cutover. Retiring Cloudflare Email Routing (ADR-054) is part of step 1 regardless.
 
 ## Operating the CLI
 
