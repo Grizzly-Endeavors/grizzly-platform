@@ -55,7 +55,7 @@ Continuous-write services run on ZFS to avoid SnapRAID sync issues (dirty files,
 
 ## Foundation Data Stores
 
-PostgreSQL, kv-cache (Valkey), and two versitygw S3 gateways run on the R730xd as Docker Compose services, not in K8s. K8s nodes are diskless — all stateful workloads belong on the storage server. See [ADR-003](../docs/decisions/003-foundation-stores-on-r730xd.md) for design rationale.
+PostgreSQL, kv-cache (Valkey), and two versitygw S3 gateways run on the R730xd as Docker Compose services, not in K8s. K8s node disks hold only the OS — all durable/stateful workloads belong on the storage server, which keeps the backup and recovery story in one place. See [ADR-003](../docs/decisions/003-foundation-stores-on-r730xd.md) for design rationale.
 
 ### Endpoints
 

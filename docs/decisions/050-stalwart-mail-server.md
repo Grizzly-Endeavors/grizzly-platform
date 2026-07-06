@@ -13,7 +13,7 @@ The platform has no first-party email. We want a self-hosted mailbox server for 
 
 - **Outbound relays through SMTP2GO** as a smarthost. SMTP2GO owns the sending IP reputation and **performs DKIM signing** — the whole reason to use a relay. This makes Hetzner's outbound port-25 block irrelevant and removes IP-warmup from our plate. Outbound egresses the cluster directly to SMTP2GO (587/2525/API); it never touches the VPS or the ingress tunnel.
 - **Inbound: we are our own MX.** Inbound 25/465/587/993 reach the VPS and are carried to the in-cluster NodePort using the gameserver ingress topology (VPS → WireGuard tunnel → NodePort), but via an L4 proxy with PROXY protocol rather than raw DNAT — see [ADR-051](051-haproxy-l4-mail-ingress.md). Port 443 (JMAP / webmail / autoconfig / MTA-STS) rides the **existing Caddy HTTP path** as `mail.<domain>`, no new plumbing.
-- **State lives on the foundation stores, not a PVC.** Stalwart's directory/metadata → foundation **PostgreSQL**; message blobs → foundation **MinIO (S3)**. This is what the foundation stores ([ADR-003](003-foundation-stores-on-r730xd.md)) exist for; diskless PXE nodes hold no durable state.
+- **State lives on the foundation stores, not a PVC.** Stalwart's directory/metadata → foundation **PostgreSQL**; message blobs → foundation **MinIO (S3)**. This is what the foundation stores ([ADR-003](003-foundation-stores-on-r730xd.md)) exist for; node disks hold only the OS, and durable state belongs on the foundation stores.
 - **TLS for SMTP/IMAP is terminated by Stalwart** using a publicly-trusted cert for `mail.<domain>` minted in-cluster — see [ADR-052](052-in-cluster-acme-cert-for-mail.md).
 
 ## Alternatives Considered
