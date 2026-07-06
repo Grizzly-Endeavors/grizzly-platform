@@ -1,6 +1,6 @@
 ---
 # r730xd-tempo: Tempo distributed tracing on Docker
-# S3 backend via MinIO Obs, single-binary mode
+# S3 backend via s3-hot versitygw gateway (ADR-055), single-binary mode
 # Local data on ZFS pool (tank/observability/tempo, recordsize=128K)
 #
 # Tempo API: http://<r730xd_ip>:3200
@@ -22,8 +22,8 @@ tempo_compose_dir: "/opt/observability/tempo"
 # Memory limit
 tempo_memory_limit: "512m"
 
-# S3 backend (MinIO)
-tempo_s3_endpoint: "{{ r730xd_ip }}:9000"
+# S3 backend (s3-hot versitygw gateway; was MinIO Obs :9000 pre-ADR-055)
+tempo_s3_endpoint: "{{ r730xd_ip }}:7070"
 tempo_s3_bucket: "observability-tempo"
 # Access keys from group_vars (vault-backed)
 # tempo_s3_access_key: "{{ minio_observability_access_key }}"

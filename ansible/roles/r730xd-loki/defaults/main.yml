@@ -1,6 +1,6 @@
 ---
 # r730xd-loki: Loki log aggregation on Docker
-# S3 backend via MinIO Obs, single-binary mode
+# S3 backend via s3-hot versitygw gateway (ADR-055), single-binary mode
 # Local data on ZFS pool (tank/observability/loki, recordsize=128K)
 #
 # Loki API: http://<r730xd_ip>:3100
@@ -18,8 +18,8 @@ loki_compose_dir: "/opt/observability/loki"
 # Memory limit
 loki_memory_limit: "512m"
 
-# S3 backend (MinIO)
-loki_s3_endpoint: "{{ r730xd_ip }}:9000"
+# S3 backend (s3-hot versitygw gateway; was MinIO Obs :9000 pre-ADR-055)
+loki_s3_endpoint: "{{ r730xd_ip }}:7070"
 loki_s3_bucket: "observability-loki"
 loki_s3_region: "us-east-1"
 # Access keys from group_vars (vault-backed)
