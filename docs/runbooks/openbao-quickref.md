@@ -103,6 +103,8 @@ All platform secrets live under `secret/grizzly-platform/<domain>/<name>` (KV v2
 
 ### Adding a new platform secret
 
+> The control node (`bear-desktop`) holds a **persistent root session** — write secrets directly with `bao kv put`, no SSH or interactive login. Setup + hygiene: [openbao-add-secret.md](openbao-add-secret.md).
+
 1. `bao kv put secret/grizzly-platform/<domain>/<name> k1=v1 k2=v2`
 2. Add a Jinja lookup for each key to `ansible/vars/openbao_secrets.yml`
    (redefines `vault_*` as a `vault_kv2_get` lookup).
