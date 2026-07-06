@@ -41,7 +41,7 @@ spec:
           args:
             - |
               mkdir -p /var/lib/stalwart
-              cp /config/config.toml /var/lib/stalwart/config.toml
+              cp /config/config.json /var/lib/stalwart/config.json
           volumeMounts:
             - name: config
               mountPath: /config
@@ -64,8 +64,11 @@ spec:
             capabilities:
               drop: ["ALL"]
               add: ["NET_BIND_SERVICE"]
-          # Point at our config; the image default is --config /etc/stalwart/config.json.
-          args: ["--config", "/var/lib/stalwart/config.toml"]
+          # 0.16 static config = the data-store object only (config.json); the
+          # blob store, listeners, TLS, domain, accounts, DKIM and relay live in
+          # Postgres and are applied via the Stalwart CLI. Image default config
+          # path is /etc/stalwart/config.json.
+          args: ["--config", "/var/lib/stalwart/config.json"]
           ports:
             - name: smtp
               containerPort: 25
