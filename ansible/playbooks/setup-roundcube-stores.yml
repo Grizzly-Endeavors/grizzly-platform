@@ -1,0 +1,104 @@
+---
+# setup-roundcube-stores.yml — foundation-side provisioning for the Roundcube
+# webmail front-end to Stalwart (ADR-056). K8s manifests live in
+# kubernetes/infrastructure/roundcube/ and are applied by Flux.
+#
+# Roundcube keeps its (small) state — user prefs, contacts, identities, caches —
+# on the shared foundation PostgreSQL rather than an in-cluster PVC. Mail bodies
+# are NOT stored here: those live in Stalwart (Postgres + s3-hot). So unlike the
+# other stores playbooks this one provisions only a database + login role, no S3.
+#
+# The roundcube role password lives in OpenBao
+# secret/grizzly-platform/stores/roundcube (db_password) — provisioned here and
+# read cross-domain by Roundcube's K8s ExternalSecret. Kept under
+# grizzly-platform/ (not a lab-apps/ path) because the ansible-platform-read
+# AppRole policy is scoped to grizzly-platform/* — mirrors stalwart / nextcloud.
+#
+# The schema itself is created by the Roundcube container on first start (the
+# image runs initdb against the empty database), so this playbook only lays down
+# the empty owned database.
+#
+# Prerequisites:
+#   - Foundation Postgres running (deploy-foundation-stores.yml).
+#   - OpenBao seeded: secret/grizzly-platform/stores/roundcube with key
+#     db_password. Generate WITHOUT single quotes (e.g. `openssl rand -hex 24`).
+#
+# Usage:
+#   ansible-playbook ansible/playbooks/setup-roundcube-stores.yml \
+#     --vault-password-file .vault_pass -v
+
+- name: Provision Roundcube database on foundation Postgres
+  hosts: r730xd
+  become: yes
+  gather_facts: no
+
+  # The roundcube role password lives only in OpenBao (no static vault.yml
+  # fallback), so this play always reads from OpenBao.
+  vars:
+    openbao_read_enabled: true
+
+  vars_files:
+    - "{{ playbook_dir }}/../vars/openbao_auth.yml"
+
+  pre_tasks:
+    - name: Load OpenBao-sourced platform secrets
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/../vars/openbao_secrets.yml"
+
+    - name: Verify foundation Postgres container is running
+      ansible.builtin.command: docker exec foundation-postgres pg_isready -U postgres
+      changed_when: false
+
+  tasks:
+    # psql -U postgres connects over the container's local socket (trust auth) —
+    # no superuser password needed. The role password is passed via psql's
+    # :'pw' literal (safe quoting); the SQL is fed on stdin (docker exec -i),
+    # because psql only interpolates variables for stdin/-f input, NOT for -c.
+    - name: Check whether the roundcube role exists
+      ansible.builtin.command: >-
+        docker exec foundation-postgres
+        psql -U postgres -tAc
+        "SELECT 1 FROM pg_roles WHERE rolname='roundcube'"
+      register: rc_role
+      changed_when: false
+
+    - name: Create the roundcube login role
+      ansible.builtin.shell:
+        cmd: >-
+          set -o pipefail;
+          printf "CREATE ROLE roundcube LOGIN PASSWORD :'pw';\n"
+          | docker exec -i foundation-postgres
+          psql -U postgres -v ON_ERROR_STOP=1 -v pw="$PGPW"
+        executable: /bin/bash
+      environment:
+        PGPW: "{{ vault_roundcube_db_password }}"
+      when: rc_role.stdout != "1"
+      no_log: true
+
+    - name: Keep the roundcube role password in sync with OpenBao
+      ansible.builtin.shell:
+        cmd: >-
+          set -o pipefail;
+          printf "ALTER ROLE roundcube LOGIN PASSWORD :'pw';\n"
+          | docker exec -i foundation-postgres
+          psql -U postgres -v ON_ERROR_STOP=1 -v pw="$PGPW"
+        executable: /bin/bash
+      environment:
+        PGPW: "{{ vault_roundcube_db_password }}"
+      no_log: true
+      changed_when: false
+
+    - name: Check whether the roundcube database exists
+      ansible.builtin.command: >-
+        docker exec foundation-postgres
+        psql -U postgres -tAc
+        "SELECT 1 FROM pg_database WHERE datname='roundcube'"
+      register: rc_db
+      changed_when: false
+
+    - name: Create the roundcube database owned by the roundcube role
+      ansible.builtin.command: >-
+        docker exec foundation-postgres
+        psql -U postgres -v ON_ERROR_STOP=1
+        -c "CREATE DATABASE roundcube OWNER roundcube"
+      when: rc_db.stdout != "1"
