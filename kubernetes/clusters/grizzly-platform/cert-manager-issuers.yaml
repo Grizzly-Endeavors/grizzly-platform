@@ -23,3 +23,9 @@ spec:
     - apiVersion: cert-manager.io/v1
       kind: ClusterIssuer
       name: selfsigned-issuer
+    - apiVersion: cert-manager.io/v1
+      kind: ClusterIssuer
+      name: letsencrypt-staging
+    - apiVersion: cert-manager.io/v1
+      kind: ClusterIssuer
+      name: letsencrypt-prod
