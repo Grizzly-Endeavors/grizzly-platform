@@ -1,0 +1,7 @@
+---
+- name: Restart foundation-s3-bulk
+  ansible.builtin.systemd_service:
+    name: "{{ s3_bulk_server_unit_name }}"
+    state: restarted
+    daemon_reload: true
+  listen: Restart foundation-s3-bulk

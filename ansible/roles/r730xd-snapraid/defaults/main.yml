@@ -26,6 +26,15 @@ snapraid_excludes:
   # .minio.sys/ (e.g. <bucket>/<object>/) and stays protected. Trade-off:
   # bucket-level config (versioning/lifecycle/policy) is not parity-covered.
   - ".minio.sys/"
+  # versitygw's transient multipart-upload staging dir (one per bucket:
+  # <bucket>/.sgwtmp/multipart/). It holds in-flight parts that are created
+  # and removed as uploads complete, so it changes mid-sync just like
+  # .minio.sys/ and would cause the same "cannot modify during sync" errors.
+  # Committed object data and the write-once version files (under the
+  # versitygw versioning dir) live outside .sgwtmp/ and stay parity-covered.
+  # Coexists with the .minio.sys/ exclude during the MinIO→versitygw migration
+  # (ADR-055); drop .minio.sys/ once MinIO Bulk is retired.
+  - ".sgwtmp/"
   - "/lost+found/"
   - ".Thumbs.db"
   - ".DS_Store"

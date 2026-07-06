@@ -1,0 +1,17 @@
+# Managed by Ansible — r730xd-s3-hot role
+# statsd_exporter mapping for versitygw StatsD metrics.
+#
+# versitygw emits metrics over StatsD (--metrics-statsd-servers); it has no
+# native Prometheus endpoint, so statsd_exporter bridges StatsD → Prometheus
+# (docs/runbooks/versitygw-cli.md). versitygw's exact emitted metric names were
+# not enumerated during the ADR-055 Phase-1 stand-up, so this starts as a
+# pass-through (default naming, sanitized) with a histogram default for timers.
+#
+# TODO(ADR-055 cutover): once the live gateway's emitted metric names are
+# observed (`curl <host>:{{ s3_hot_metrics_port }}/metrics`), tighten these into
+# typed mappings — extract bucket/method/status labels and pick real histogram
+# buckets/quantiles instead of relying on default naming.
+defaults:
+  timer_type: histogram
+  buckets: [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10]
+mappings: []

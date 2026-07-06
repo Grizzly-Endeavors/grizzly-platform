@@ -65,6 +65,13 @@ prometheus_observability_targets:
   - job: "minio-bulk"
     target: "{{ r730xd_ip }}:9002"
     metrics_path: "/minio/v2/metrics/cluster"
+  # versitygw stores (ADR-055) — scraped via their statsd-exporter sidecars
+  # (versitygw has no native Prometheus endpoint). Coexist with the minio-*
+  # jobs during the migration; those are removed once MinIO is retired.
+  - job: "s3-hot"
+    target: "{{ r730xd_ip }}:9102"
+  - job: "s3-bulk"
+    target: "{{ r730xd_ip }}:9103"
   - job: "postgres-exporter"
     target: "{{ r730xd_ip }}:9187"
   - job: "kv-cache-exporter"
@@ -83,11 +90,16 @@ prometheus_observability_targets:
   - job: "caddy"
     target: "{{ wg_vps_ip }}:2019"
 
-# Scrape targets — blackbox probes (external endpoints)
+# Scrape targets — blackbox probes (external endpoints + versitygw liveness)
 prometheus_blackbox_targets:
   - "https://landing.bearflinn.com"
   - "https://pennydreadfulsfx.com"
   - "https://resume.bearflinn.com"
+  # versitygw /health (ADR-055) — true gateway liveness. The statsd-exporter
+  # scrape (s3-hot/s3-bulk jobs) covers metrics but the exporter can be up while
+  # the gateway is down, so probe the gateway's own health endpoint directly.
+  - "http://{{ r730xd_ip }}:7070/health"
+  - "http://{{ r730xd_ip }}:7072/health"
 
 prometheus_blackbox_exporter: "{{ r730xd_ip }}:9115"
 

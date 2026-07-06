@@ -1,0 +1,78 @@
+# Managed by Ansible — r730xd-s3-hot role
+# versitygw S3 gateway (hot / ZFS) + statsd-exporter sidecar.
+#
+# Lifecycle is owned by {{ s3_hot_server_unit_name }} (systemd), which invokes
+# `docker compose up -d` after the ZFS mount is present. versitygw is stateless
+# and has NO live reload — every config change is a container restart. Do not
+# `docker compose down` directly; use `systemctl restart {{ s3_hot_server_unit_name }}`.
+
+services:
+  versitygw:
+    image: {{ s3_hot_versitygw_image }}
+    container_name: foundation-s3-hot
+    restart: unless-stopped
+    depends_on:
+      - statsd-exporter
+    ports:
+      # S3 API only. The admin API ({{ s3_hot_admin_port }}) is intentionally NOT
+      # published — user/bucket provisioning runs in-container via
+      # `docker exec foundation-s3-hot versitygw admin --er http://127.0.0.1:{{ s3_hot_admin_port }} ...`.
+      - "{{ s3_hot_s3_port }}:{{ s3_hot_s3_port }}"
+    env_file:
+      - versitygw.env
+    environment:
+      # OpenBao CA for the Vault-IAM TLS connection. versitygw wants the PEM
+      # *content* here, NOT a file path (docs/runbooks/versitygw-cli.md gotcha —
+      # a path yields "Couldn't parse PEM"). Inlined by Ansible from the host CA
+      # bundle; the CA is a public certificate, so it is safe in this file.
+      VGW_IAM_VAULT_SERVER_CERT: |
+{{ s3_hot_ca_pem | indent(8, first=True) }}
+    volumes:
+      - {{ s3_hot_data_dir }}:/data/s3
+      - {{ s3_hot_versions_dir }}:/data/versions
+    command:
+      - "--port"
+      - ":{{ s3_hot_s3_port }}"
+      - "--admin-port"
+      - ":{{ s3_hot_admin_port }}"
+      - "--health"
+      - "/health"
+      - "--region"
+      - "{{ s3_hot_region }}"
+      - "--iam-vault-endpoint-url"
+      - "{{ s3_hot_iam_vault_endpoint }}"
+      - "--iam-vault-mount-path"
+      - "{{ s3_hot_iam_vault_mount_path }}"
+      - "--iam-vault-secret-storage-path"
+      - "{{ s3_hot_iam_vault_storage_path }}"
+      - "--iam-vault-auth-method"
+      - "approle"
+      - "--metrics-statsd-servers"
+      - "statsd-exporter:{{ s3_hot_statsd_port }}"
+      - "posix"
+      - "--versioning-dir"
+      - "/data/versions"
+      - "/data/s3"
+    logging:
+      driver: journald
+      options:
+        tag: foundation-s3-hot
+
+  statsd-exporter:
+    image: {{ s3_hot_statsd_exporter_image }}
+    container_name: foundation-s3-hot-statsd
+    restart: unless-stopped
+    ports:
+      # Prometheus metrics only. The StatsD intake ({{ s3_hot_statsd_port }}/udp)
+      # is reached by the gateway over the compose network — not host-published.
+      - "{{ s3_hot_metrics_port }}:9102"
+    volumes:
+      - {{ s3_hot_config_dir }}/statsd-mapping.yml:/etc/statsd/mapping.yml:ro
+    command:
+      - "--statsd.listen-udp=:{{ s3_hot_statsd_port }}"
+      - "--web.listen-address=:9102"
+      - "--statsd.mapping-config=/etc/statsd/mapping.yml"
+    logging:
+      driver: journald
+      options:
+        tag: foundation-s3-hot-statsd

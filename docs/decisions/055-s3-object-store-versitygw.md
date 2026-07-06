@@ -1,7 +1,7 @@
 # ADR-055: S3 Object Store — MinIO → Versity S3 Gateway (versitygw)
 
 **Date:** 2026-07-06
-**Status:** Accepted — **validation spike passed 2026-07-06** (versitygw v1.6.0, run against a scratch dir on the live MergerFS pool; see Consequences → *Validation results*). The Garage fallback is not needed. Operating reference: [`docs/runbooks/versitygw-cli.md`](../runbooks/versitygw-cli.md).
+**Status:** Accepted — **validation spike passed 2026-07-06** (versitygw v1.6.0, run against a scratch dir on the live MergerFS pool; see Consequences → *Validation results*). The Garage fallback is not needed. **Phase 1 (store stand-up) complete 2026-07-06:** both gateways (`s3-hot` on ZFS, `s3-bulk` on MergerFS) are live in OpenBao Vault-IAM mode alongside MinIO on fresh ports (7070/7072), end-to-end verified (multipart round-trip, versioning, object/version on-disk layout, `user.*` xattrs, statsd-exporter metrics) on both tiers. Data migration + consumer cutover + MinIO teardown are the next phase. Operating reference: [`docs/runbooks/versitygw-cli.md`](../runbooks/versitygw-cli.md); deployment/cutover runbook: [`docs/runbooks/versitygw-deploy.md`](../runbooks/versitygw-deploy.md).
 **Relates to:** [ADR-012](012-hot-services-on-zfs-minio-split.md) (retains the obs/bulk tiering split; supersedes only the MinIO *engine* choice), [ADR-003](003-foundation-stores-on-r730xd.md) (foundation stores). Consumers to re-point: [ADR-018](018-argo-workflows.md) (Argo artifacts), [ADR-027](027-registry-zot.md) (zot registry), [ADR-038](038-nextcloud-on-foundation-stores-and-sso.md) (Nextcloud), plus Loki/Tempo and Stalwart blob store.
 
 ## Context
