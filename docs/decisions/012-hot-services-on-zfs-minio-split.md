@@ -1,7 +1,7 @@
 # 012: Hot Services on ZFS, MinIO Split into Obs/Bulk
 
 **Date:** 2026-04-03
-**Status:** accepted
+**Status:** accepted — the obs/bulk **tiering split** established here still stands; the **MinIO engine** is being replaced per [ADR-055](055-s3-object-store-versitygw.md) (versitygw), which keeps this two-tier layout.
 
 ## Context
 
