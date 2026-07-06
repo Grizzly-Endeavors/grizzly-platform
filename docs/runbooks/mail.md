@@ -1,6 +1,6 @@
 # Mail (Stalwart) — Deployment Status & Runbook
 
-**Status as of 2026-07-06: own-MX inbound LIVE (MX cut over); outbound pending SMTP2GO signup.** Stalwart is configured (S3 blob store, TLS, domain, mailbox, listeners) and reachable from the internet on 25/465/587/993 via the VPS HAProxy → WireGuard tunnel path, terminating TLS with a Let's Encrypt **prod** cert. **The inbound MX cutover is done** — Cloudflare Email Routing is disabled and `MX 10 mail.grizzly-endeavors.com` → VPS → Stalwart is authoritative; `bearflinn@`/`postmaster@`/`abuse@` accept `RCPT` with a clean `250`. **Remaining: Phase 5 Part B/C** — Bear completes SMTP2GO signup (now unblocked), then wire SMTP2GO as the outbound smarthost + SPF/DKIM-DNS/DMARC/MTA-STS. Design rationale: ADRs [050](../decisions/050-stalwart-mail-server.md) (Stalwart), [051](../decisions/051-haproxy-l4-mail-ingress.md) (HAProxy L4 ingress), [052](../decisions/052-in-cluster-acme-cert-for-mail.md) (in-cluster ACME cert), [054](../decisions/054-cloudflare-email-routing-interim-inbound.md) (interim inbound, now superseded).
+**Status as of 2026-07-06: own-MX inbound LIVE (MX cut over); outbound pending SMTP2GO signup.** Stalwart is configured (S3 blob store, TLS, domain, mailbox, listeners) and reachable from the internet on 25/465/587/993 via the VPS HAProxy → WireGuard tunnel path, terminating TLS with a Let's Encrypt **prod** cert. **The inbound MX cutover is done** — Cloudflare Email Routing is disabled and `MX 10 mail.grizzly-endeavors.com` → VPS → Stalwart is authoritative; `bearflinn@`/`postmaster@`/`abuse@` accept `RCPT` with a clean `250`. **Remaining: Phase 5 Part B/C** — ⏸ **PARKED**: SMTP2GO signup is gated on the domain being >3 days old (registered 2026-07-05; retry ~2026-07-08+). Then wire SMTP2GO as the outbound smarthost + SPF/DKIM-DNS/DMARC/MTA-STS. Design rationale: ADRs [050](../decisions/050-stalwart-mail-server.md) (Stalwart), [051](../decisions/051-haproxy-l4-mail-ingress.md) (HAProxy L4 ingress), [052](../decisions/052-in-cluster-acme-cert-for-mail.md) (in-cluster ACME cert), [054](../decisions/054-cloudflare-email-routing-interim-inbound.md) (interim inbound, now superseded).
 
 ## Architecture
 
@@ -44,15 +44,19 @@ The interim Cloudflare Email Routing inbound (ADR-054) was retired and MX cut to
 
 **Verified end-to-end:** a real external message from `bearflinn@gmail.com` landed in the Stalwart INBOX (IMAPS to `mail.grizzly-endeavors.com:993`); `RCPT TO` returns `250` for `bearflinn@`/`postmaster@`/`abuse@`. Home ISP blocks outbound 25, so SMTP `RCPT` probes must run from the VPS (`ssh proxy-vps`), not the control node.
 
-## Phase 5 Part B — SMTP2GO signup (human gate, Bear)
+## Phase 5 Part B — SMTP2GO signup (human gate, Bear) — ⏸ PARKED on domain age until ~2026-07-08
 
-The original signup blocker is now cleared: SMTP2GO live-probes the account address, and the CF-routing MX used to defer/reject `RCPT` (returning "Error code 6 — Service unavailable"); the real Stalwart mailbox now answers `250`. **Retry signup with `bearflinn@grizzly-endeavors.com`.** (Free/consumer addresses like `bearflinn@gmail.com` are rejected outright — "use an email at your own domain" — so a domain address is mandatory.) This is a web form; it can't be automated. Once done, hand SMTP2GO's SMTP creds + DKIM/return-path DNS targets to Part C.
+**The real blocker is domain age, not deliverability.** `grizzly-endeavors.com` was registered **2026-07-05 19:32 UTC** (Verisign RDAP), and **SMTP2GO requires the signup domain to be more than 3 days old** — so a retry on 2026-07-06 still failed even with the real Stalwart mailbox answering `RCPT` `250`. The earlier "Error code 6 — Service unavailable" was this age gate all along, *not* the interim CF-routing MX failing the probe (that theory is retired). **Park until on/after ~2026-07-08 19:32 UTC** (retry 07-09 to be safe), then sign up with `bearflinn@grizzly-endeavors.com`. (Free/consumer addresses like `bearflinn@gmail.com` are rejected outright — "use an email at your own domain" — so a domain address is mandatory.) The web form can't be automated; the mailbox is ready to receive the verification mail (read it at `https://mail.grizzly-endeavors.com` or pull it via IMAP). Once done, hand SMTP2GO's SMTP creds + DKIM/return-path DNS targets to Part C.
+
+Note: the inbound MX cutover (Part A) was end-state architecture regardless (own-MX is the ADR-050 goal), so it was not wasted — it just turned out not to be what unblocks signup.
 
 ## Phase 5 Part C — outbound smarthost + sender auth (after signup)
 
 Store SMTP2GO creds in OpenBao (`stores/smtp2go`) + `stalwart-secrets` ExternalSecret env; wire SMTP2GO as the outbound smarthost via the CLI (relay-host / MTA-route object in `plan.json`, auth via a typed `{"@type":"EnvironmentVariable"}` secret — confirm the exact 0.16 object shape with `describe`/`get`). DNS: SPF → `include:spf.smtp2go.com`; SMTP2GO DKIM CNAMEs + return-path; DMARC; MTA-STS (`mta-sts` host + `/.well-known/mta-sts.txt` via Caddy + `_mta-sts` TXT); retire the interim CF DKIM. Verify SPF+DKIM+DMARC pass via mail-tester.com.
 
 ## Operating the CLI
+
+**Full CLI reference: [`stalwart-cli.md`](stalwart-cli.md)** — verbs, schema model (index-keyed maps, typed secrets, singletons), recipes (accounts/aliases, reloads, auto-ban recovery, snapshot/backup), and the object catalog. Quick version below.
 
 The CLI authenticates as the recovery admin. From the control node:
 
