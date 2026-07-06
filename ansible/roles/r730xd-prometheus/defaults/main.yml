@@ -67,8 +67,15 @@ prometheus_observability_targets:
     metrics_path: "/minio/v2/metrics/cluster"
   - job: "postgres-exporter"
     target: "{{ r730xd_ip }}:9187"
-  - job: "redis-exporter"
+  - job: "kv-cache-exporter"
     target: "{{ r730xd_ip }}:9121"
+    # oliver006/redis_exporter emits a fixed redis_* namespace; rewrite it to
+    # kv_cache_* so the slot's metrics match its function name (not the backend).
+    metric_relabel:
+      - source_labels: [__name__]
+        regex: 'redis_(.*)'
+        target_label: __name__
+        replacement: 'kv_cache_${1}'
   - job: "cadvisor"
     target: "{{ r730xd_ip }}:8080"
   # Caddy's dedicated metrics listener (caddy_metrics_port), scraped over the

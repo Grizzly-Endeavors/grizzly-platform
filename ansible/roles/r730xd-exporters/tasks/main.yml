@@ -41,9 +41,9 @@
     delay: 3
     timeout: 60
 
-- name: Wait for redis-exporter
+- name: Wait for kv-cache-exporter
   ansible.builtin.wait_for:
-    port: "{{ redis_exporter_port }}"
+    port: "{{ kv_cache_exporter_port }}"
     delay: 3
     timeout: 60
 
@@ -65,6 +65,6 @@
       - "=== Prometheus Exporters ==="
       - ""
       - "postgres-exporter: http://{{ ansible_facts['default_ipv4']['address'] | default(r730xd_ip) }}:{{ postgres_exporter_port }}"
-      - "redis-exporter:    http://{{ ansible_facts['default_ipv4']['address'] | default(r730xd_ip) }}:{{ redis_exporter_port }}"
+      - "kv-cache-exporter: http://{{ ansible_facts['default_ipv4']['address'] | default(r730xd_ip) }}:{{ kv_cache_exporter_port }}"
       - "blackbox-exporter: http://{{ ansible_facts['default_ipv4']['address'] | default(r730xd_ip) }}:{{ blackbox_exporter_port }}"
       - "cadvisor:          http://{{ ansible_facts['default_ipv4']['address'] | default(r730xd_ip) }}:{{ cadvisor_port }}"

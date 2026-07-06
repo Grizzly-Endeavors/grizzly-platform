@@ -3,17 +3,20 @@
 # Stateless scrapers — no persistent data
 #
 # postgres-exporter: http://<r730xd_ip>:9187
-# redis-exporter:    http://<r730xd_ip>:9121
+# kv-cache-exporter: http://<r730xd_ip>:9121
 # blackbox-exporter: http://<r730xd_ip>:9115
 # cadvisor:          http://<r730xd_ip>:8080
 
 # Images (pinned versions)
 postgres_exporter_image: "prometheuscommunity/postgres-exporter:v0.16.0"
-redis_exporter_image: "oliver006/redis_exporter:v1.67.0"
+# oliver006/redis_exporter is the canonical RESP exporter (works against Valkey);
+# it is the tool's own name, not slot cruft. Emits redis_* metrics, relabeled to
+# kv_cache_* at scrape time (see r730xd-prometheus).
+kv_cache_exporter_image: "oliver006/redis_exporter:v1.67.0"
 blackbox_exporter_image: "prom/blackbox-exporter:v0.25.0"
 # Networking (published ports)
 postgres_exporter_port: 9187
-redis_exporter_port: 9121
+kv_cache_exporter_port: 9121
 blackbox_exporter_port: 9115
 
 # Directories
@@ -25,8 +28,8 @@ cadvisor_memory_limit: "512m"
 
 # Memory limits
 postgres_exporter_memory_limit: "64m"
-redis_exporter_memory_limit: "64m"
+kv_cache_exporter_memory_limit: "64m"
 blackbox_exporter_memory_limit: "64m"
 
 # Foundation store connection details (from group_vars)
-# postgres_password and redis_password inherited from group_vars
+# postgres_password and kv_cache_password inherited from group_vars

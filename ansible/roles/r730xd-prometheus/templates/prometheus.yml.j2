@@ -44,6 +44,15 @@ scrape_configs:
           - "{{ svc.target }}"
         labels:
           env: "grizzly-platform"
+{% if svc.metric_relabel is defined %}
+    metric_relabel_configs:
+{% for rule in svc.metric_relabel %}
+      - source_labels: [{{ rule.source_labels | join(', ') }}]
+        regex: '{{ rule.regex }}'
+        target_label: {{ rule.target_label }}
+        replacement: '{{ rule.replacement }}'
+{% endfor %}
+{% endif %}
 
 {% endfor %}
   - job_name: "etcd"
