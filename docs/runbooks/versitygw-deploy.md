@@ -59,9 +59,19 @@ The account lands in OpenBao at `versitygw-iam/<storage-path>/<access>` (`bao kv
 
 Per-consumer this is an endpoint + bucket + credential swap (all consumers are S3-compatible), not an app rewrite. For each consumer:
 
-1. Create its scoped account on the target gateway (above); mirror its bucket(s).
-2. Migrate objects (e.g. `rclone sync minio:<bucket> versitygw:<bucket>` or `aws s3 sync` through each endpoint).
-3. Re-point the consumer's endpoint (`:9000`→`:7070`, `:9002`→`:7072`) + swap creds, then verify.
+1. Create its scoped account on the target gateway (above); mirror its bucket(s). Provisioning is scripted per consumer via `ansible/tasks/versitygw-provision-account.yml` (create-user `userplus` + create-bucket owned by it, through the admin port) — each `setup-<app>-stores.yml` includes it.
+2. Migrate objects. **Use `rclone sync`, not `mc mirror`, for any bucket with large (multipart) objects.** `mc mirror` streams S3→S3 by piping a source GET straight into a destination multipart PUT; on the R730xd that truncated large registry blobs (`ContentLength=16777216 with Body length …`) and, because `mc mirror` aborts the whole run on the first error, it barely progressed. `rclone sync` retries per object and continues, so it converges. Recipe (env-config remotes, path-style):
+
+   ```
+   export RCLONE_CONFIG_SRC_TYPE=s3 RCLONE_CONFIG_SRC_PROVIDER=Minio  RCLONE_CONFIG_SRC_ENDPOINT=http://10.0.0.200:9002
+   export RCLONE_CONFIG_DST_TYPE=s3 RCLONE_CONFIG_DST_PROVIDER=Other  RCLONE_CONFIG_DST_ENDPOINT=http://10.0.0.200:7072 RCLONE_CONFIG_DST_FORCE_PATH_STYLE=true
+   # + RCLONE_CONFIG_{SRC,DST}_ACCESS_KEY_ID / _SECRET_ACCESS_KEY from OpenBao
+   rclone sync src:<bucket> dst:<bucket> --transfers 8 --checkers 16 --retries 5 --low-level-retries 10
+   rclone check src:<bucket> dst:<bucket> --one-way   # size parity; multipart ETags differ so some "hashes could not be checked" — size match is authoritative
+   ```
+
+   Small buckets (Nextcloud's 585 objects) copy fine with `mc mirror`. For a **live-written** store (the zot registry takes CI image pushes), run a final catch-up **immediately before** flipping the endpoint, and use `rclone copy` (not `sync`) for any catch-up *after* the flip so it never deletes newly-written destination objects.
+3. Re-point the consumer's endpoint (`:9000`→`:7070`, `:9002`→`:7072`) + swap creds, then verify. For K8s consumers the flip lands on Flux reconcile after merge; MinIO stays up until PR 3 as a live rollback (revert the endpoint edit → old data still there).
 
 Consumers to move (ADR-055): **hot (`:9000`→`:7070`)** — Loki (`r730xd-loki` defaults/template), Tempo (`r730xd-tempo`), Stalwart blob store (via Stalwart CLI + `setup-stalwart-stores.yml`). **bulk (`:9002`→`:7072`)** — zot registry (`kubernetes/infrastructure/registry/configmap.yaml`), Argo artifacts (`kubernetes/infrastructure/argo-workflows/helmrelease.yaml`), sccache, Nextcloud (manifests in the **lab-apps** repo). Each has an OpenBao path + (for k8s) an ExternalSecret `remoteRef.key` to re-point.
 
