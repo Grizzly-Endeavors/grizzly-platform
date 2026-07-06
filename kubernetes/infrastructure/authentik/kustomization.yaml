@@ -20,6 +20,7 @@ configMapGenerator:
       - blueprints/brand.yaml
       - blueprints/groups.yaml
       - blueprints/grizzly-invite-admin.yaml
+      - blueprints/grizzly-webmail.yaml
       - blueprints/nextcloud.yaml
       - blueprints/career-scanner.yaml
       - blueprints/social-login.yaml

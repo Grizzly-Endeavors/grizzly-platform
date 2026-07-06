@@ -54,6 +54,16 @@ Note: the inbound MX cutover (Part A) was end-state architecture regardless (own
 
 Store SMTP2GO creds in OpenBao (`stores/smtp2go`) + `stalwart-secrets` ExternalSecret env; wire SMTP2GO as the outbound smarthost via the CLI (relay-host / MTA-route object in `plan.json`, auth via a typed `{"@type":"EnvironmentVariable"}` secret — confirm the exact 0.16 object shape with `describe`/`get`). DNS: SPF → `include:spf.smtp2go.com`; SMTP2GO DKIM CNAMEs + return-path; DMARC; MTA-STS (`mta-sts` host + `/.well-known/mta-sts.txt` via Caddy + `_mta-sts` TXT); retire the interim CF DKIM. Verify SPF+DKIM+DMARC pass via mail-tester.com.
 
+## Webmail (Roundcube) — ADR-058
+
+Stalwart 0.16 ships no mailbox UI (the `mail.grizzly-endeavors.com` surface is the *admin console* only), so the browser inbox is **Roundcube** at `https://webmail.grizzly-endeavors.com`, gated by **Authentik forward-auth** (grizzly-admins). IaC in `kubernetes/infrastructure/roundcube/` (own Flux Kustomization `kubernetes/clusters/grizzly-platform/roundcube.yaml`), foundation-provisioned by `ansible/playbooks/setup-roundcube-stores.yml`.
+
+- **State:** foundation Postgres db/role `roundcube` (schema auto-created by the image's initdb on first start); no PVC. Secrets: `stores/roundcube` db_password + `platform/roundcube` des_key (24-char), via `ExternalSecret/roundcube-secrets`.
+- **Mail path:** in-cluster to `stalwart-mail.stalwart.svc:993` (IMAPS) / `:465` (submissions). TLS-encrypted with Stalwart's real cert; `custom.inc.php` relaxes peer-*name* verification because we dial the Service name, not the cert SAN.
+- **Login:** after the Authentik gate, Roundcube does its own mailbox login — user `bearflinn@grizzly-endeavors.com`, password = OpenBao `platform/stalwart account_password`. (Full OIDC SSO / no mailbox password is deferred to the Stalwart↔Authentik directory work.)
+- **Forward-auth:** blueprint `authentik/blueprints/grizzly-webmail.yaml` (proxy provider + app + grizzly-admins policy + the embedded-outpost provider list, which now owns BOTH the webmail and invite providers). Mirrors the grizzly-invite admin gate. Adding another forward-auth app = append its provider to the outpost list in that file.
+- **Reading a message by hand (no UI needed):** IMAPS `mail.grizzly-endeavors.com:993`, user `bearflinn@grizzly-endeavors.com`, password from OpenBao `platform/stalwart account_password`. Note Stalwart's spam filter files some legit mail under **`Junk Mail`** (folder names have spaces → quote them in IMAP SELECT).
+
 ## Operating the CLI
 
 **Full CLI reference: [`stalwart-cli.md`](stalwart-cli.md)** — verbs, schema model (index-keyed maps, typed secrets, singletons), recipes (accounts/aliases, reloads, auto-ban recovery, snapshot/backup), and the object catalog. Quick version below.
