@@ -16,7 +16,10 @@
 
 # Images (pinned — verified current stable 2026-07-06; re-verify before bump)
 s3_bulk_versitygw_image: "ghcr.io/versity/versitygw:v1.6.0"
-s3_bulk_statsd_exporter_image: "prom/statsd-exporter:v0.30.0"
+# v0.30.0 only shipped a -distroless image tag (the plain non-distroless line
+# stops at v0.29.0); distroless is preferable anyway — static Go binary, no
+# shell needed here.
+s3_bulk_statsd_exporter_image: "prom/statsd-exporter:v0.30.0-distroless"
 
 # Networking — published ports coexist with live MinIO on 9000-9003
 s3_bulk_s3_port: 7072           # S3 API (LAN-published)
