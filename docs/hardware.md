@@ -6,7 +6,7 @@ Machines, specs, and live roles. This is the day-to-day "what's where" reference
 
 **Update when:** a machine is added, removed, or takes on a different role; a disk is replaced; firmware/OS changes materially affect operations.
 
-Last updated: 2026-04-17
+Last updated: 2026-07-05 (platform relocated from closet to garage; EX50 router cutover still pending)
 
 ---
 
@@ -249,7 +249,8 @@ Not infrastructure: the operator's on-the-go dev laptop (GS66 Stealth) is a pers
 
 - [ ] UPS: replace batteries, wire NUT.
 - [ ] Finish GPU inference host build; assign IP + hostname and write its ADR.
-- [ ] Deploy the Digi EX50 as router + relocate the platform to the garage (one staged window). See [runbooks/garage-relocation-cutover.md](runbooks/garage-relocation-cutover.md), [ADR-044](decisions/044-digi-ex50-as-off-the-shelf-router.md), [ADR-045](decisions/045-platform-relocation-to-garage.md).
+- [x] Relocate the platform to the garage — done 2026-07-05 (physical move during a power outage; SR2024 + all machines came back on the same flat 10.0.0.x network). See [ADR-045](decisions/045-platform-relocation-to-garage.md).
+- [ ] Deploy the Digi EX50 as router (was originally planned as one staged window with the relocation above, but the move happened on its own; the router cutover is still outstanding). See [runbooks/garage-relocation-cutover.md](runbooks/garage-relocation-cutover.md), [ADR-044](decisions/044-digi-ex50-as-off-the-shelf-router.md).
 - [ ] Configure L3 segmentation on the EX50/SR2024 (evict home to its own subnet — [ADR-046](decisions/046-platform-network-segmentation-via-home-eviction.md)).
 - [ ] Mount remaining APs; verify coverage.
 - [ ] Join Tower PC to the cluster (see [ADR-021](decisions/021-off-the-shelf-router-tower-pc-as-worker.md)).
