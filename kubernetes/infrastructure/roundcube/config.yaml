@@ -1,10 +1,7 @@
 # Non-secret Roundcube configuration.
 #
 # The roundcube/roundcubemail image builds its config.docker.inc.php from
-# ROUNDCUBEMAIL_* env vars; anything not expressible that way is added as an
-# extra *.inc.php dropped into /var/roundcube/config/ (the image auto-includes
-# files there). We use both: env for the common knobs, and custom.inc.php for the
-# in-cluster TLS trust tweak.
+# ROUNDCUBEMAIL_* env vars.
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -21,42 +18,23 @@ data:
   ROUNDCUBEMAIL_DB_NAME: "roundcube"
   ROUNDCUBEMAIL_DB_USER: "roundcube"
   # A single fixed IMAP/SMTP target hides the "server" field on the login page.
-  # In-cluster hop to Stalwart's mail Service (imaps 993 / submissions 465, both
-  # implicit TLS). The svc name won't match Stalwart's mail.grizzly-endeavors.com
-  # cert SAN, so custom.inc.php relaxes peer-name verification for this hop only.
-  ROUNDCUBEMAIL_DEFAULT_HOST: "ssl://stalwart-mail.stalwart.svc.cluster.local"
+  # We dial Stalwart via its PUBLIC host mail.grizzly-endeavors.com (imaps 993 /
+  # submissions 465, implicit TLS) rather than the in-cluster Service. Reason:
+  # Stalwart's mail listeners carry overrideProxyTrustedNetworks 10.0.0.0/8 and
+  # the pod network (10.244.x) is inside that range, so a direct in-cluster
+  # connection is treated as PROXY-protocol and reset (errno 104) when it isn't.
+  # The public path rides the VPS HAProxy, which prepends the PROXY header, and
+  # the cert matches this SAN — so no TLS name kludge is needed. It hairpins out
+  # to the VPS and back; fine for low-volume webmail. (A future in-cluster,
+  # PROXY-free listener is the "narrower PROXY trust" follow-up in mail.md.)
+  ROUNDCUBEMAIL_DEFAULT_HOST: "ssl://mail.grizzly-endeavors.com"
   ROUNDCUBEMAIL_DEFAULT_PORT: "993"
-  ROUNDCUBEMAIL_SMTP_SERVER: "ssl://stalwart-mail.stalwart.svc.cluster.local"
+  ROUNDCUBEMAIL_SMTP_SERVER: "ssl://mail.grizzly-endeavors.com"
   ROUNDCUBEMAIL_SMTP_PORT: "465"
   ROUNDCUBEMAIL_SKIN: "elastic"
   ROUNDCUBEMAIL_PRODUCT_NAME: "Grizzly Webmail"
   ROUNDCUBEMAIL_PLUGINS: "archive,zipdownload,newmail_notifier"
   ROUNDCUBEMAIL_UPLOAD_MAX_FILESIZE: "25M"
-  # Access is fronted by the Authentik forward-auth gate at the ingress, so the
-  # login page itself is never exposed unauthenticated; a modest rate limit is
-  # still good hygiene against a compromised session brute-forcing the mailbox.
-  ROUNDCUBEMAIL_LOGIN_RATE_LIMIT: "3"
----
-# Extra PHP config the env interface can't express: relax TLS peer-name
-# verification on the in-cluster hop to Stalwart. The connection is still
-# TLS-encrypted with Stalwart's real Let's Encrypt cert; we only skip the
-# hostname match because we dial the ClusterIP Service name, not the cert's
-# mail.grizzly-endeavors.com SAN. Traffic never leaves the cluster.
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: roundcube-custom-php
-  namespace: roundcube
-  labels:
-    app.kubernetes.io/name: roundcube
-data:
-  custom.inc.php: |
-    <?php
-    // In-cluster hop to Stalwart: encrypted, but the Service DNS name does not
-    // match the cert SAN (mail.grizzly-endeavors.com), so skip the name check.
-    $ssl = ['verify_peer' => false, 'verify_peer_name' => false, 'allow_self_signed' => true];
-    $config['imap_conn_options'] = ['ssl' => $ssl];
-    $config['smtp_conn_options'] = ['ssl' => $ssl];
 ---
 # Extra headers injected into nginx's forward-auth subrequest. The embedded
 # Authentik outpost picks the proxy provider from the request host, but the
