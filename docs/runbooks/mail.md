@@ -1,6 +1,6 @@
 # Mail (Stalwart) — Deployment Status & Runbook
 
-**Status as of 2026-07-06: functionally configured; own-MX inbound path live end-to-end.** Stalwart is configured (S3 blob store, TLS, domain, mailbox, listeners) and reachable from the internet on 25/465/587/993 via the VPS HAProxy → WireGuard tunnel path, terminating TLS with a Let's Encrypt **prod** cert. **Remaining: Phase 5** — DNS MX cutover + SMTP2GO outbound smarthost + SPF/DKIM-DNS/DMARC/MTA-STS (gated on SMTP2GO signup). Design rationale: ADRs [050](../decisions/050-stalwart-mail-server.md) (Stalwart), [051](../decisions/051-haproxy-l4-mail-ingress.md) (HAProxy L4 ingress), [052](../decisions/052-in-cluster-acme-cert-for-mail.md) (in-cluster ACME cert), [054](../decisions/054-cloudflare-email-routing-interim-inbound.md) (interim inbound).
+**Status as of 2026-07-06: own-MX inbound LIVE (MX cut over); outbound pending SMTP2GO signup.** Stalwart is configured (S3 blob store, TLS, domain, mailbox, listeners) and reachable from the internet on 25/465/587/993 via the VPS HAProxy → WireGuard tunnel path, terminating TLS with a Let's Encrypt **prod** cert. **The inbound MX cutover is done** — Cloudflare Email Routing is disabled and `MX 10 mail.grizzly-endeavors.com` → VPS → Stalwart is authoritative; `bearflinn@`/`postmaster@`/`abuse@` accept `RCPT` with a clean `250`. **Remaining: Phase 5 Part B/C** — Bear completes SMTP2GO signup (now unblocked), then wire SMTP2GO as the outbound smarthost + SPF/DKIM-DNS/DMARC/MTA-STS. Design rationale: ADRs [050](../decisions/050-stalwart-mail-server.md) (Stalwart), [051](../decisions/051-haproxy-l4-mail-ingress.md) (HAProxy L4 ingress), [052](../decisions/052-in-cluster-acme-cert-for-mail.md) (in-cluster ACME cert), [054](../decisions/054-cloudflare-email-routing-interim-inbound.md) (interim inbound, now superseded).
 
 ## Architecture
 
@@ -31,25 +31,26 @@ Stalwart 0.16 uses a **JSON, database-backed** config. The static file (`config.
 - **Tunnel/DNAT:** `setup-r730xd.yml` `ingress_dnat_rules` gained the 4 mail NodePorts (30025/30465/30587/30993 → dell_inspiron), re-DNAT'd to the K8s node.
 - Verified: `openssl s_client -connect 178.156.217.91:993` presents the prod cert; SMTP EHLO through HAProxy logs the real client IP (PROXY parsed).
 
-## What is NOT done yet — Phase 5 (SMTP2GO-gated)
+## Phase 5 Part A — inbound MX cutover ✅ DONE (2026-07-06)
 
-Disable Cloudflare Email Routing; MX → VPS (grey `mail` A → 178.156.217.91); SPF → `include:spf.smtp2go.com`; SMTP2GO DKIM CNAMEs + return-path (or publish Stalwart's own auto-generated DKIM record); DMARC; MTA-STS; autoconfig. Wire SMTP2GO as the outbound smarthost via the CLI (an `MtaRoute`/outbound-strategy object).
+The interim Cloudflare Email Routing inbound (ADR-054) was retired and MX cut to our own Stalwart. **DNS is hand-managed via the cloudflare-api MCP** (zone `e748f8927854bbf3e8d6a91a345d1842`); there is no DNS-as-code. What changed:
 
-### ⚠ SMTP2GO signup blocker — do the inbound MX cutover FIRST (2026-07-06)
+- **`mail.grizzly-endeavors.com` A → `178.156.217.91` (grey / DNS-only).** SMTP can't ride the Cloudflare proxy, so this host must be grey. It overrides the orange `*` wildcard for this name. The HTTPS webadmin surface still works — the VPS Caddy `*.grizzly-endeavors.com` wildcard vhost terminates 443 directly (grey just drops CF's proxy out of the path; verified 302 + valid cert).
+- **Cloudflare Email Routing disabled** (`POST /zones/{zone}/email/routing/disable`). This auto-removed all 3 `route{1,2,3}.mx.cloudflare.net` MX records **and** the CF SPF TXT.
+- **`grizzly-endeavors.com MX 10 mail.grizzly-endeavors.com`** created — inbound now routes internet → CF DNS → VPS `:25` (HAProxy L4) → tunnel → Stalwart.
+- **Interim SPF `v=spf1 -all`** (domain sends no mail yet — anti-spoofing). Part C flips it to `v=spf1 include:spf.smtp2go.com ~all`.
+- **`postmaster@` + `abuse@` aliases** added to the `bearflinn` mailbox (RFC 5321 requires postmaster). Codified in `configure-stalwart.yml` (EmailAlias = `{name: <local-part>, domainId}`, an index-keyed map like `credentials`).
+- The interim CF DKIM `cf2024-1._domainkey` TXT is left in place (harmless, nothing signs with it now); retire in Part C.
 
-SMTP2GO's signup form validates the account email in real time and **cannot be completed yet**. Two confirmed failures:
+**Verified end-to-end:** a real external message from `bearflinn@gmail.com` landed in the Stalwart INBOX (IMAPS to `mail.grizzly-endeavors.com:993`); `RCPT TO` returns `250` for `bearflinn@`/`postmaster@`/`abuse@`. Home ISP blocks outbound 25, so SMTP `RCPT` probes must run from the VPS (`ssh proxy-vps`), not the control node.
 
-- **Free/consumer addresses are rejected outright:** signing up with `bearflinn@gmail.com` returns **"Error code 6 — Please use an email at your own domain to sign up."** So a domain address is mandatory; the "just use Gmail" workaround does not exist here.
-- **`bearflinn@grizzly-endeavors.com` returns "Error code 6 — Service unavailable."** SMTP2GO does a live MX/SMTP probe of the address, and the **interim Cloudflare Email Routing MX** (`route1/2/3.mx.cloudflare.net`, forwarding to Gmail) does not satisfy it — it defers/rejects the probe rather than returning a clean `250` for `RCPT TO`.
+## Phase 5 Part B — SMTP2GO signup (human gate, Bear)
 
-**Implication — the original Phase-5 ordering is inverted.** You cannot set up outbound (SMTP2GO) before inbound. Sequence must be:
+The original signup blocker is now cleared: SMTP2GO live-probes the account address, and the CF-routing MX used to defer/reject `RCPT` (returning "Error code 6 — Service unavailable"); the real Stalwart mailbox now answers `250`. **Retry signup with `bearflinn@grizzly-endeavors.com`.** (Free/consumer addresses like `bearflinn@gmail.com` are rejected outright — "use an email at your own domain" — so a domain address is mandatory.) This is a web form; it can't be automated. Once done, hand SMTP2GO's SMTP creds + DKIM/return-path DNS targets to Part C.
 
-1. **Grey `mail` A → VPS** and **cut MX → VPS** so external mail (and SMTP2GO's probe) reaches the *real* Stalwart mailbox, which accepts `RCPT TO:<bearflinn@grizzly-endeavors.com>` with a clean `250`. (Note: greying `mail` also makes the mailbox client-reachable by hostname — see below.)
-2. **Verify** a real external message to `bearflinn@grizzly-endeavors.com` lands in the Stalwart INBOX (IMAP login already works over the VPS path — auth succeeds, INBOX currently empty because MX still → Cloudflare).
-3. **Then** retry SMTP2GO signup with `bearflinn@grizzly-endeavors.com` — the probe should now get a clean `250`.
-4. Add `grizzly-endeavors.com` as a verified sender in SMTP2GO (DNS: SPF/DKIM/return-path), publish DMARC/MTA-STS, and wire SMTP2GO as the outbound smarthost.
+## Phase 5 Part C — outbound smarthost + sender auth (after signup)
 
-Open question for the next session: whether the CF-routing probe fails because of greylisting/deferral or an outright reject, and whether a temporary direct-MX (skip CF routing) is enough to unblock signup before the full cutover. Retiring Cloudflare Email Routing (ADR-054) is part of step 1 regardless.
+Store SMTP2GO creds in OpenBao (`stores/smtp2go`) + `stalwart-secrets` ExternalSecret env; wire SMTP2GO as the outbound smarthost via the CLI (relay-host / MTA-route object in `plan.json`, auth via a typed `{"@type":"EnvironmentVariable"}` secret — confirm the exact 0.16 object shape with `describe`/`get`). DNS: SPF → `include:spf.smtp2go.com`; SMTP2GO DKIM CNAMEs + return-path; DMARC; MTA-STS (`mta-sts` host + `/.well-known/mta-sts.txt` via Caddy + `_mta-sts` TXT); retire the interim CF DKIM. Verify SPF+DKIM+DMARC pass via mail-tester.com.
 
 ## Operating the CLI
 
@@ -97,7 +98,8 @@ ansible-playbook ansible/playbooks/configure-stalwart.yml --vault-password-file 
 
 ## Key facts for resuming
 
-- OpenBao (control-node root session; see [openbao-add-secret.md](openbao-add-secret.md)): `stores/stalwart` (db_password, s3_access_key, s3_secret_key), `platform/stalwart` (admin_password, account_password), `platform/cloudflare-certmanager` (api_token).
+- OpenBao (control-node root session; see [openbao-add-secret.md](openbao-add-secret.md)): `stores/stalwart` (db_password, s3_access_key, s3_secret_key), `platform/stalwart` (admin_password, account_password), `platform/cloudflare-certmanager` (api_token). Part C adds `stores/smtp2go`.
 - Foundation: Postgres `10.0.0.200:5432` db/user `stalwart`; MinIO obs S3 `http://10.0.0.200:9000` bucket `stalwart`.
+- **DNS (hand-managed via cloudflare-api MCP, zone `e748f8927854bbf3e8d6a91a345d1842`):** `mail` A `133307cf1f603655b77fbeb9a1ea151c` → 178.156.217.91 grey; MX `69dcc3b46ebe2455d4052dc8d9ce69f8` → mail; SPF TXT `f10af94070358437c817b82b3cb99a68` (`v=spf1 -all`, interim). CF DKIM `cf2024-1._domainkey` `90525406a6d7a7926cd67a249e84573c` (retire in Part C). Stalwart domain id `b`, mailbox account id `b`.
 - IaC: `ansible/files/stalwart/plan.json` (declarative CLI plan), `ansible/playbooks/configure-stalwart.yml` (driver), `ansible/roles/haproxy-mail/` (VPS L4 ingress).
 - PRs: #102 (interim inbound + LE issuer), #103 (manifests), #104 (CF token + own Kustomization), #105 (NET_BIND_SERVICE), #106 (config path), #107 (0.16 JSON config), #109 (recovery admin), #110 (config plan + prod cert), plus the Phase-4 mail-ingress PR.

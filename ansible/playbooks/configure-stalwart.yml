@@ -336,6 +336,35 @@
       changed_when: "'Updated' in stalwart_account_pw.stdout"
       no_log: true
 
+    # RFC 5321 requires postmaster@ to be deliverable; abuse@ (RFC 2142) is good
+    # hygiene. Attached as aliases on the bootstrap mailbox (EmailAlias =
+    # {name: <local-part>, domainId}). Idempotent — re-applies the same set.
+    - name: Ensure RFC role-address aliases (postmaster, abuse) on the mailbox
+      ansible.builtin.command:
+        argv:
+          - docker
+          - run
+          - --rm
+          - -e
+          - STALWART_URL
+          - -e
+          - STALWART_USER
+          - -e
+          - STALWART_PASSWORD
+          - "{{ stalwart_cli_image }}"
+          - -k
+          - update
+          - Account
+          - "{{ (stalwart_account_q.stdout_lines | select('match', '.+') | first | from_json).id }}"
+          - --field
+          - "aliases/0={{ {'name': 'postmaster', 'domainId': stalwart_domain_id} | to_json }}"
+          - --field
+          - "aliases/1={{ {'name': 'abuse', 'domainId': stalwart_domain_id} | to_json }}"
+      environment: *cli_env
+      register: stalwart_account_aliases
+      changed_when: "'Updated' in stalwart_account_aliases.stdout"
+      no_log: true
+
     # --- apply / reload -------------------------------------------------------
     - name: Reload settings and TLS certificates
       ansible.builtin.command:
