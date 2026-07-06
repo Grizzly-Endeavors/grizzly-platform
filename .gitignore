@@ -91,3 +91,6 @@ archive/**/*.tfvars
 *.bak
 .claude/settings.local.json
 .playwright-mcp/
+
+# Local grizzly-gate pre-check output (grizzly-gate:check skill)
+grizzly-gate-report/
