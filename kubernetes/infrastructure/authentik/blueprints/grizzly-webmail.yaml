@@ -1,0 +1,62 @@
+version: 1
+metadata:
+  name: grizzly-webmail
+entries:
+  # Forward-auth (single application) proxy provider fronting the Roundcube
+  # webmail app at webmail.grizzly-endeavors.com (ADR-056). The second proxy
+  # provider in the homelab (after grizzly-invite-admin) — both ride the one
+  # embedded outpost, whose provider list is (re)declared at the bottom of this
+  # file so the two never clobber each other.
+  - model: authentik_providers_proxy.proxyprovider
+    id: webmail-provider
+    identifiers:
+      name: grizzly-webmail
+    attrs:
+      mode: forward_single
+      external_host: https://webmail.grizzly-endeavors.com
+      authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+      invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
+
+  - model: authentik_core.application
+    id: webmail-app
+    identifiers:
+      slug: grizzly-webmail
+    attrs:
+      name: Grizzly Webmail
+      provider: !KeyOf webmail-provider
+      meta_launch_url: https://webmail.grizzly-endeavors.com
+      meta_description: "Read and send mail for the Grizzly Endeavors mailboxes"
+      policy_engine_mode: any
+
+  # Webmail is the mailbox owner's tool, so scope both library visibility and
+  # access to grizzly-admins — a non-admin hitting the URL gets the outpost's
+  # generic 403. (Roundcube still requires the mailbox IMAP login behind this.)
+  - model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf webmail-app
+      group: !Find [authentik_core.group, [name, grizzly-admins]]
+      order: 0
+    attrs:
+      enabled: true
+      negate: false
+
+  # Embedded outpost provider list. This entry OWNS the list for the whole
+  # homelab now that there are two proxy providers: it must enumerate every one,
+  # because the blueprint replaces the M2M wholesale (a partial list would
+  # silently drop the other app's gate). grizzly-invite-admin.yaml previously
+  # declared this with just its own provider; that entry was removed there and
+  # consolidated here. webmail-provider resolves via !KeyOf (same file, above);
+  # grizzly-invite-admin via !Find (it already exists in the DB from its own
+  # blueprint, so this resolves on the first pass).
+  #
+  # authentik_host MUST be set or the outpost builds its sign-in redirect against
+  # http://localhost (the internal API URL) and the browser 404s.
+  - model: authentik_outposts.outpost
+    identifiers:
+      name: authentik Embedded Outpost
+    attrs:
+      providers:
+        - !KeyOf webmail-provider
+        - !Find [authentik_providers_proxy.proxyprovider, [name, grizzly-invite-admin]]
+      config:
+        authentik_host: https://sso.grizzly-endeavors.com/
