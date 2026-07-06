@@ -59,6 +59,13 @@
     stalwart_domain_bearflinn: "bearflinn.com"
     stalwart_tls_san: "mail.grizzly-endeavors.com"
     stalwart_account_local: "bearflinn"
+    # SMTP2GO outbound smarthost (ADR-050 Part C). Home ISP blocks :25, so all
+    # outbound relays through SMTP2GO; 587/STARTTLS is reachable from the cluster.
+    # authUsername is injected from OpenBao (vault_smtp2go_username); the password
+    # is read by Stalwart from the pod env SMTP2GO_PASSWORD (via the ExternalSecret).
+    stalwart_relay_name: "smtp2go"
+    stalwart_relay_address: "mail.smtp2go.com"
+    stalwart_relay_port: 587
     stalwart_namespace: "stalwart"
     stalwart_plan_dir: "{{ playbook_dir }}/../files/stalwart"
     # Blob-store and listener (bind / PROXY trusted-networks) changes only take
@@ -397,6 +404,136 @@
       environment: *cli_env
       register: stalwart_account_aliases
       changed_when: "'Updated' in stalwart_account_aliases.stdout"
+      no_log: true
+
+    # --- outbound smarthost (SMTP2GO relay, ADR-050 Part C) -------------------
+    # All non-local mail relays through SMTP2GO (home ISP blocks :25). The route
+    # carries the literal authUsername (injected from OpenBao — can't be an env
+    # ref) and an authSecret that points Stalwart at the pod env SMTP2GO_PASSWORD
+    # (materialized by the stalwart-secrets ExternalSecret). The pod must be
+    # restarted after the secret gains SMTP2GO_PASSWORD so the env is present —
+    # run this play with -e stalwart_force_restart=true when first wiring the relay.
+    - name: Detect whether the SMTP2GO relay route already exists
+      ansible.builtin.command:
+        argv:
+          - docker
+          - run
+          - --rm
+          - -e
+          - STALWART_URL
+          - -e
+          - STALWART_USER
+          - -e
+          - STALWART_PASSWORD
+          - "{{ stalwart_cli_image }}"
+          - -k
+          - query
+          - MtaRoute
+          - --where
+          - "name={{ stalwart_relay_name }}"
+          - --json
+      environment: *cli_env
+      register: stalwart_relay_before
+      changed_when: false
+      no_log: true
+
+    - name: Create the SMTP2GO relay route if absent
+      ansible.builtin.command:
+        argv:
+          - docker
+          - run
+          - --rm
+          - -e
+          - STALWART_URL
+          - -e
+          - STALWART_USER
+          - -e
+          - STALWART_PASSWORD
+          - "{{ stalwart_cli_image }}"
+          - -k
+          - create
+          - MtaRoute/Relay
+          - --json
+          - "{{ {'name': stalwart_relay_name, 'address': stalwart_relay_address, 'port': stalwart_relay_port, 'implicitTls': false, 'protocol': 'smtp', 'allowInvalidCerts': false, 'authUsername': vault_smtp2go_username, 'authSecret': {'@type': 'EnvironmentVariable', 'variableName': 'SMTP2GO_PASSWORD'}, 'description': 'SMTP2GO outbound smarthost (ADR-050 Part C)'} | to_json }}"
+      environment: *cli_env
+      register: stalwart_relay_create
+      when: stalwart_relay_name not in stalwart_relay_before.stdout
+      changed_when: "'Created' in stalwart_relay_create.stdout"
+      no_log: true
+
+    - name: Look up the relay route id
+      ansible.builtin.command:
+        argv:
+          - docker
+          - run
+          - --rm
+          - -e
+          - STALWART_URL
+          - -e
+          - STALWART_USER
+          - -e
+          - STALWART_PASSWORD
+          - "{{ stalwart_cli_image }}"
+          - -k
+          - query
+          - MtaRoute
+          - --where
+          - "name={{ stalwart_relay_name }}"
+          - --json
+      environment: *cli_env
+      register: stalwart_relay_q
+      changed_when: false
+      no_log: true
+
+    # Keep the mutable fields (address/port/tls/auth) in sync with the vars +
+    # OpenBao username on every run — idempotent, and rotates auth if it changes.
+    - name: Sync the relay route's mutable fields
+      ansible.builtin.command:
+        argv:
+          - docker
+          - run
+          - --rm
+          - -e
+          - STALWART_URL
+          - -e
+          - STALWART_USER
+          - -e
+          - STALWART_PASSWORD
+          - "{{ stalwart_cli_image }}"
+          - -k
+          - update
+          - MtaRoute
+          - "{{ (stalwart_relay_q.stdout_lines | select('match', '.+') | first | from_json).id }}"
+          - --json
+          - "{{ {'address': stalwart_relay_address, 'port': stalwart_relay_port, 'implicitTls': false, 'protocol': 'smtp', 'allowInvalidCerts': false, 'authUsername': vault_smtp2go_username, 'authSecret': {'@type': 'EnvironmentVariable', 'variableName': 'SMTP2GO_PASSWORD'}} | to_json }}"
+      environment: *cli_env
+      register: stalwart_relay_sync
+      changed_when: "'Updated' in stalwart_relay_sync.stdout"
+      no_log: true
+
+    # Point all non-local outbound at the relay: local domains still deliver
+    # locally, everything else now routes to 'smtp2go' (was 'mx' = direct MX).
+    - name: Route non-local outbound through the SMTP2GO relay
+      ansible.builtin.command:
+        argv:
+          - docker
+          - run
+          - --rm
+          - -e
+          - STALWART_URL
+          - -e
+          - STALWART_USER
+          - -e
+          - STALWART_PASSWORD
+          - "{{ stalwart_cli_image }}"
+          - -k
+          - update
+          - MtaOutboundStrategy
+          - --json
+          - "{{ {'route': {'match': {'0': {'if': 'is_local_domain(rcpt_domain)', 'then': \"'local'\"}}, 'else': \"'\" + stalwart_relay_name + \"'\"}} | to_json }}"
+      environment: *cli_env
+      register: stalwart_route_strategy
+      changed_when: "'Updated' in stalwart_route_strategy.stdout"
       no_log: true
 
     # --- apply / reload -------------------------------------------------------
