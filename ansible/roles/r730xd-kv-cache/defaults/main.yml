@@ -1,0 +1,42 @@
+---
+# r730xd-kv-cache: key-value / cache foundation store (Valkey backend) on Docker
+# Persistent via AOF + RDB on ZFS pool (tank/foundation/kv-cache, recordsize=64K)
+#
+# The slot is named by function (kv-cache), not by product — the backend is a
+# swappable implementation detail. Currently Valkey (Redis's Linux Foundation
+# fork, wire/RDB/AOF-compatible). See ADR-056.
+#
+# Connection: redis://:<password>@<r730xd_ip>:6379  (RESP wire protocol)
+
+# Image — Valkey (drop-in for the Redis 7.x line)
+kv_cache_version: "9.1.0"
+kv_cache_image: "valkey/valkey:{{ kv_cache_version }}"
+
+# Networking (host network mode — binds directly to host interface)
+kv_cache_port: 6379
+kv_cache_bind_address: "0.0.0.0"
+
+# Directories
+kv_cache_data_dir: "/mnt/zfs/foundation/kv-cache/data"
+kv_cache_compose_dir: "/opt/foundation/kv-cache"
+
+# Password (set via vault — see group_vars/all/vars.yml)
+# kv_cache_password: "{{ vault_kv_cache_password }}"
+# (inherited from group_vars/all/vars.yml)
+
+# Memory management
+kv_cache_maxmemory: "2gb"
+kv_cache_maxmemory_policy: "allkeys-lru"
+
+# Persistence — AOF
+kv_cache_appendonly: "yes"
+kv_cache_appendfsync: "everysec"
+
+# Persistence — RDB snapshots
+kv_cache_save_rules:
+  - seconds: 3600
+    changes: 1
+  - seconds: 300
+    changes: 100
+  - seconds: 60
+    changes: 10000

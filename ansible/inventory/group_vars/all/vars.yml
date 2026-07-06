@@ -13,7 +13,7 @@ claude_ssh_public_key: "{{ vault_claude_ssh_public_key }}"
 
 # Foundation data stores (R730xd)
 postgres_password: "{{ vault_postgres_password }}"
-redis_password: "{{ vault_redis_password }}"
+kv_cache_password: "{{ vault_kv_cache_password }}"
 
 # MinIO Obs — hot instance on ZFS (Loki/Tempo S3 backend)
 minio_obs_root_user: "{{ vault_minio_obs_root_user }}"

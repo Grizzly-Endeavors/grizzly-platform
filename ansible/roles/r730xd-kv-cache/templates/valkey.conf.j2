@@ -1,0 +1,29 @@
+# Managed by Ansible — r730xd-kv-cache role (Valkey backend)
+
+# Network
+bind {{ kv_cache_bind_address }}
+port {{ kv_cache_port }}
+protected-mode yes
+
+# Authentication
+requirepass {{ kv_cache_password }}
+
+# Memory
+maxmemory {{ kv_cache_maxmemory }}
+maxmemory-policy {{ kv_cache_maxmemory_policy }}
+
+# Persistence — AOF
+appendonly {{ kv_cache_appendonly }}
+appendfsync {{ kv_cache_appendfsync }}
+
+# Persistence — RDB snapshots
+{% for rule in kv_cache_save_rules %}
+save {{ rule.seconds }} {{ rule.changes }}
+{% endfor %}
+
+# Logging
+loglevel notice
+
+# Disable dangerous commands in a shared environment
+rename-command FLUSHALL ""
+rename-command FLUSHDB ""
