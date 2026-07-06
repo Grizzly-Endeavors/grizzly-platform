@@ -35,11 +35,6 @@ spec:
                 name: roundcube-config
             - secretRef:
                 name: roundcube-secrets
-          volumeMounts:
-            - name: custom-php
-              mountPath: /var/roundcube/config/custom.inc.php
-              subPath: custom.inc.php
-              readOnly: true
           readinessProbe:
             httpGet:
               path: /
@@ -59,7 +54,3 @@ spec:
             limits:
               cpu: "1"
               memory: 1Gi
-      volumes:
-        - name: custom-php
-          configMap:
-            name: roundcube-custom-php
