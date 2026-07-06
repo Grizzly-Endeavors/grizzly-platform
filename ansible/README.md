@@ -12,7 +12,7 @@ Configuration management for active infrastructure. Previous K8s cluster and tow
 | `setup-r730xd.yml` | r730xd | R730xd baseline setup (hostname, static IP, packages, Docker, monitoring) |
 | `r730xd-storage.yml` | r730xd | MergerFS + SnapRAID stack — bay resolution, partitioning, pool, parity, NFS exports |
 | `r730xd-zfs.yml` | r730xd | ZFS raidz1 pool + service datasets for latency-sensitive workloads |
-| `deploy-foundation-stores.yml` | r730xd | PostgreSQL 16, Redis 7, MinIO Obs (ZFS), MinIO Bulk (MergerFS) as Docker Compose services |
+| `deploy-foundation-stores.yml` | r730xd | PostgreSQL 16, kv-cache (Valkey), MinIO Obs (ZFS), MinIO Bulk (MergerFS) as Docker Compose services |
 | `deploy-observability.yml` | r730xd | Prometheus, Alertmanager, Loki, Tempo, Grafana, Alloy on ZFS pool |
 | `create-staging-vm.yml` | r730xd | Create Debian 13 staging VM via libvirt for critical services during migration |
 | `deploy-staging-services.yml` | staging-vm | Deploy web services (landing-page, caz-portfolio, resume-site) to staging VM |
@@ -30,7 +30,7 @@ Configuration management for active infrastructure. Previous K8s cluster and tow
 | `r730xd-zfs` | r730xd-zfs.yml | ZFS raidz1 pool + per-service datasets with tuned recordsize |
 | `r730xd-vm-host` | create-staging-vm.yml | KVM/libvirt + bridged networking on R730xd |
 | `r730xd-postgres` | deploy-foundation-stores.yml | PostgreSQL 16 on Docker (host network, daily pg_dump backup) |
-| `r730xd-redis` | deploy-foundation-stores.yml | Redis 7 on Docker (host network, AOF+RDB persistence) |
+| `r730xd-kv-cache` | deploy-foundation-stores.yml | Key-value / cache store (Valkey) on Docker (host network, AOF+RDB persistence) |
 | `r730xd-minio-obs` | deploy-foundation-stores.yml | MinIO S3 (observability) — hot instance on ZFS for Loki/Tempo |
 | `r730xd-minio-bulk` | deploy-foundation-stores.yml | MinIO S3 (bulk) — cold instance on MergerFS for registry/artifacts |
 | `r730xd-prometheus` | deploy-observability.yml | Prometheus + Alertmanager (metrics collection, alerting) |
@@ -55,14 +55,14 @@ Continuous-write services run on ZFS to avoid SnapRAID sync issues (dirty files,
 
 ## Foundation Data Stores
 
-PostgreSQL, Redis, and two MinIO instances run on the R730xd as Docker Compose services, not in K8s. K8s nodes are diskless — all stateful workloads belong on the storage server. See [ADR-003](../docs/decisions/003-foundation-stores-on-r730xd.md) for design rationale.
+PostgreSQL, kv-cache (Valkey), and two MinIO instances run on the R730xd as Docker Compose services, not in K8s. K8s nodes are diskless — all stateful workloads belong on the storage server. See [ADR-003](../docs/decisions/003-foundation-stores-on-r730xd.md) for design rationale.
 
 ### Endpoints
 
 | Service | Address | Data Directory | Storage Tier |
 |---------|---------|----------------|--------------|
 | PostgreSQL 16 | `postgresql://postgres:<password>@<r730xd_ip>:5432/` | `/mnt/zfs/foundation/postgres/data` | ZFS (8K recordsize) |
-| Redis 7 | `redis://:<password>@<r730xd_ip>:6379` | `/mnt/zfs/foundation/redis/data` | ZFS (64K recordsize) |
+| kv-cache (Valkey) | `redis://:<password>@<r730xd_ip>:6379` | `/mnt/zfs/foundation/kv-cache/data` | ZFS (64K recordsize) |
 | MinIO Obs API | `http://<r730xd_ip>:9000` | `/mnt/zfs/foundation/minio-obs/data` | ZFS (1M recordsize) |
 | MinIO Obs Console | `http://<r730xd_ip>:9001` | — | — |
 | MinIO Bulk API | `http://<r730xd_ip>:9002` | `/mnt/pool/foundation/minio-bulk/data` | MergerFS |
@@ -102,19 +102,19 @@ ansible-playbook -i ansible/inventory/r730xd.yml \
 
 # Check service status on R730xd
 docker compose -f /opt/foundation/postgres/docker-compose.yml ps
-docker compose -f /opt/foundation/redis/docker-compose.yml ps
+docker compose -f /opt/foundation/kv-cache/docker-compose.yml ps
 docker compose -f /opt/foundation/minio-obs/docker-compose.yml ps
 docker compose -f /opt/foundation/minio-bulk/docker-compose.yml ps
 
 # View logs
 docker logs foundation-postgres --tail 50
-docker logs foundation-redis --tail 50
+docker logs foundation-kv-cache --tail 50
 docker logs minio-obs --tail 50
 docker logs minio-bulk --tail 50
 
 # Health checks
 docker exec foundation-postgres pg_isready -U postgres
-docker exec foundation-redis redis-cli -a <password> ping
+docker exec foundation-kv-cache valkey-cli -a <password> ping
 curl http://<r730xd_ip>:9000/minio/health/live   # MinIO Obs
 curl http://<r730xd_ip>:9002/minio/health/live   # MinIO Bulk
 ```
@@ -136,7 +136,7 @@ Store application credentials in Ansible Vault and pass them to K8s via Secrets.
 ### Backup
 
 - **PostgreSQL:** Daily `pg_dumpall` at 02:00 → `/mnt/zfs/foundation/postgres/backup/`, 7-day retention. Cron managed by Ansible.
-- **Redis:** AOF (`appendfsync everysec`) + RDB snapshots. Data in `/mnt/zfs/foundation/redis/data/`. Copy `dump.rdb` off-host for backup.
+- **kv-cache (Valkey):** AOF (`appendfsync everysec`) + RDB snapshots. Data in `/mnt/zfs/foundation/kv-cache/data/`. Copy `dump.rdb` off-host for backup.
 - **MinIO Obs:** Loki/Tempo data with 30-day retention. ZFS snapshots available for point-in-time recovery.
 - **MinIO Bulk:** Container images and build artifacts on MergerFS with SnapRAID parity. `mc mirror` for offsite replication is a future enhancement.
 
@@ -149,8 +149,8 @@ Default values are in each role's `defaults/main.yml`. Override via `--extra-var
 | `postgres_version` | `"16"` | Postgres Docker image tag |
 | `postgres_shared_buffers` | `"2GB"` | Shared memory for caching |
 | `postgres_max_connections` | `100` | Max concurrent connections |
-| `redis_maxmemory` | `"2gb"` | Memory limit before eviction |
-| `redis_maxmemory_policy` | `"allkeys-lru"` | Eviction strategy |
+| `kv_cache_maxmemory` | `"2gb"` | Memory limit before eviction |
+| `kv_cache_maxmemory_policy` | `"allkeys-lru"` | Eviction strategy |
 | `minio_obs_api_port` | `9000` | MinIO Obs S3 API port |
 | `minio_obs_console_port` | `9001` | MinIO Obs web console port |
 | `minio_bulk_api_port` | `9002` | MinIO Bulk S3 API port |
