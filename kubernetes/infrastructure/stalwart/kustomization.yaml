@@ -13,4 +13,4 @@ resources:
 configMapGenerator:
   - name: stalwart-config
     files:
-      - config.toml
+      - config.json
