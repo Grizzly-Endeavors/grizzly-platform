@@ -19,7 +19,7 @@ vault_idrac_password: "your-idrac-password-here"
 
 # Foundation data stores (R730xd)
 vault_postgres_password: "your-postgres-superuser-password-here"
-vault_redis_password: "your-redis-password-here"
+vault_kv_cache_password: "your-kv-cache-password-here"
 vault_minio_root_user: "your-minio-root-user-here"
 vault_minio_root_password: "your-minio-root-password-here"
 
