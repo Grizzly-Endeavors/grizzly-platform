@@ -1,5 +1,0 @@
----
-- name: Restart minio-bulk
-  ansible.builtin.command: docker compose up -d --force-recreate
-  args:
-    chdir: "{{ minio_bulk_compose_dir }}"

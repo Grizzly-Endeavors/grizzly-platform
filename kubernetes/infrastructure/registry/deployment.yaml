@@ -34,11 +34,11 @@ spec:
               containerPort: 5000
               protocol: TCP
           env:
-            # S3 backend → MinIO bulk on R730xd (see ansible/roles/r730xd-minio-bulk).
-            # zot's S3 driver (docker/distribution) reads credentials from the
-            # AWS SDK env chain; we feed it the registry-s3-creds Secret seeded
-            # by ansible/playbooks/seed-app-secrets.yml (and synced via ESO,
-            # external-secrets-stores/registry.yaml).
+            # S3 backend → s3-bulk versitygw gateway on R730xd (ADR-055; see
+            # ansible/playbooks/setup-registry-stores.yml). zot's S3 driver
+            # (docker/distribution) reads credentials from the AWS SDK env
+            # chain; we feed it the registry-s3-creds Secret synced via ESO
+            # (external-secrets-stores/registry.yaml → stores/registry).
             - name: AWS_ACCESS_KEY_ID
               valueFrom:
                 secretKeyRef:

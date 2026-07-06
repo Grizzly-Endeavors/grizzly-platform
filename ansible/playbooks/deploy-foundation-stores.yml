@@ -1,14 +1,13 @@
 ---
 # deploy-foundation-stores.yml — Deploy foundation data stores to R730xd
 #
-# Deploys PostgreSQL, kv-cache (Valkey), the MinIO stores, and the versitygw
-# stores (s3-hot/s3-bulk, ADR-055) as Docker Compose services on the R730xd
-# storage server. During the MinIO→versitygw migration both engines run side by
-# side on distinct ports; the versitygw stores replace MinIO once cutover lands.
+# Deploys PostgreSQL, kv-cache (Valkey), and the versitygw S3 stores
+# (s3-hot/s3-bulk, ADR-055) as Docker Compose services on the R730xd storage
+# server. (MinIO was retired after the versitygw cutover completed — ADR-055.)
 #
 # Storage tiers:
-#   Hot (ZFS):     PostgreSQL, kv-cache, MinIO Obs, s3-hot — continuous-write
-#   Cold (MergerFS): MinIO Bulk, s3-bulk — write-once-read-many (registry, artifacts)
+#   Hot (ZFS):     PostgreSQL, kv-cache, s3-hot — continuous-write
+#   Cold (MergerFS): s3-bulk — write-once-read-many (registry, artifacts)
 #
 # These services are consumed by K8s workloads (via <r730xd_ip>:<port>)
 # and staging VM services. They run on R730xd because stateful workloads
@@ -30,18 +29,12 @@
 # Deploy individual services:
 #   ... --tags postgres
 #   ... --tags kv-cache
-#   ... --tags minio-obs
-#   ... --tags minio-bulk
 #   ... --tags s3-hot      (versitygw — requires setup-versitygw-iam.yml first)
 #   ... --tags s3-bulk     (versitygw — requires setup-versitygw-iam.yml first)
 #
 # Endpoints (after deploy) — IPs from ansible/group_vars/all/network.yml:
 #   PostgreSQL:        postgresql://postgres:<password>@<r730xd_ip>:5432/
 #   kv-cache (Valkey): redis://:<password>@<r730xd_ip>:6379
-#   MinIO Obs API:     http://<r730xd_ip>:9000
-#   MinIO Obs Console: http://<r730xd_ip>:9001
-#   MinIO Bulk API:    http://<r730xd_ip>:9002
-#   MinIO Bulk Console: http://<r730xd_ip>:9003
 #   s3-hot (versitygw):  http://<r730xd_ip>:7070  (metrics :9102)
 #   s3-bulk (versitygw): http://<r730xd_ip>:7072  (metrics :9103)
 
@@ -103,12 +96,7 @@
       tags: [foundation, postgres]
     - role: r730xd-kv-cache
       tags: [foundation, kv-cache]
-    - role: r730xd-minio-obs
-      tags: [foundation, minio-obs]
-    - role: r730xd-minio-bulk
-      tags: [foundation, minio-bulk]
-    # versitygw stores (ADR-055) — stand up alongside MinIO during the
-    # migration; they replace minio-obs/minio-bulk once cutover completes.
+    # versitygw S3 stores (ADR-055) — replaced the retired MinIO Obs/Bulk.
     # Prereq: setup-versitygw-iam.yml (OpenBao mount/approle/root creds).
     - role: r730xd-s3-hot
       tags: [foundation, s3-hot]
