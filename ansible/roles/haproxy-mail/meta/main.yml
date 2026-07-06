@@ -1,0 +1,16 @@
+---
+# Role metadata for haproxy-mail
+
+galaxy_info:
+  author: bearf
+  description: L4 (TCP) HAProxy ingress with PROXY protocol v2 for the Stalwart mail ports
+  license: MIT
+  min_ansible_version: "2.10"
+
+  platforms:
+    - name: Debian
+      versions:
+        - bookworm
+        - trixie
+
+dependencies: []

@@ -1,0 +1,40 @@
+---
+# haproxy-mail — install and configure L4 mail ingress (ADR-051).
+
+- name: Install HAProxy
+  ansible.builtin.apt:
+    name: haproxy
+    state: present
+    update_cache: yes
+
+- name: Render HAProxy mail config
+  ansible.builtin.template:
+    src: haproxy.cfg.j2
+    dest: "{{ haproxy_mail_config_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+    backup: yes
+    validate: "haproxy -c -f %s"
+  notify: Reload haproxy
+
+- name: Enable and start HAProxy
+  ansible.builtin.systemd:
+    name: haproxy
+    enabled: "{{ haproxy_mail_service_enabled }}"
+    state: "{{ haproxy_mail_service_state }}"
+
+# Apply the Reload handler now (not at end-of-play): a bare `state: started`
+# is a no-op when the apt-installed haproxy is already running, so without an
+# explicit flush the new config would not be loaded before the port check.
+- name: Flush handlers so the new config is loaded before the port check
+  ansible.builtin.meta: flush_handlers
+
+- name: Wait for the mail ports to be listening
+  ansible.builtin.wait_for:
+    port: "{{ item.listen }}"
+    host: 127.0.0.1
+    timeout: 15
+  loop: "{{ haproxy_mail_ports }}"
+  loop_control:
+    label: "{{ item.name }}:{{ item.listen }}"

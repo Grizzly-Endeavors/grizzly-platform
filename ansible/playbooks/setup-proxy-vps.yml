@@ -202,6 +202,29 @@
             apply:
               tags: [caddy]
 
+    # --- Mail L4 ingress (ADR-051) ---
+    # HAProxy fronts 25/465/587/993 and forwards to Stalwart over the wg0 tunnel
+    # with PROXY protocol v2. Lifecycle-independent of Caddy; placed after the
+    # ingress-tunnel role so wg0 is up first.
+    - name: Install and configure HAProxy mail ingress
+      when: enable_haproxy_mail | default(true) | bool
+      tags: [haproxy-mail]
+      block:
+        - name: Open mail ports in UFW
+          community.general.ufw:
+            rule: allow
+            port: "{{ item.port }}"
+            proto: "{{ item.proto }}"
+            comment: "{{ item.comment }}"
+          loop: "{{ ufw_mail_rules | default([]) }}"
+          when: enable_firewall | default(true) | bool
+
+        - name: Include haproxy-mail role
+          ansible.builtin.include_role:
+            name: haproxy-mail
+            apply:
+              tags: [haproxy-mail]
+
     # --- Monitoring ---
     - name: Install monitoring base (node-exporter)
       ansible.builtin.include_role:

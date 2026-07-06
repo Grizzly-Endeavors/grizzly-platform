@@ -215,6 +215,26 @@
             port: 30356
             target_ip: "{{ dell_inspiron_ip }}"
             target_port: 30356
+          # Stalwart mail NodePorts (smtp/submissions/submission/imaps). The VPS
+          # HAProxy (haproxy-mail role, ADR-051) terminates 25/465/587/993 and
+          # forwards here over wg0 with PROXY protocol v2; these re-DNAT to the
+          # K8s NodePorts on dell_inspiron.
+          - proto: tcp
+            port: 30025
+            target_ip: "{{ dell_inspiron_ip }}"
+            target_port: 30025
+          - proto: tcp
+            port: 30465
+            target_ip: "{{ dell_inspiron_ip }}"
+            target_port: 30465
+          - proto: tcp
+            port: 30587
+            target_ip: "{{ dell_inspiron_ip }}"
+            target_port: 30587
+          - proto: tcp
+            port: 30993
+            target_ip: "{{ dell_inspiron_ip }}"
+            target_port: 30993
           # Game server ingress (grizzly-gameservers) — Agones dynamic port
           # range, forwarded 1:1 (target_port omitted → port preserved
           # end-to-end so an allocated port is consistent). Pods must be
