@@ -86,13 +86,14 @@ spec:
             env:
               - name: DOCKER_HOST
                 value: unix:///run/docker/docker.sock
-              # sccache — Rust build cache backed by MinIO bulk (S3)
+              # sccache — Rust build cache backed by the s3-bulk versitygw
+              # gateway (ADR-055; was MinIO bulk :9002).
               - name: RUSTC_WRAPPER
                 value: "sccache"
               - name: SCCACHE_BUCKET
                 value: "build-cache"
               - name: SCCACHE_ENDPOINT
-                value: "http://10.0.0.200:9002"
+                value: "http://10.0.0.200:7072"
               - name: SCCACHE_REGION
                 value: "us-east-1"
               - name: SCCACHE_S3_USE_SSL

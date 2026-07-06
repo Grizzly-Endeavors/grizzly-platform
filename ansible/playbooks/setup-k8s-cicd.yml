@@ -172,87 +172,13 @@
       changed_when: false
       no_log: true
 
-# ============================================================
-# Play 3: Create sccache build-cache bucket and credentials
-# ============================================================
-- name: Create sccache build-cache bucket and credentials
-  hosts: localhost
-  connection: local
-  gather_facts: no
-
-  vars:
-    kubeconfig: "{{ lookup('env', 'HOME') }}/.kube/config"
-
-  vars_files:
-    - "{{ playbook_dir }}/../../ansible/inventory/group_vars/all/vault.yml"
-    - "{{ playbook_dir }}/../../ansible/inventory/group_vars/all/vars.yml"
-    - "{{ playbook_dir }}/../../ansible/inventory/group_vars/all/network.yml"
-    - "{{ playbook_dir }}/../vars/openbao_auth.yml"
-
-  pre_tasks:
-    - name: Load OpenBao-sourced platform secrets
-      ansible.builtin.include_vars:
-        file: "{{ playbook_dir }}/../vars/openbao_secrets.yml"
-      when: openbao_read_enabled | default(false) | bool
-      tags: [always]
-
-  tasks:
-    - name: Verify sccache MinIO credentials are set
-      ansible.builtin.assert:
-        that:
-          - vault_sccache_minio_access_key is defined and vault_sccache_minio_access_key | length > 0
-          - vault_sccache_minio_secret_key is defined and vault_sccache_minio_secret_key | length > 0
-        fail_msg: >
-          vault_sccache_minio_access_key and vault_sccache_minio_secret_key must be
-          set in vault.yml. These are used for sccache S3 build cache on MinIO bulk.
-        success_msg: "sccache MinIO credentials are set"
-
-    - name: Ensure build-cache bucket exists on MinIO bulk
-      ansible.builtin.command: mc mb --ignore-existing minio-bulk/build-cache
-      changed_when: false
-      failed_when: false
-
-    - name: Create sccache MinIO user on bulk instance
-      ansible.builtin.shell: |
-        mc admin user add minio-bulk \
-          "{{ vault_sccache_minio_access_key }}" \
-          "{{ vault_sccache_minio_secret_key }}" 2>&1 || true
-      changed_when: false
-      no_log: true
-
-    - name: Grant sccache user readwrite access to build-cache bucket
-      ansible.builtin.shell: |
-        cat <<'EOF' | mc admin policy create minio-bulk build-cache-rw /dev/stdin
-        {
-          "Version": "2012-10-17",
-          "Statement": [{
-            "Effect": "Allow",
-            "Action": ["s3:*"],
-            "Resource": [
-              "arn:aws:s3:::build-cache",
-              "arn:aws:s3:::build-cache/*"
-            ]
-          }]
-        }
-        EOF
-        mc admin policy attach minio-bulk build-cache-rw --user "{{ vault_sccache_minio_access_key }}"
-      changed_when: false
-      no_log: true
-
-    - name: Create sccache S3 credentials secret
-      ansible.builtin.shell: |
-        kubectl create secret generic sccache-s3-credentials \
-          --from-literal=accesskey="{{ vault_sccache_minio_access_key }}" \
-          --from-literal=secretkey="{{ vault_sccache_minio_secret_key }}" \
-          -n arc-runners \
-          --dry-run=client -o yaml | kubectl apply -f -
-      environment:
-        KUBECONFIG: "{{ kubeconfig }}"
-      changed_when: false
-      no_log: true
+# NOTE: sccache build-cache provisioning moved to setup-sccache-stores.yml
+# (versitygw s3-bulk, ADR-055) and the sccache-s3-credentials secret is now
+# ESO-managed (external-secrets-stores/github-runners.yaml). The former Play 3
+# (MinIO `mc` bucket/user + imperative kubectl secret) is retired.
 
 # ============================================================
-# Play 4: Deploy Prometheus targets and alerts on R730xd (was Play 3)
+# Play 3: Deploy Prometheus targets and alerts on R730xd
 # ============================================================
 - name: Deploy CI/CD Prometheus targets and alert rules
   hosts: r730xd
