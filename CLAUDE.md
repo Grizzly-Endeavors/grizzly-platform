@@ -33,10 +33,10 @@ Self-hosted infrastructure for Grizzly Endeavors projects (Infrastructure as Cod
 
 # Email / Mail (Stalwart)
 
-**Start here:** `docs/runbooks/mail.md` — deployment status, resume point, and gotchas. **In progress (as of 2026-07-06): Stalwart is deployed and connected to Postgres but in bootstrap mode — not yet functionally configured.**
+**Start here:** `docs/runbooks/mail.md` — deployment status, resume point, and gotchas. **As of 2026-07-06: functionally configured; own-MX inbound live end-to-end (VPS HAProxy → tunnel → NodePort → Stalwart TLS, prod cert). Remaining: Phase 5 — DNS MX cutover + SMTP2GO outbound (SMTP2GO-gated).**
 
 - Self-hosted [Stalwart](https://stalw.art) mail server (`stalwartlabs/stalwart:v0.16.11`), in-cluster via its own Flux Kustomization (`kubernetes/infrastructure/stalwart/` + `kubernetes/clusters/grizzly-platform/stalwart.yaml`), state on foundation Postgres + MinIO obs. Outbound relays via SMTP2GO; inbound is own-MX via VPS HAProxy + tunnel (not built yet). HTTP surface live at `mail.grizzly-endeavors.com`.
-- **Stalwart 0.16 config is JSON + DB-backed:** the static `config.json` is only the data-store object; blob store, listeners, TLS, domain, accounts, DKIM, relay are configured via the first-party CLI (`stalwartlabs/cli`) into Postgres. Next step is `ansible/playbooks/configure-stalwart.yml` applying that CLI plan.
+- **Stalwart 0.16 config is JSON + DB-backed:** the static `config.json` is only the data-store object; blob store, listeners, TLS, domain, accounts, DKIM, security live in Postgres, applied via the first-party CLI (`stalwartlabs/cli`). `ansible/playbooks/configure-stalwart.yml` applies the declarative `ansible/files/stalwart/plan.json`. **Gotchas:** no `%{env:}%` macro expansion (use typed `EnvironmentVariable`/`File` secret objects); blob-store + listener changes need a pod restart (not `ReloadSettings`); the http surface shares the ingress-nginx IP so Stalwart's auto-ban can wedge it — internal ranges are allowlisted (`AllowedIp 10.0.0.0/8`).
 - ADRs: `docs/decisions/050-stalwart-mail-server.md`, `051-haproxy-l4-mail-ingress.md`, `052-in-cluster-acme-cert-for-mail.md`, `054-cloudflare-email-routing-interim-inbound.md`.
 
 # Rules
