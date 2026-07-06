@@ -1,0 +1,28 @@
+# Cloudflare API token for cert-manager's Let's Encrypt DNS-01 solver
+# (ADR-052). Synced from OpenBao into the cert-manager namespace so the
+# letsencrypt-staging / letsencrypt-prod ClusterIssuers can solve the
+# ACME DNS-01 challenge for mail.grizzly-endeavors.com by writing a
+# _acme-challenge TXT record.
+#
+# Reuses the same token that Caddy uses for wildcard DNS-01 on the VPS
+# (secret/grizzly-platform/platform/cloudflare, property api_token) — it
+# already carries Zone:DNS:Edit scope on grizzly-endeavors.com. The
+# public half of nothing here is secret; the token itself is.
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: cloudflare-api-token
+  namespace: cert-manager
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: openbao
+  target:
+    name: cloudflare-api-token
+    creationPolicy: Owner
+  data:
+    - secretKey: api-token
+      remoteRef:
+        key: grizzly-platform/platform/cloudflare
+        property: api_token

@@ -21,3 +21,4 @@ resources:
   - notifications.yaml
   - flux-system.yaml
   - cosign.yaml
+  - cloudflare-api-token.yaml

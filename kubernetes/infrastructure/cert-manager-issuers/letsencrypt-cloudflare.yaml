@@ -1,0 +1,53 @@
+# Let's Encrypt ClusterIssuers using the DNS-01 solver via Cloudflare
+# (ADR-052). These close the deferral ADR-019 left open: the mail server
+# (Stalwart, ADR-050) is the first in-cluster workload that needs a
+# browser-trusted certificate — Caddy's VPS wildcard never touches the
+# raw SMTP/IMAP ports.
+#
+# The Cloudflare API token is delivered to the cert-manager namespace via
+# ExternalSecret (external-secrets-stores/cloudflare-api-token.yaml).
+# DNS-01 is used because the cluster sits on a private LAN, so HTTP-01 /
+# TLS-ALPN-01 challenges can't be reached from the public ACME servers.
+#
+# Validate with the STAGING issuer first (its certs are untrusted but it
+# has generous rate limits), then switch the Certificate to the prod
+# issuer — LE prod caps issuance per week.
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-staging
+spec:
+  acme:
+    server: https://acme-staging-v02.api.letsencrypt.org/directory
+    email: bearflinn@gmail.com
+    privateKeySecretRef:
+      name: letsencrypt-staging-account-key
+    solvers:
+      - dns01:
+          cloudflare:
+            apiTokenSecretRef:
+              name: cloudflare-api-token
+              key: api-token
+        selector:
+          dnsZones:
+            - grizzly-endeavors.com
+---
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-prod
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: bearflinn@gmail.com
+    privateKeySecretRef:
+      name: letsencrypt-prod-account-key
+    solvers:
+      - dns01:
+          cloudflare:
+            apiTokenSecretRef:
+              name: cloudflare-api-token
+              key: api-token
+        selector:
+          dnsZones:
+            - grizzly-endeavors.com
