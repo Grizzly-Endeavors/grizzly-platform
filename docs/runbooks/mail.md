@@ -4,7 +4,7 @@
 
 ## Architecture
 
-Self-hosted [Stalwart](https://stalw.art) mail server, in-cluster via Flux, state on the foundation stores (Postgres + MinIO obs). Outbound will relay through **SMTP2GO** (Phase 5). Inbound is our own MX: internet → Hetzner VPS → **HAProxy (TCP, PROXY protocol v2)** → WireGuard tunnel → R730xd DNAT → K8s NodePort → Stalwart, with TLS terminated by Stalwart. HTTP surface (JMAP/webadmin/autoconfig/MTA-STS) rides the existing Caddy path as `mail.grizzly-endeavors.com`.
+Self-hosted [Stalwart](https://stalw.art) mail server, in-cluster via Flux, state on the foundation stores (Postgres + s3-hot versitygw blob store, ADR-055). Outbound will relay through **SMTP2GO** (Phase 5). Inbound is our own MX: internet → Hetzner VPS → **HAProxy (TCP, PROXY protocol v2)** → WireGuard tunnel → R730xd DNAT → K8s NodePort → Stalwart, with TLS terminated by Stalwart. HTTP surface (JMAP/webadmin/autoconfig/MTA-STS) rides the existing Caddy path as `mail.grizzly-endeavors.com`.
 
 ## Stalwart 0.16 config model (important)
 
@@ -19,7 +19,7 @@ Stalwart 0.16 uses a **JSON, database-backed** config. The static file (`config.
 - **TLS:** cert-manager `Certificate/stalwart-tls` for `mail.grizzly-endeavors.com` on **letsencrypt-prod** (DNS-01, dedicated CF token `platform/cloudflare-certmanager`). Mounted at `/etc/stalwart/tls/{tls.crt,tls.key}`; Stalwart references them via a `Certificate` object with `File` refs and serves it as `SystemSettings.defaultCertificateId`.
 
 ### CLI-applied config (`configure-stalwart.yml` + `plan.json`)
-- **Blob store** → MinIO obs S3 (`http://10.0.0.200:9000`, bucket `stalwart`; `secretKey` via typed `EnvironmentVariable` object, `accessKey` = the `stalwart` username). Verified: inbound mail lands a blob in the bucket.
+- **Blob store** → s3-hot versitygw S3 (`http://10.0.0.200:7070`, bucket `stalwart`; `secretKey` via typed `EnvironmentVariable` object, `accessKey` = the `stalwart` username). Was MinIO obs `:9000` pre-ADR-055. Verified: inbound mail lands a blob in the bucket.
 - **Listeners** smtp 25 / submissions 465 / submission 587 / imaps 993 / http 8080 — the four mail listeners carry `overrideProxyTrustedNetworks: 10.0.0.0/8` so they parse HAProxy's PROXY v2 header.
 - **Domain** `grizzly-endeavors.com` (DKIM management = Automatic — keys generated/rotated by the server; DNS record is Phase 5).
 - **Bootstrap mailbox** `bearflinn@grizzly-endeavors.com` (password from OpenBao `platform/stalwart account_password`). **TEMPORARY** — accounts move to an Authentik-backed directory later.
@@ -81,7 +81,7 @@ ansible-playbook ansible/playbooks/configure-stalwart.yml --vault-password-file 
 - **The ingress-ban trap.** Stalwart's `Security` auto-ban bans by source IP. All HTTP/JMAP/webadmin/CLI traffic arrives from the single ingress-nginx pod IP (no real client IP on the HTTP path), so a few failed logins ban that one IP and take down the **entire** HTTP surface → 502 everywhere. Fixed with `AllowedIp 10.0.0.0/8` (internal infra is never banned). To recover if it recurs: reach the pod directly, bypassing the banned ingress — `kubectl -n stalwart port-forward pod/<pod> 18080:8080`, then `docker run --network host -e STALWART_URL=http://localhost:18080 ... query BlockedIp` and `delete BlockedIp --ids <id>`.
 - **PROXY trusted-networks is per-listener** (`overrideProxyTrustedNetworks`), NOT global (`SystemSettings.proxyTrustedNetworks`) — global would make the http listener expect PROXY from ingress-nginx (which sends none) and break it.
 - **Certificate cross-reference:** the CLI's in-plan `#ref` resolution is unreliable for `id<Certificate>` fields, so `SystemSettings.defaultCertificateId` is set by the playbook after querying the cert id, not in `plan.json`.
-- **0.16 store `@type` values are PascalCase** (`PostgreSql`, `S3`). MinIO endpoint goes in `region` as `{"@type":"Custom","customEndpoint":"...","customRegion":"us-east-1"}`. `credentials` on an Account is an index-keyed map (`credentials/0=...`), not a JSON array.
+- **0.16 store `@type` values are PascalCase** (`PostgreSql`, `S3`). The S3 endpoint goes in `region` as `{"@type":"Custom","customEndpoint":"...","customRegion":"us-east-1"}`. `credentials` on an Account is an index-keyed map (`credentials/0=...`), not a JSON array.
 - **cert-manager needs a non-IP-locked CF token** — the shared `platform/cloudflare` token is IP-pinned to the VPS. Dedicated `platform/cloudflare-certmanager`.
 - **Binary has `cap_net_bind_service=ep`** → deployment sets `allowPrivilegeEscalation: true` + `capabilities.add: [NET_BIND_SERVICE]` (drop ALL otherwise).
 - **Flux** — Stalwart must be its own Kustomization, not a member of `infrastructure`. Also: Flux reverts manual `kubectl apply` of `stalwart/` manifests within ~5m; land changes via git.
@@ -90,8 +90,8 @@ ansible-playbook ansible/playbooks/configure-stalwart.yml --vault-password-file 
 
 - **Health:** `kubectl -n stalwart get pods`; `https://mail.grizzly-endeavors.com` (webadmin, 302). Container logs via the stdout tracer (`kubectl -n stalwart logs deploy/stalwart`).
 - **Metrics/alerting:** TODO — Prometheus scrape, MX reachability, cert expiry (cert-manager auto-renews; note the cert reload caveat below), queue depth.
-- **Dependencies:** foundation Postgres + MinIO obs (R730xd), cert-manager LE issuer, the WireGuard tunnel + VPS HAProxy, SMTP2GO (outbound, Phase 5).
-- **Recovery:** stateless pod (Deployment, Recreate) — reschedules freely; durable state in Postgres + MinIO obs.
+- **Dependencies:** foundation Postgres + s3-hot versitygw (R730xd), cert-manager LE issuer, the WireGuard tunnel + VPS HAProxy, SMTP2GO (outbound, Phase 5).
+- **Recovery:** stateless pod (Deployment, Recreate) — reschedules freely; durable state in Postgres + s3-hot versitygw.
 
 ## Known follow-ups
 
@@ -103,7 +103,7 @@ ansible-playbook ansible/playbooks/configure-stalwart.yml --vault-password-file 
 ## Key facts for resuming
 
 - OpenBao (control-node root session; see [openbao-add-secret.md](openbao-add-secret.md)): `stores/stalwart` (db_password, s3_access_key, s3_secret_key), `platform/stalwart` (admin_password, account_password), `platform/cloudflare-certmanager` (api_token). Part C adds `stores/smtp2go`.
-- Foundation: Postgres `10.0.0.200:5432` db/user `stalwart`; MinIO obs S3 `http://10.0.0.200:9000` bucket `stalwart`.
+- Foundation: Postgres `10.0.0.200:5432` db/user `stalwart`; s3-hot versitygw S3 `http://10.0.0.200:7070` bucket `stalwart`.
 - **DNS (hand-managed via cloudflare-api MCP, zone `e748f8927854bbf3e8d6a91a345d1842`):** `mail` A `133307cf1f603655b77fbeb9a1ea151c` → 178.156.217.91 grey; MX `69dcc3b46ebe2455d4052dc8d9ce69f8` → mail; SPF TXT `f10af94070358437c817b82b3cb99a68` (`v=spf1 -all`, interim). CF DKIM `cf2024-1._domainkey` `90525406a6d7a7926cd67a249e84573c` (retire in Part C). Stalwart domain id `b`, mailbox account id `b`.
 - IaC: `ansible/files/stalwart/plan.json` (declarative CLI plan), `ansible/playbooks/configure-stalwart.yml` (driver), `ansible/roles/haproxy-mail/` (VPS L4 ingress).
 - PRs: #102 (interim inbound + LE issuer), #103 (manifests), #104 (CF token + own Kustomization), #105 (NET_BIND_SERVICE), #106 (config path), #107 (0.16 JSON config), #109 (recovery admin), #110 (config plan + prod cert), plus the Phase-4 mail-ingress PR.
