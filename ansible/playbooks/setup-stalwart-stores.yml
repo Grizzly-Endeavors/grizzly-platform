@@ -1,0 +1,175 @@
+---
+# setup-stalwart-stores.yml — foundation-side provisioning for the Stalwart
+# mail server (ADR-050). K8s manifests live in
+# kubernetes/infrastructure/stalwart/ and are applied by Flux.
+#
+# Stalwart externalizes its state onto the shared foundation stores rather than
+# an in-cluster PVC: its directory + metadata go to the foundation PostgreSQL,
+# and message blobs go to MinIO (S3). This playbook provisions those two
+# resources:
+#
+#   Play 1  The `stalwart` database + login role on the foundation PostgreSQL.
+#   Play 2  The `stalwart` bucket + a scoped MinIO user on the OBS (ZFS-tier)
+#           instance — mail blobs want the durable hot tier, unlike Nextcloud
+#           which backs onto the bulk MergerFS instance.
+#
+# Credentials come from OpenBao secret/grizzly-platform/stores/stalwart
+# (db_password, s3_access_key, s3_secret_key) — provisioned here, and read
+# cross-domain by Stalwart's K8s ExternalSecret. Kept under grizzly-platform/
+# rather than a lab-apps/ path because the ansible-platform-read AppRole policy
+# only grants grizzly-platform/* (mirrors nextcloud / career-scanner).
+#
+# Prerequisites:
+#   - Foundation Postgres + MinIO obs running (deploy-foundation-stores.yml).
+#   - The `minio-obs` mc alias configured on the control node (jumpbox).
+#   - OpenBao seeded: secret/grizzly-platform/stores/stalwart with keys
+#     db_password, s3_access_key, s3_secret_key. Generate db_password WITHOUT
+#     single quotes (e.g. `openssl rand -base64 36`).
+#
+# Usage (DEFAULT inventory — Play 2 runs on localhost with the mc alias):
+#   ansible-playbook ansible/playbooks/setup-stalwart-stores.yml \
+#     --vault-password-file .vault_pass -v
+#
+# Run just one half:
+#   ... --tags db
+#   ... --tags s3
+
+- name: Provision Stalwart database on foundation Postgres
+  hosts: r730xd
+  become: yes
+  gather_facts: no
+  tags: [db]
+
+  # The stalwart role password lives only in OpenBao (no static vault.yml
+  # fallback), so this play always reads from OpenBao.
+  vars:
+    openbao_read_enabled: true
+
+  vars_files:
+    - "{{ playbook_dir }}/../vars/openbao_auth.yml"
+
+  pre_tasks:
+    - name: Load OpenBao-sourced platform secrets
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/../vars/openbao_secrets.yml"
+
+    - name: Verify foundation Postgres container is running
+      ansible.builtin.command: docker exec foundation-postgres pg_isready -U postgres
+      changed_when: false
+
+  tasks:
+    # psql -U postgres connects over the container's local socket (trust auth) —
+    # no superuser password needed. The role password is passed via psql's
+    # :'pw' literal (safe quoting); the SQL is fed on stdin (docker exec -i),
+    # because psql only interpolates variables for stdin/-f input, NOT for -c.
+    - name: Check whether the stalwart role exists
+      ansible.builtin.command: >-
+        docker exec foundation-postgres
+        psql -U postgres -tAc
+        "SELECT 1 FROM pg_roles WHERE rolname='stalwart'"
+      register: sw_role
+      changed_when: false
+
+    - name: Create the stalwart login role
+      ansible.builtin.shell:
+        cmd: >-
+          set -o pipefail;
+          printf "CREATE ROLE stalwart LOGIN PASSWORD :'pw';\n"
+          | docker exec -i foundation-postgres
+          psql -U postgres -v ON_ERROR_STOP=1 -v pw="$PGPW"
+        executable: /bin/bash
+      environment:
+        PGPW: "{{ vault_stalwart_db_password }}"
+      when: sw_role.stdout != "1"
+      no_log: true
+
+    - name: Keep the stalwart role password in sync with OpenBao
+      ansible.builtin.shell:
+        cmd: >-
+          set -o pipefail;
+          printf "ALTER ROLE stalwart LOGIN PASSWORD :'pw';\n"
+          | docker exec -i foundation-postgres
+          psql -U postgres -v ON_ERROR_STOP=1 -v pw="$PGPW"
+        executable: /bin/bash
+      environment:
+        PGPW: "{{ vault_stalwart_db_password }}"
+      no_log: true
+      changed_when: false
+
+    - name: Check whether the stalwart database exists
+      ansible.builtin.command: >-
+        docker exec foundation-postgres
+        psql -U postgres -tAc
+        "SELECT 1 FROM pg_database WHERE datname='stalwart'"
+      register: sw_db
+      changed_when: false
+
+    - name: Create the stalwart database owned by the stalwart role
+      ansible.builtin.command: >-
+        docker exec foundation-postgres
+        psql -U postgres -v ON_ERROR_STOP=1
+        -c "CREATE DATABASE stalwart OWNER stalwart"
+      when: sw_db.stdout != "1"
+
+- name: Provision Stalwart S3 bucket and scoped user on MinIO obs
+  hosts: localhost
+  connection: local
+  gather_facts: no
+  tags: [s3]
+
+  vars:
+    openbao_read_enabled: true
+
+  vars_files:
+    - "{{ playbook_dir }}/../inventory/group_vars/all/vault.yml"
+    - "{{ playbook_dir }}/../inventory/group_vars/all/vars.yml"
+    - "{{ playbook_dir }}/../inventory/group_vars/all/network.yml"
+    - "{{ playbook_dir }}/../vars/openbao_auth.yml"
+
+  pre_tasks:
+    - name: Load OpenBao-sourced platform secrets
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/../vars/openbao_secrets.yml"
+
+  tasks:
+    - name: Verify Stalwart S3 credentials are present in OpenBao
+      ansible.builtin.assert:
+        that:
+          - vault_stalwart_s3_access_key is defined and vault_stalwart_s3_access_key | length > 0
+          - vault_stalwart_s3_secret_key is defined and vault_stalwart_s3_secret_key | length > 0
+        fail_msg: >
+          secret/grizzly-platform/stores/stalwart must define s3_access_key and
+          s3_secret_key. Seed OpenBao before running this play.
+        success_msg: "Stalwart S3 credentials are set"
+
+    - name: Ensure the stalwart bucket exists on MinIO obs
+      ansible.builtin.command: mc mb --ignore-existing minio-obs/stalwart
+      changed_when: false
+      failed_when: false
+
+    - name: Create the stalwart MinIO user on the obs instance
+      ansible.builtin.shell: |
+        mc admin user add minio-obs \
+          "{{ vault_stalwart_s3_access_key }}" \
+          "{{ vault_stalwart_s3_secret_key }}" 2>&1 || true
+      changed_when: false
+      no_log: true
+
+    - name: Grant the stalwart user readwrite access to its bucket
+      ansible.builtin.shell: |
+        cat <<'EOF' | mc admin policy create minio-obs stalwart-rw /dev/stdin
+        {
+          "Version": "2012-10-17",
+          "Statement": [{
+            "Effect": "Allow",
+            "Action": ["s3:*"],
+            "Resource": [
+              "arn:aws:s3:::stalwart",
+              "arn:aws:s3:::stalwart/*"
+            ]
+          }]
+        }
+        EOF
+        mc admin policy attach minio-obs stalwart-rw --user "{{ vault_stalwart_s3_access_key }}"
+      changed_when: false
+      no_log: true
