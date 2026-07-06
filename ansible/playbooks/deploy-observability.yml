@@ -81,11 +81,11 @@
              ansible_facts.services['docker.service'].state != 'running'"
       tags: [always]
 
-    - name: Verify MinIO Obs is healthy
+    - name: Verify s3-hot object store is healthy
       ansible.builtin.uri:
-        url: "http://localhost:9000/minio/health/live"
+        url: "http://localhost:7070/health"
         status_code: 200
-      register: minio_obs_health
+      register: s3_hot_health
       tags: [always]
 
     - name: Verify PostgreSQL is healthy
@@ -96,67 +96,10 @@
       register: pg_health
       tags: [always]
 
-    # --- MinIO Obs bucket and service account provisioning ---
-
-    - name: Check if MinIO client is available in container
-      ansible.builtin.command: docker exec minio-obs mc --version
-      changed_when: false
-      failed_when: false
-      register: mc_check
-      tags: [loki, tempo]
-
-    - name: Configure MinIO client alias
-      ansible.builtin.command: >
-        docker exec minio-obs mc alias set local
-        http://localhost:9000
-        {{ minio_obs_root_user }}
-        {{ minio_obs_root_password }}
-      changed_when: false
-      no_log: true
-      when: mc_check.rc == 0
-      tags: [loki, tempo]
-
-    - name: Create Loki S3 bucket
-      ansible.builtin.command: >
-        docker exec minio-obs mc mb --ignore-existing local/observability-loki
-      register: loki_bucket
-      changed_when: "'Bucket created' in loki_bucket.stdout"
-      when: mc_check.rc == 0
-      tags: [loki]
-
-    - name: Create Tempo S3 bucket
-      ansible.builtin.command: >
-        docker exec minio-obs mc mb --ignore-existing local/observability-tempo
-      register: tempo_bucket
-      changed_when: "'Bucket created' in tempo_bucket.stdout"
-      when: mc_check.rc == 0
-      tags: [tempo]
-
-    - name: Check if observability MinIO user exists
-      ansible.builtin.command: >
-        docker exec minio-obs mc admin user info local {{ minio_observability_access_key }}
-      changed_when: false
-      failed_when: false
-      register: minio_user_check
-      when: mc_check.rc == 0
-      tags: [loki, tempo]
-
-    - name: Create observability MinIO user
-      ansible.builtin.command: >
-        docker exec minio-obs mc admin user add local
-        {{ minio_observability_access_key }}
-        {{ minio_observability_secret_key }}
-      no_log: true
-      when: mc_check.rc == 0 and minio_user_check.rc != 0
-      tags: [loki, tempo]
-
-    - name: Grant observability user readwrite access to Loki bucket
-      ansible.builtin.command: >
-        docker exec minio-obs mc admin policy attach local readwrite
-        --user {{ minio_observability_access_key }}
-      changed_when: false
-      when: mc_check.rc == 0
-      tags: [loki, tempo]
+    # --- Loki/Tempo S3 buckets + account ---
+    # Provisioned on the s3-hot versitygw gateway by
+    # setup-observability-stores.yml (ADR-055) — run that before this playbook.
+    # The former inline `mc` block against minio-obs is retired.
 
     # --- Grafana PostgreSQL database provisioning ---
 

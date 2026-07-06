@@ -1,0 +1,73 @@
+---
+# setup-observability-stores.yml — foundation-side S3 provisioning for the
+# observability stack (Loki + Tempo) on the s3-hot versitygw gateway (ADR-055).
+#
+# Extracted from deploy-observability.yml's inline `mc` block (which now only
+# deploys the stack). Loki and Tempo share ONE account (as they did on MinIO
+# Obs with the `readwrite` policy) that owns both buckets — versitygw isolation
+# is ownership-based, so the shared task is included twice with the same creds:
+# the first call creates the account + observability-loki, the second reuses the
+# account and adds observability-tempo.
+#
+# Credentials: secret/grizzly-platform/observability/minio-client (access_key,
+# secret_key) — reused as the versitygw account creds so only the Loki/Tempo
+# endpoints change at cutover. s3-hot root creds (admin) from stores/s3-hot.
+#
+# Telemetry is disposable, so no data migration — the buckets start fresh.
+#
+# Prerequisites:
+#   - s3-hot versitygw gateway running (deploy-foundation-stores.yml --tags s3-hot).
+#   - OpenBao seeded: observability/minio-client + stores/s3-hot.
+#
+# Usage:
+#   ansible-playbook -i ansible/inventory ansible/playbooks/setup-observability-stores.yml \
+#     --vault-password-file .vault_pass -v
+
+- name: Provision Loki + Tempo buckets + shared account on s3-hot
+  hosts: r730xd
+  become: yes
+  gather_facts: no
+
+  vars:
+    openbao_read_enabled: true
+
+  vars_files:
+    - "{{ playbook_dir }}/../vars/openbao_auth.yml"
+
+  pre_tasks:
+    - name: Load OpenBao-sourced platform secrets
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/../vars/openbao_secrets.yml"
+
+    - name: Verify observability + s3-hot credentials are present in OpenBao
+      ansible.builtin.assert:
+        that:
+          - vault_minio_observability_access_key | default('') | length > 0
+          - vault_minio_observability_secret_key | default('') | length > 0
+          - vault_s3_hot_root_access_key | default('') | length > 0
+          - vault_s3_hot_root_secret_key | default('') | length > 0
+        fail_msg: >
+          observability/minio-client (access_key, secret_key) and stores/s3-hot
+          (root_access_key, root_secret_key) must be seeded in OpenBao.
+        success_msg: "observability + s3-hot credentials are set"
+
+  tasks:
+    - name: Provision the observability account + Loki bucket on s3-hot
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/versitygw-provision-account.yml"
+      vars:
+        vgw_instance: s3-hot
+        vgw_root_access: "{{ vault_s3_hot_root_access_key }}"
+        vgw_root_secret: "{{ vault_s3_hot_root_secret_key }}"
+        vgw_access: "{{ vault_minio_observability_access_key }}"
+        vgw_secret: "{{ vault_minio_observability_secret_key }}"
+        vgw_bucket: observability-loki
+
+    - name: Add the Tempo bucket owned by the same observability account
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/versitygw-provision-account.yml"
+      vars:
+        vgw_instance: s3-hot
+        vgw_root_access: "{{ vault_s3_hot_root_access_key }}"
+        vgw_root_secret: "{{ vault_s3_hot_root_secret_key }}"
+        vgw_access: "{{ vault_minio_observability_access_key }}"
+        vgw_secret: "{{ vault_minio_observability_secret_key }}"
+        vgw_bucket: observability-tempo
