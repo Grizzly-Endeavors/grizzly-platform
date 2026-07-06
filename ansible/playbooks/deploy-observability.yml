@@ -3,7 +3,7 @@
 #
 # Deploys Prometheus, Alertmanager, Loki, Tempo, Grafana, and Alloy as
 # Docker Compose services on the R730xd storage server. Uses foundation
-# stores (MinIO Obs for S3 object storage, PostgreSQL for Grafana database).
+# stores (s3-hot versitygw for S3 object storage, PostgreSQL for Grafana database).
 #
 # All observability data persisted on ZFS pool (tank/observability/*).
 #
@@ -12,7 +12,8 @@
 # Prerequisites:
 #   - R730xd baseline applied (setup-r730xd.yml — installs Docker)
 #   - ZFS pool and datasets created (r730xd-zfs.yml)
-#   - Foundation stores running (deploy-foundation-stores.yml — MinIO Obs, Postgres)
+#   - Foundation stores running (deploy-foundation-stores.yml — s3-hot, Postgres)
+#   - Observability S3 buckets/account provisioned (setup-observability-stores.yml)
 #   - Vault secrets configured (see vault.yml.example)
 #
 # Usage:

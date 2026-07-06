@@ -1,5 +1,0 @@
----
-- name: Restart minio-obs
-  ansible.builtin.command: docker compose up -d --force-recreate
-  args:
-    chdir: "{{ minio_obs_compose_dir }}"

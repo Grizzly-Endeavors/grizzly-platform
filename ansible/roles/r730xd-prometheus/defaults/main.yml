@@ -59,15 +59,9 @@ prometheus_observability_targets:
     target: "{{ r730xd_ip }}:3200"
   - job: "grafana"
     target: "{{ r730xd_ip }}:3000"
-  - job: "minio-obs"
-    target: "{{ r730xd_ip }}:9000"
-    metrics_path: "/minio/v2/metrics/cluster"
-  - job: "minio-bulk"
-    target: "{{ r730xd_ip }}:9002"
-    metrics_path: "/minio/v2/metrics/cluster"
   # versitygw stores (ADR-055) — scraped via their statsd-exporter sidecars
-  # (versitygw has no native Prometheus endpoint). Coexist with the minio-*
-  # jobs during the migration; those are removed once MinIO is retired.
+  # (versitygw has no native Prometheus endpoint). Replaced the retired MinIO
+  # Obs/Bulk scrape jobs.
   - job: "s3-hot"
     target: "{{ r730xd_ip }}:9102"
   - job: "s3-bulk"

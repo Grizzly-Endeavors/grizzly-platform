@@ -18,22 +18,13 @@ snapraid_excludes:
   # Unanchored (no leading slash) so it matches any directory named "tmp" at
   # any depth — covers root /tmp as well as transient tmp dirs anywhere.
   - "tmp/"
-  # MinIO's internal bookkeeping directory. It continuously rewrites volatile
-  # files (tmp/.trash/, per-bucket .usage-cache.bin, heal/scanner state), which
-  # change mid-sync and cause "file errors" / "cannot modify data disk during
-  # sync" non-zero exits on every run. It is MinIO-managed and regenerable, so
-  # it is excluded from parity. Actual bucket object data lives outside
-  # .minio.sys/ (e.g. <bucket>/<object>/) and stays protected. Trade-off:
-  # bucket-level config (versioning/lifecycle/policy) is not parity-covered.
-  - ".minio.sys/"
   # versitygw's transient multipart-upload staging dir (one per bucket:
   # <bucket>/.sgwtmp/multipart/). It holds in-flight parts that are created
-  # and removed as uploads complete, so it changes mid-sync just like
-  # .minio.sys/ and would cause the same "cannot modify during sync" errors.
-  # Committed object data and the write-once version files (under the
-  # versitygw versioning dir) live outside .sgwtmp/ and stay parity-covered.
-  # Coexists with the .minio.sys/ exclude during the MinIO→versitygw migration
-  # (ADR-055); drop .minio.sys/ once MinIO Bulk is retired.
+  # and removed as uploads complete, so it changes mid-sync and would cause
+  # "cannot modify during sync" errors. Committed object data and the
+  # write-once version files (under the versitygw versioning dir) live outside
+  # .sgwtmp/ and stay parity-covered. (The former MinIO `.minio.sys/` exclude
+  # was dropped when MinIO Bulk was retired — ADR-055.)
   - ".sgwtmp/"
   - "/lost+found/"
   - ".Thumbs.db"

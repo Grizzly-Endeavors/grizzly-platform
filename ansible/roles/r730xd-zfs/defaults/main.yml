@@ -1,7 +1,7 @@
 ---
 # r730xd-zfs: Create and configure a ZFS raidz1 pool with service datasets
 #
-# Hosts foundation stores (PostgreSQL, kv-cache, MinIO Obs) and observability
+# Hosts foundation stores (PostgreSQL, kv-cache, s3-hot) and observability
 # stack (Prometheus, Loki, Tempo, Grafana) — all continuous-write workloads
 # that are incompatible with SnapRAID's sync-between-writes model.
 #
@@ -42,12 +42,8 @@ zfs_datasets:
     recordsize: 8K        # matches PostgreSQL 8K page size
   - name: foundation/kv-cache
     recordsize: 64K       # sequential AOF append + RDB dumps (Valkey)
-  - name: foundation/minio-obs
-    recordsize: 1M        # large S3 objects (Loki/Tempo backend)
-  # versitygw hot tier (ADR-055) — large S3 objects, same 1M sizing as
-  # minio-obs. Stands up alongside minio-obs during the MinIO→versitygw
-  # migration; minio-obs is removed and this inherits the hot-S3 role once
-  # cutover completes.
+  # versitygw hot tier (ADR-055) — large S3 objects (Loki/Tempo/Stalwart
+  # backend). Replaced the retired foundation/minio-obs dataset.
   - name: foundation/s3-hot
     recordsize: 1M
   - name: observability/prometheus

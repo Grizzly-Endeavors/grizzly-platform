@@ -15,15 +15,7 @@ claude_ssh_public_key: "{{ vault_claude_ssh_public_key }}"
 postgres_password: "{{ vault_postgres_password }}"
 kv_cache_password: "{{ vault_kv_cache_password }}"
 
-# MinIO Obs — hot instance on ZFS (Loki/Tempo S3 backend)
-minio_obs_root_user: "{{ vault_minio_obs_root_user }}"
-minio_obs_root_password: "{{ vault_minio_obs_root_password }}"
-
-# MinIO Bulk — cold instance on MergerFS (container registry, build artifacts)
-minio_bulk_root_user: "{{ vault_minio_bulk_root_user }}"
-minio_bulk_root_password: "{{ vault_minio_bulk_root_password }}"
-
-# versitygw stores (ADR-055) — replacing MinIO Obs/Bulk. Root creds per gateway
+# versitygw stores (ADR-055) — replaced MinIO Obs/Bulk. Root creds per gateway
 # + the shared OpenBao AppRole the gateways use for their Vault-IAM account
 # store. Provisioned into OpenBao by setup-versitygw-iam.yml.
 s3_hot_root_access_key: "{{ vault_s3_hot_root_access_key }}"
