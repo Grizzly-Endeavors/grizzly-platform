@@ -12,7 +12,7 @@ Configuration management for active infrastructure. Previous K8s cluster and tow
 | `setup-r730xd.yml` | r730xd | R730xd baseline setup (hostname, static IP, packages, Docker, monitoring) |
 | `r730xd-storage.yml` | r730xd | MergerFS + SnapRAID stack — bay resolution, partitioning, pool, parity, NFS exports |
 | `r730xd-zfs.yml` | r730xd | ZFS raidz1 pool + service datasets for latency-sensitive workloads |
-| `deploy-foundation-stores.yml` | r730xd | PostgreSQL 16, kv-cache (Valkey), MinIO Obs (ZFS), MinIO Bulk (MergerFS) as Docker Compose services |
+| `deploy-foundation-stores.yml` | r730xd | PostgreSQL 16, kv-cache (Valkey), s3-hot (ZFS), s3-bulk (MergerFS) versitygw gateways as Docker Compose services |
 | `deploy-observability.yml` | r730xd | Prometheus, Alertmanager, Loki, Tempo, Grafana, Alloy on ZFS pool |
 | `create-staging-vm.yml` | r730xd | Create Debian 13 staging VM via libvirt for critical services during migration |
 | `deploy-staging-services.yml` | staging-vm | Deploy web services (landing-page, caz-portfolio, resume-site) to staging VM |
@@ -31,11 +31,11 @@ Configuration management for active infrastructure. Previous K8s cluster and tow
 | `r730xd-vm-host` | create-staging-vm.yml | KVM/libvirt + bridged networking on R730xd |
 | `r730xd-postgres` | deploy-foundation-stores.yml | PostgreSQL 16 on Docker (host network, daily pg_dump backup) |
 | `r730xd-kv-cache` | deploy-foundation-stores.yml | Key-value / cache store (Valkey) on Docker (host network, AOF+RDB persistence) |
-| `r730xd-minio-obs` | deploy-foundation-stores.yml | MinIO S3 (observability) — hot instance on ZFS for Loki/Tempo |
-| `r730xd-minio-bulk` | deploy-foundation-stores.yml | MinIO S3 (bulk) — cold instance on MergerFS for registry/artifacts |
+| `r730xd-s3-hot` | deploy-foundation-stores.yml | versitygw S3 — hot gateway on ZFS (Loki/Tempo/Stalwart), ADR-055 |
+| `r730xd-s3-bulk` | deploy-foundation-stores.yml | versitygw S3 — bulk gateway on MergerFS (registry/artifacts), ADR-055 |
 | `r730xd-prometheus` | deploy-observability.yml | Prometheus + Alertmanager (metrics collection, alerting) |
-| `r730xd-loki` | deploy-observability.yml | Loki log aggregation (S3 backend via MinIO Obs) |
-| `r730xd-tempo` | deploy-observability.yml | Tempo distributed tracing (S3 backend via MinIO Obs) |
+| `r730xd-loki` | deploy-observability.yml | Loki log aggregation (S3 backend via s3-hot versitygw) |
+| `r730xd-tempo` | deploy-observability.yml | Tempo distributed tracing (S3 backend via s3-hot versitygw) |
 | `r730xd-grafana` | deploy-observability.yml | Grafana dashboards (Postgres backend, provisioned data sources) |
 | `r730xd-alloy` | deploy-observability.yml | Grafana Alloy log collector (Docker socket → Loki) |
 | `monitoring-base` | setup-r730xd.yml | Node exporter, IPMI exporter, smartd |
@@ -55,7 +55,7 @@ Continuous-write services run on ZFS to avoid SnapRAID sync issues (dirty files,
 
 ## Foundation Data Stores
 
-PostgreSQL, kv-cache (Valkey), and two MinIO instances run on the R730xd as Docker Compose services, not in K8s. K8s nodes are diskless — all stateful workloads belong on the storage server. See [ADR-003](../docs/decisions/003-foundation-stores-on-r730xd.md) for design rationale.
+PostgreSQL, kv-cache (Valkey), and two versitygw S3 gateways run on the R730xd as Docker Compose services, not in K8s. K8s nodes are diskless — all stateful workloads belong on the storage server. See [ADR-003](../docs/decisions/003-foundation-stores-on-r730xd.md) for design rationale.
 
 ### Endpoints
 
@@ -63,10 +63,10 @@ PostgreSQL, kv-cache (Valkey), and two MinIO instances run on the R730xd as Dock
 |---------|---------|----------------|--------------|
 | PostgreSQL 16 | `postgresql://postgres:<password>@<r730xd_ip>:5432/` | `/mnt/zfs/foundation/postgres/data` | ZFS (8K recordsize) |
 | kv-cache (Valkey) | `redis://:<password>@<r730xd_ip>:6379` | `/mnt/zfs/foundation/kv-cache/data` | ZFS (64K recordsize) |
-| MinIO Obs API | `http://<r730xd_ip>:9000` | `/mnt/zfs/foundation/minio-obs/data` | ZFS (1M recordsize) |
-| MinIO Obs Console | `http://<r730xd_ip>:9001` | — | — |
-| MinIO Bulk API | `http://<r730xd_ip>:9002` | `/mnt/pool/foundation/minio-bulk/data` | MergerFS |
-| MinIO Bulk Console | `http://<r730xd_ip>:9003` | — | — |
+| s3-hot (versitygw) API | `http://<r730xd_ip>:7070` | `/mnt/zfs/foundation/s3-hot/{data,versions}` | ZFS (1M recordsize) |
+| s3-hot metrics | `http://<r730xd_ip>:9102` | — | statsd-exporter sidecar |
+| s3-bulk (versitygw) API | `http://<r730xd_ip>:7072` | `/mnt/pool/foundation/s3-bulk/{data,versions}` | MergerFS |
+| s3-bulk metrics | `http://<r730xd_ip>:9103` | — | statsd-exporter sidecar |
 
 ### Connecting from K8s workloads
 
@@ -103,20 +103,20 @@ ansible-playbook -i ansible/inventory/r730xd.yml \
 # Check service status on R730xd
 docker compose -f /opt/foundation/postgres/docker-compose.yml ps
 docker compose -f /opt/foundation/kv-cache/docker-compose.yml ps
-docker compose -f /opt/foundation/minio-obs/docker-compose.yml ps
-docker compose -f /opt/foundation/minio-bulk/docker-compose.yml ps
+docker compose -f /opt/foundation/s3-hot/docker-compose.yml ps
+docker compose -f /opt/foundation/s3-bulk/docker-compose.yml ps
 
 # View logs
 docker logs foundation-postgres --tail 50
 docker logs foundation-kv-cache --tail 50
-docker logs minio-obs --tail 50
-docker logs minio-bulk --tail 50
+docker logs foundation-s3-hot --tail 50
+docker logs foundation-s3-bulk --tail 50
 
 # Health checks
 docker exec foundation-postgres pg_isready -U postgres
 docker exec foundation-kv-cache valkey-cli -a <password> ping
-curl http://<r730xd_ip>:9000/minio/health/live   # MinIO Obs
-curl http://<r730xd_ip>:9002/minio/health/live   # MinIO Bulk
+curl http://<r730xd_ip>:7070/health   # s3-hot (versitygw)
+curl http://<r730xd_ip>:7072/health   # s3-bulk (versitygw)
 ```
 
 ### Creating application databases
@@ -137,8 +137,8 @@ Store application credentials in Ansible Vault and pass them to K8s via Secrets.
 
 - **PostgreSQL:** Daily `pg_dumpall` at 02:00 → `/mnt/zfs/foundation/postgres/backup/`, 7-day retention. Cron managed by Ansible.
 - **kv-cache (Valkey):** AOF (`appendfsync everysec`) + RDB snapshots. Data in `/mnt/zfs/foundation/kv-cache/data/`. Copy `dump.rdb` off-host for backup.
-- **MinIO Obs:** Loki/Tempo data with 30-day retention. ZFS snapshots available for point-in-time recovery.
-- **MinIO Bulk:** Container images and build artifacts on MergerFS with SnapRAID parity. `mc mirror` for offsite replication is a future enhancement.
+- **s3-hot (versitygw):** Loki/Tempo/Stalwart data with 30-day retention. Objects stored as plain files on the ZFS dataset; ZFS snapshots available for point-in-time recovery.
+- **s3-bulk (versitygw):** Container images and build artifacts on MergerFS with SnapRAID parity (objects are one immutable file each, SnapRAID-safe). `rclone` for offsite replication is a future enhancement.
 
 ### Configuration tuning
 
@@ -151,14 +151,14 @@ Default values are in each role's `defaults/main.yml`. Override via `--extra-var
 | `postgres_max_connections` | `100` | Max concurrent connections |
 | `kv_cache_maxmemory` | `"2gb"` | Memory limit before eviction |
 | `kv_cache_maxmemory_policy` | `"allkeys-lru"` | Eviction strategy |
-| `minio_obs_api_port` | `9000` | MinIO Obs S3 API port |
-| `minio_obs_console_port` | `9001` | MinIO Obs web console port |
-| `minio_bulk_api_port` | `9002` | MinIO Bulk S3 API port |
-| `minio_bulk_console_port` | `9003` | MinIO Bulk web console port |
+| `s3_hot_s3_port` | `7070` | s3-hot (versitygw) S3 API port |
+| `s3_hot_metrics_port` | `9102` | s3-hot statsd-exporter metrics port |
+| `s3_bulk_s3_port` | `7072` | s3-bulk (versitygw) S3 API port |
+| `s3_bulk_metrics_port` | `9103` | s3-bulk statsd-exporter metrics port |
 
 ## Observability Stack
 
-Prometheus, Loki, Tempo, Grafana, and Alloy run on the R730xd as Docker Compose services under `/opt/observability/`. Data persisted on the ZFS pool under `/mnt/zfs/observability/`. Loki and Tempo use MinIO Obs as their S3 backend. See [ADR-004](../docs/decisions/004-observability-stack-on-r730xd.md) for design rationale.
+Prometheus, Loki, Tempo, Grafana, and Alloy run on the R730xd as Docker Compose services under `/opt/observability/`. Data persisted on the ZFS pool under `/mnt/zfs/observability/`. Loki and Tempo use the s3-hot versitygw gateway as their S3 backend. See [ADR-004](../docs/decisions/004-observability-stack-on-r730xd.md) for design rationale.
 
 ### Endpoints
 

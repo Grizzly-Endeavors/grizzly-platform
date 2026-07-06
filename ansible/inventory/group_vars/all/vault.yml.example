@@ -20,8 +20,6 @@ vault_idrac_password: "your-idrac-password-here"
 # Foundation data stores (R730xd)
 vault_postgres_password: "your-postgres-superuser-password-here"
 vault_kv_cache_password: "your-kv-cache-password-here"
-vault_minio_root_user: "your-minio-root-user-here"
-vault_minio_root_password: "your-minio-root-password-here"
 
 # versitygw stores (ADR-055) — NOT set here. The s3-hot/s3-bulk root creds and
 # the versitygw Vault-IAM AppRole (role_id/secret_id) are generated and stored
@@ -33,8 +31,8 @@ vault_minio_root_password: "your-minio-root-password-here"
 
 # Observability stack (R730xd)
 vault_grafana_admin_password: "your-grafana-admin-password-here"
-vault_minio_observability_access_key: "your-minio-observability-access-key-here"
-vault_minio_observability_secret_key: "your-minio-observability-secret-key-here"
+vault_obs_s3_access_key: "your-obs-s3-access-key-here"
+vault_obs_s3_secret_key: "your-obs-s3-secret-key-here"
 
 # OpenBao bootstrap — Infisical universal-auth machine identity credentials.
 # These are the ONLY secrets the IaC layer needs once OpenBao is live; they

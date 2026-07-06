@@ -77,7 +77,7 @@ Consumers to move (ADR-055): **hot (`:9000`→`:7070`)** — Loki (`r730xd-loki`
 
 After all consumers are migrated and verified — **done 2026-07-06, this is the record of how**:
 
-- Remove the MinIO roles/creds and the `minio-obs`/`minio-bulk` Prometheus scrape jobs. (Loki/Tempo keep the `observability/minio-client` account — only its backing engine moved.)
+- Remove the MinIO roles/creds and the `minio-obs`/`minio-bulk` Prometheus scrape jobs. (Loki/Tempo keep the `observability/s3-client` account — only its backing engine moved.)
 - Stop + remove the containers: `docker compose down` in `/opt/foundation/minio-{obs,bulk}`, then remove those compose dirs.
 - Destroy the drained `tank/foundation/minio-obs` dataset (`zfs destroy -r`; s3-hot is its own dataset — no rename needed) and remove the MinIO bulk data dir (`rm -rf /mnt/pool/foundation/minio-bulk` — be precise, the sibling `s3-bulk` dir stays).
 - Drop the `.minio.sys/` SnapRAID exclude (keep `.sgwtmp/`).

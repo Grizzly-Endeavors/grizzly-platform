@@ -19,11 +19,11 @@ spec:
   data:
     - secretKey: accesskey
       remoteRef:
-        key: grizzly-platform/cicd/sccache-minio
+        key: grizzly-platform/cicd/sccache-s3
         property: access_key
     - secretKey: secretkey
       remoteRef:
-        key: grizzly-platform/cicd/sccache-minio
+        key: grizzly-platform/cicd/sccache-s3
         property: secret_key
 ---
 apiVersion: external-secrets.io/v1

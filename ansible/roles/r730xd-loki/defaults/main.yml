@@ -23,8 +23,8 @@ loki_s3_endpoint: "{{ r730xd_ip }}:7070"
 loki_s3_bucket: "observability-loki"
 loki_s3_region: "us-east-1"
 # Access keys from group_vars (vault-backed)
-# loki_s3_access_key: "{{ minio_observability_access_key }}"
-# loki_s3_secret_key: "{{ minio_observability_secret_key }}"
+# loki_s3_access_key: "{{ obs_s3_access_key }}"
+# loki_s3_secret_key: "{{ obs_s3_secret_key }}"
 
 # Retention
 loki_retention_period: "720h"  # 30 days
