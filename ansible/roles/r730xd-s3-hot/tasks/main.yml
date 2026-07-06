@@ -1,0 +1,112 @@
+---
+# r730xd-s3-hot: versitygw S3 gateway on the ZFS hot tier (ADR-055).
+# Modeled on r730xd-openbao: pinned image + systemd unit + mount guard.
+# Coexists with MinIO Obs during the migration (fresh ports/paths).
+
+- name: Create s3-hot directories
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: "{{ s3_hot_data_dir }}", mode: "0755" }
+    - { path: "{{ s3_hot_versions_dir }}", mode: "0755" }
+    - { path: "{{ s3_hot_compose_dir }}", mode: "0750" }
+    - { path: "{{ s3_hot_config_dir }}", mode: "0750" }
+
+# versitygw's Vault-IAM TLS wants the OpenBao CA as PEM *content* (not a path).
+# Read it off the host CA bundle and inline it into the compose environment.
+- name: Read OpenBao CA certificate (PEM content for Vault-IAM TLS)
+  ansible.builtin.slurp:
+    src: "{{ s3_hot_iam_vault_ca_path }}"
+  register: s3_hot_ca_slurp
+
+- name: Set OpenBao CA PEM fact
+  ansible.builtin.set_fact:
+    s3_hot_ca_pem: "{{ s3_hot_ca_slurp.content | b64decode }}"
+
+- name: Deploy s3-hot statsd-exporter mapping
+  ansible.builtin.template:
+    src: statsd-mapping.yml.j2
+    dest: "{{ s3_hot_config_dir }}/statsd-mapping.yml"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart foundation-s3-hot
+
+- name: Deploy s3-hot secrets env file
+  ansible.builtin.template:
+    src: versitygw.env.j2
+    dest: "{{ s3_hot_compose_dir }}/versitygw.env"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+  notify: Restart foundation-s3-hot
+
+- name: Deploy s3-hot docker-compose.yml
+  ansible.builtin.template:
+    src: docker-compose.yml.j2
+    dest: "{{ s3_hot_compose_dir }}/docker-compose.yml"
+    owner: root
+    group: root
+    mode: "0600"
+  notify: Restart foundation-s3-hot
+
+- name: Deploy foundation-s3-hot.service
+  ansible.builtin.template:
+    src: foundation-s3-hot.service.j2
+    dest: "/etc/systemd/system/{{ s3_hot_server_unit_name }}"
+    owner: root
+    group: root
+    mode: "0644"
+  register: s3_hot_unit
+
+- name: Reload systemd if unit changed
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+  when: s3_hot_unit.changed
+
+- name: Enable and start foundation-s3-hot.service
+  ansible.builtin.systemd_service:
+    name: "{{ s3_hot_server_unit_name }}"
+    enabled: true
+    state: started
+
+# Apply any config changes (handlers) before we health-check, so the probe
+# reflects the just-rendered config rather than a stale running container.
+- name: Apply pending s3-hot restarts before verification
+  ansible.builtin.meta: flush_handlers
+
+- name: Wait for s3-hot S3 API to accept connections
+  ansible.builtin.wait_for:
+    port: "{{ s3_hot_s3_port }}"
+    delay: 3
+    timeout: 60
+
+# A 200 here proves the gateway started cleanly, which means BOTH the OpenBao
+# Vault-IAM AppRole auth and the startup xattr-support validation passed —
+# versitygw refuses to start if either fails.
+- name: Verify s3-hot health (proves Vault-IAM auth + xattr validation passed)
+  ansible.builtin.uri:
+    url: "http://localhost:{{ s3_hot_s3_port }}/health"
+    status_code: 200
+  retries: 5
+  delay: 5
+  register: s3_hot_health
+  until: s3_hot_health.status == 200
+
+- name: Display s3-hot summary
+  ansible.builtin.debug:
+    msg:
+      - "=== versitygw s3-hot (ZFS hot tier) ==="
+      - ""
+      - "S3 API:   http://{{ r730xd_ip }}:{{ s3_hot_s3_port }}"
+      - "Metrics:  http://{{ r730xd_ip }}:{{ s3_hot_metrics_port }}/metrics (statsd-exporter)"
+      - "Data:     {{ s3_hot_data_dir }}"
+      - "Versions: {{ s3_hot_versions_dir }}"
+      - "Backing:  ZFS (tank/foundation/s3-hot)"
+      - "IAM:      OpenBao Vault mode — mount {{ s3_hot_iam_vault_mount_path }}, storage-path {{ s3_hot_iam_vault_storage_path }}"
+      - "Unit:     {{ s3_hot_server_unit_name }}"

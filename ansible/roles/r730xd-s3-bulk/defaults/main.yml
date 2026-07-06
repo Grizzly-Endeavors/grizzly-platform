@@ -1,0 +1,51 @@
+---
+# r730xd-s3-bulk: versitygw S3 gateway — BULK tier on MergerFS+SnapRAID (ADR-055)
+#
+# Stateless S3 gateway storing objects as plain POSIX files on the MergerFS
+# pool (/mnt/pool), one immutable file per object/version — the property that
+# lets SnapRAID protect it (contrast SeaweedFS/MinIO's mutable containers).
+# Durability rides on SnapRAID; IAM accounts live in OpenBao (Vault IAM mode,
+# set up by setup-versitygw-iam.yml). Replaces MinIO Bulk — stands up alongside
+# it on fresh ports/paths during the migration, and inherits the bulk-S3 role
+# once MinIO is retired. Config is 100% flags/env (versitygw holds no config
+# state) — see docs/runbooks/versitygw-cli.md.
+#
+# S3 API:  http://<r730xd_ip>:7072
+# Metrics: http://<r730xd_ip>:9103/metrics  (statsd-exporter sidecar;
+#          versitygw has no native Prometheus endpoint)
+
+# Images (pinned — verified current stable 2026-07-06; re-verify before bump)
+s3_bulk_versitygw_image: "ghcr.io/versity/versitygw:v1.6.0"
+s3_bulk_statsd_exporter_image: "prom/statsd-exporter:v0.30.0"
+
+# Networking — published ports coexist with live MinIO on 9000-9003
+s3_bulk_s3_port: 7072           # S3 API (LAN-published)
+s3_bulk_admin_port: 7073        # admin API — container-internal ONLY (not published)
+s3_bulk_metrics_port: 9103      # statsd-exporter Prometheus metrics (LAN-published)
+s3_bulk_statsd_port: 9125       # statsd-exporter UDP intake (compose-internal only)
+
+# Filesystem layout — MergerFS+SnapRAID bulk tier
+s3_bulk_data_dir: "/mnt/pool/foundation/s3-bulk/data"
+s3_bulk_versions_dir: "/mnt/pool/foundation/s3-bulk/versions"
+s3_bulk_compose_dir: "/opt/foundation/s3-bulk"
+s3_bulk_config_dir: "/etc/versitygw/s3-bulk"
+
+# systemd unit (owns the compose lifecycle + boot ordering / mount guard)
+s3_bulk_server_unit_name: "foundation-s3-bulk.service"
+
+# S3 region string
+s3_bulk_region: "us-east-1"
+
+# OpenBao Vault-IAM backend (mount + approle from setup-versitygw-iam.yml)
+s3_bulk_iam_vault_endpoint: "{{ openbao_api_addr }}"
+s3_bulk_iam_vault_mount_path: "versitygw-iam"
+s3_bulk_iam_vault_storage_path: "s3-bulk"   # per-instance account namespace under the shared mount
+s3_bulk_iam_vault_ca_path: "{{ openbao_tls_ca_path | default('/etc/openbao/tls/ca.crt') }}"
+
+# Root credentials + shared IAM AppRole creds — sourced from OpenBao via
+# group_vars/all/vars.yml (inherited at play time; commented here like the
+# MinIO roles so the role file itself never hardcodes secrets):
+#   s3_bulk_root_access_key:    "{{ vault_s3_bulk_root_access_key }}"
+#   s3_bulk_root_secret_key:    "{{ vault_s3_bulk_root_secret_key }}"
+#   versitygw_iam_role_id:      "{{ vault_versitygw_iam_role_id }}"
+#   versitygw_iam_role_secret:  "{{ vault_versitygw_iam_secret_id }}"

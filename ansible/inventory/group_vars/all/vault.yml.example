@@ -23,6 +23,14 @@ vault_kv_cache_password: "your-kv-cache-password-here"
 vault_minio_root_user: "your-minio-root-user-here"
 vault_minio_root_password: "your-minio-root-password-here"
 
+# versitygw stores (ADR-055) — NOT set here. The s3-hot/s3-bulk root creds and
+# the versitygw Vault-IAM AppRole (role_id/secret_id) are generated and stored
+# directly in OpenBao by setup-versitygw-iam.yml (source of truth), then read
+# back via ansible/vars/openbao_secrets.yml as:
+#   vault_s3_hot_root_access_key / vault_s3_hot_root_secret_key
+#   vault_s3_bulk_root_access_key / vault_s3_bulk_root_secret_key
+#   vault_versitygw_iam_role_id / vault_versitygw_iam_secret_id
+
 # Observability stack (R730xd)
 vault_grafana_admin_password: "your-grafana-admin-password-here"
 vault_minio_observability_access_key: "your-minio-observability-access-key-here"

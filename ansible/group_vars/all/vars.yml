@@ -23,6 +23,16 @@ minio_obs_root_password: "{{ vault_minio_obs_root_password }}"
 minio_bulk_root_user: "{{ vault_minio_bulk_root_user }}"
 minio_bulk_root_password: "{{ vault_minio_bulk_root_password }}"
 
+# versitygw stores (ADR-055) — replacing MinIO Obs/Bulk. Root creds per gateway
+# + the shared OpenBao AppRole the gateways use for their Vault-IAM account
+# store. Provisioned into OpenBao by setup-versitygw-iam.yml.
+s3_hot_root_access_key: "{{ vault_s3_hot_root_access_key }}"
+s3_hot_root_secret_key: "{{ vault_s3_hot_root_secret_key }}"
+s3_bulk_root_access_key: "{{ vault_s3_bulk_root_access_key }}"
+s3_bulk_root_secret_key: "{{ vault_s3_bulk_root_secret_key }}"
+versitygw_iam_role_id: "{{ vault_versitygw_iam_role_id }}"
+versitygw_iam_role_secret: "{{ vault_versitygw_iam_secret_id }}"
+
 # Observability stack (R730xd)
 grafana_admin_password: "{{ vault_grafana_admin_password }}"
 minio_observability_access_key: "{{ vault_minio_observability_access_key }}"
