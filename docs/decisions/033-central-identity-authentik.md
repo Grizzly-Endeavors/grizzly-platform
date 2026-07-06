@@ -29,7 +29,7 @@ This ADR records the stand-up decision (core service). App integrations — OIDC
 ## Alternatives Considered
 
 - **Put Authentik in lab-apps.** Lighter deploy pattern (no Kyverno/ADR ceremony), but it would make platform services depend on a personal-app repo for auth, and forward-auth couples to platform-owned ingress. Wrong tier.
-- **Bundle per-app Postgres/Redis (as Nextcloud does in lab-apps).** Nextcloud isolates its DB to avoid handing a *lab app* the foundation superuser. Authentik *is* platform infrastructure, so sharing the foundation stores is appropriate and avoids running yet another stateful pair in-cluster (nodes are diskless — ADR-003).
+- **Bundle per-app Postgres/Redis (as Nextcloud does in lab-apps).** Nextcloud isolates its DB to avoid handing a *lab app* the foundation superuser. Authentik *is* platform infrastructure, so sharing the foundation stores is appropriate and avoids running yet another stateful pair in-cluster (durable state belongs on the foundation stores, not node disks — ADR-003).
 - **Extend the `r730xd-postgres` role with a declarative databases list.** Cleaner long-term for many platform DBs, but a larger change to a shared role for a single consumer today. A one-shot provisioning playbook is the lighter touch; revisit if more platform services need foundation databases.
 - **Stand up a dedicated Valkey for Authentik now.** The user is mid-migration from Redis to Valkey (OSS-license driven). Authentik only needs `host:port:password`, so the cutover is transparent on the shared instance — a separate cache is more moving parts than a single shared cache warrants.
 

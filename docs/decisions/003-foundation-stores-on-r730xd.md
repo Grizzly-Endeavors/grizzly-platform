@@ -3,6 +3,8 @@
 **Date:** 2026-04-01
 **Status:** Accepted
 
+> **Amendment (2026-07-06):** The original Context below assumed diskless, PXE-booted K8s nodes (per the then-current [ADR-005](005-nfs-root-for-pxe-nodes.md)). [ADR-013](013-local-disk-over-pxe-boot.md) superseded that — nodes now boot from local disk. **This does not change the decision.** Node disks hold only the OS; durable application state still belongs *exclusively* on the R730xd foundation stores. The operative rationale is not that nodes are physically stateless — it's a **simple management and recovery story**: one place to back up, snapshot, and restore, rather than durable state scattered across per-node disks. Where a workload genuinely needs a filesystem the SQL/KV/S3 stores can't provide (e.g. a media library), it backs onto foundation-provided storage such as NFS from the R730xd — still not a node's local disk.
+
 ## Context
 
 The lab architecture places all stateful workloads on the R730xd storage server. K8s nodes are diskless (PXE boot) and treat compute as disposable. Services that need durable state — PostgreSQL, Redis, MinIO — must run on the R730xd, with K8s workloads connecting over the LAN at `<r730xd_ip>:<port>`.
