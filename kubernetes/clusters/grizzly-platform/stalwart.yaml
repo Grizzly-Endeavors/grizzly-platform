@@ -1,0 +1,26 @@
+# Stalwart mail server (ADR-050) as its own Flux Kustomization rather than a
+# member of the `infrastructure` Kustomization. Mail has external dependencies
+# that can leave the pod transiently unhealthy (cert issuance, foundation-store
+# reachability); keeping it separate means a not-yet-ready mail pod never blocks
+# core infrastructure from reaching Ready (which would cascade into the
+# external-secrets-stores / cert-manager-issuers Kustomizations that depend on
+# it). dependsOn the stores + issuers so the ClusterSecretStore and the LE
+# ClusterIssuer exist before the ExternalSecret and Certificate are applied.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: stalwart
+  namespace: flux-system
+spec:
+  dependsOn:
+    - name: infrastructure
+    - name: external-secrets-stores
+    - name: cert-manager-issuers
+  interval: 5m
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  path: ./kubernetes/infrastructure/stalwart
+  prune: true
+  wait: true
+  timeout: 5m

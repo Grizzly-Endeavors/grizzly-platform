@@ -4,10 +4,12 @@
 # ACME DNS-01 challenge for mail.grizzly-endeavors.com by writing a
 # _acme-challenge TXT record.
 #
-# Reuses the same token that Caddy uses for wildcard DNS-01 on the VPS
-# (secret/grizzly-platform/platform/cloudflare, property api_token) — it
-# already carries Zone:DNS:Edit scope on grizzly-endeavors.com. The
-# public half of nothing here is secret; the token itself is.
+# DEDICATED cert-manager token (platform/cloudflare-certmanager), NOT the
+# Caddy/VPS token: the shared platform/cloudflare token is source-IP-locked to
+# the VPS, so cert-manager (egressing from the cluster/home IP) gets Cloudflare
+# error 9109 "Cannot use the access token from location". This token is scoped
+# to Zone:Read + DNS:Edit on grizzly-endeavors.com with no IP restriction. See
+# ADR-052.
 apiVersion: external-secrets.io/v1
 kind: ExternalSecret
 metadata:
@@ -24,5 +26,5 @@ spec:
   data:
     - secretKey: api-token
       remoteRef:
-        key: grizzly-platform/platform/cloudflare
+        key: grizzly-platform/platform/cloudflare-certmanager
         property: api_token

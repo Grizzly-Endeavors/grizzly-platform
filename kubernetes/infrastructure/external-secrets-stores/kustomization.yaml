@@ -22,4 +22,3 @@ resources:
   - flux-system.yaml
   - cosign.yaml
   - cloudflare-api-token.yaml
-  - stalwart.yaml
