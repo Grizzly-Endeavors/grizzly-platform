@@ -54,9 +54,16 @@ spec:
           securityContext:
             runAsUser: 1000
             runAsGroup: 1000
-            allowPrivilegeEscalation: false
+            # The stalwart binary carries cap_net_bind_service=ep (a file
+            # capability) so it can bind the privileged mail ports (25/465/587/993)
+            # as non-root. runc refuses to exec an effective-file-capability binary
+            # under no_new_privs ("exec: operation not permitted"), so
+            # allowPrivilegeEscalation must be true; the bounding set is dropped to
+            # ALL then re-adds only NET_BIND_SERVICE, so nothing else can be raised.
+            allowPrivilegeEscalation: true
             capabilities:
               drop: ["ALL"]
+              add: ["NET_BIND_SERVICE"]
           ports:
             - name: smtp
               containerPort: 25
