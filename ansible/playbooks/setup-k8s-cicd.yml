@@ -87,9 +87,13 @@
       no_log: true
 
 # ============================================================
-# Play 2: Create Argo namespace, secrets, and MinIO bucket
+# Play 2: Create Argo namespace
 # ============================================================
-- name: Create Argo namespace and MinIO credentials
+# Argo's artifact bucket + account moved to setup-argo-stores.yml (versitygw
+# s3-bulk, ADR-055); the argo-minio-credentials secret is ESO-managed
+# (external-secrets-stores/argo-workflows.yaml). This play now only ensures the
+# namespace exists ahead of Flux/ESO reconciliation.
+- name: Create Argo namespace
   hosts: localhost
   connection: local
   gather_facts: no
@@ -97,80 +101,13 @@
   vars:
     kubeconfig: "{{ lookup('env', 'HOME') }}/.kube/config"
 
-  vars_files:
-    - "{{ playbook_dir }}/../../ansible/inventory/group_vars/all/vault.yml"
-    - "{{ playbook_dir }}/../../ansible/inventory/group_vars/all/vars.yml"
-    - "{{ playbook_dir }}/../../ansible/inventory/group_vars/all/network.yml"
-    - "{{ playbook_dir }}/../vars/openbao_auth.yml"
-
-  pre_tasks:
-    - name: Load OpenBao-sourced platform secrets
-      ansible.builtin.include_vars:
-        file: "{{ playbook_dir }}/../vars/openbao_secrets.yml"
-      when: openbao_read_enabled | default(false) | bool
-      tags: [always]
-
   tasks:
-    - name: Verify Argo MinIO credentials are set
-      ansible.builtin.assert:
-        that:
-          - vault_argo_minio_access_key is defined and vault_argo_minio_access_key | length > 0
-          - vault_argo_minio_secret_key is defined and vault_argo_minio_secret_key | length > 0
-        fail_msg: >
-          vault_argo_minio_access_key and vault_argo_minio_secret_key must be
-          set in vault.yml. Create a MinIO user on the bulk instance for Argo.
-        success_msg: "Argo MinIO credentials are set"
-
     - name: Create Argo namespace
       ansible.builtin.shell: |
         kubectl create namespace argo --dry-run=client -o yaml | kubectl apply -f -
       environment:
         KUBECONFIG: "{{ kubeconfig }}"
       changed_when: false
-
-    - name: Create Argo MinIO credentials secret
-      ansible.builtin.shell: |
-        kubectl create secret generic argo-minio-credentials \
-          --from-literal=accesskey="{{ vault_argo_minio_access_key }}" \
-          --from-literal=secretkey="{{ vault_argo_minio_secret_key }}" \
-          -n argo \
-          --dry-run=client -o yaml | kubectl apply -f -
-      environment:
-        KUBECONFIG: "{{ kubeconfig }}"
-      changed_when: false
-      no_log: true
-
-    - name: Ensure argo-artifacts bucket exists on MinIO bulk
-      ansible.builtin.command: mc mb --ignore-existing minio-bulk/argo-artifacts
-      changed_when: false
-      failed_when: false
-
-    - name: Create Argo MinIO user on bulk instance
-      ansible.builtin.shell: |
-        mc admin user add minio-bulk \
-          "{{ vault_argo_minio_access_key }}" \
-          "{{ vault_argo_minio_secret_key }}" 2>&1 || true
-      changed_when: false
-      no_log: true
-
-    - name: Grant Argo user readwrite access to argo-artifacts bucket
-      ansible.builtin.shell: |
-        cat <<'EOF' | mc admin policy create minio-bulk argo-artifacts-rw /dev/stdin
-        {
-          "Version": "2012-10-17",
-          "Statement": [{
-            "Effect": "Allow",
-            "Action": ["s3:*"],
-            "Resource": [
-              "arn:aws:s3:::argo-artifacts",
-              "arn:aws:s3:::argo-artifacts/*"
-            ]
-          }]
-        }
-        EOF
-        mc admin policy attach minio-bulk argo-artifacts-rw --user "{{ vault_argo_minio_access_key }}"
-      changed_when: false
-      no_log: true
 
 # NOTE: sccache build-cache provisioning moved to setup-sccache-stores.yml
 # (versitygw s3-bulk, ADR-055) and the sccache-s3-credentials secret is now

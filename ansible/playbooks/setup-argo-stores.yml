@@ -1,0 +1,61 @@
+---
+# setup-argo-stores.yml — foundation-side provisioning for the Argo Workflows
+# artifact repository (ADR-018, ADR-055 cutover).
+#
+# Extracted from setup-k8s-cicd.yml (which now only deploys the ARC/Argo Flux
+# stack). One scoped `userplus` account + an `argo-artifacts` bucket it owns, on
+# the s3-bulk versitygw gateway. Argo reads the same keys via the ESO-managed
+# `argo-minio-credentials` secret (external-secrets-stores/argo-workflows.yaml →
+# cicd/argo-minio). Provisioning runs in-container on the r730xd via the shared
+# versitygw admin task; there is no Postgres side for Argo.
+#
+# Credentials: secret/grizzly-platform/cicd/argo-minio (access_key, secret_key)
+# — reused as the versitygw account creds so only the consumer endpoint changes
+# at cutover. s3-bulk root creds (admin) from secret/grizzly-platform/stores/s3-bulk.
+#
+# Prerequisites:
+#   - s3-bulk versitygw gateway running (deploy-foundation-stores.yml --tags s3-bulk).
+#   - OpenBao seeded: cicd/argo-minio + stores/s3-bulk.
+#
+# Usage:
+#   ansible-playbook -i ansible/inventory ansible/playbooks/setup-argo-stores.yml \
+#     --vault-password-file .vault_pass -v
+
+- name: Provision Argo artifact bucket + account on s3-bulk
+  hosts: r730xd
+  become: yes
+  gather_facts: no
+
+  vars:
+    openbao_read_enabled: true
+
+  vars_files:
+    - "{{ playbook_dir }}/../vars/openbao_auth.yml"
+
+  pre_tasks:
+    - name: Load OpenBao-sourced platform secrets
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/../vars/openbao_secrets.yml"
+
+    - name: Verify Argo + s3-bulk credentials are present in OpenBao
+      ansible.builtin.assert:
+        that:
+          - vault_argo_minio_access_key | default('') | length > 0
+          - vault_argo_minio_secret_key | default('') | length > 0
+          - vault_s3_bulk_root_access_key | default('') | length > 0
+          - vault_s3_bulk_root_secret_key | default('') | length > 0
+        fail_msg: >
+          cicd/argo-minio (access_key, secret_key) and stores/s3-bulk
+          (root_access_key, root_secret_key) must be seeded in OpenBao.
+        success_msg: "Argo + s3-bulk credentials are set"
+
+  tasks:
+    - name: Provision the argo-artifacts account + bucket on s3-bulk
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/versitygw-provision-account.yml"
+      vars:
+        vgw_instance: s3-bulk
+        vgw_root_access: "{{ vault_s3_bulk_root_access_key }}"
+        vgw_root_secret: "{{ vault_s3_bulk_root_secret_key }}"
+        vgw_access: "{{ vault_argo_minio_access_key }}"
+        vgw_secret: "{{ vault_argo_minio_secret_key }}"
+        vgw_bucket: argo-artifacts
