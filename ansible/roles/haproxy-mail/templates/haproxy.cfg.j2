@@ -1,0 +1,31 @@
+# {{ ansible_managed }}
+# L4 (TCP) ingress for the Stalwart mail ports (ADR-051). HAProxy passes the
+# TLS stream through untouched (Stalwart terminates TLS) and prepends PROXY
+# protocol v2 to the backend so Stalwart recovers the true client IP.
+# The mail port -> NodePort map lives in the haproxy-mail role defaults.
+
+global
+    log /dev/log local0
+    log /dev/log local1 notice
+    maxconn {{ haproxy_mail_maxconn }}
+    daemon
+
+defaults
+    mode                tcp
+    log                 global
+    option              tcplog
+    option              dontlognull
+    timeout connect     {{ haproxy_mail_timeout_connect }}
+    timeout client      {{ haproxy_mail_timeout_client }}
+    timeout server      {{ haproxy_mail_timeout_server }}
+    maxconn             {{ haproxy_mail_maxconn }}
+
+{% for p in haproxy_mail_ports %}
+frontend mail_{{ p.name }}_in
+    bind :{{ p.listen }}
+    default_backend mail_{{ p.name }}_be
+
+backend mail_{{ p.name }}_be
+    server stalwart {{ haproxy_mail_backend_host }}:{{ p.nodeport }} send-proxy-v2
+
+{% endfor %}

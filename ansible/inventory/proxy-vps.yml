@@ -143,3 +143,12 @@ all:
         - { port: '80', proto: 'tcp', comment: 'HTTP' }
         - { port: '443', proto: 'tcp', comment: 'HTTPS' }
         - { port: '51822', proto: 'udp', comment: 'WireGuard (ingress tunnel to R730xd)' }
+
+      # Mail L4 ingress (haproxy-mail role, ADR-051) — HAProxy binds these and
+      # forwards to Stalwart over the wg0 tunnel with PROXY protocol v2.
+      enable_haproxy_mail: true
+      ufw_mail_rules:
+        - { port: '25', proto: 'tcp', comment: 'SMTP (mail ingress)' }
+        - { port: '465', proto: 'tcp', comment: 'SMTPS/submissions (mail ingress)' }
+        - { port: '587', proto: 'tcp', comment: 'submission (mail ingress)' }
+        - { port: '993', proto: 'tcp', comment: 'IMAPS (mail ingress)' }

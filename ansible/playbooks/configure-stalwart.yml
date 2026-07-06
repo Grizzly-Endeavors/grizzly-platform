@@ -9,8 +9,9 @@
 # ExternalSecret → OpenBao platform/stalwart admin_password).
 #
 # It applies the committed declarative plan (files/stalwart/plan.json — blob
-# store, TLS certificate, domain, the submission:587 listener) and then does
-# the pieces the plan can't express declaratively:
+# store, TLS certificate, domain, the four mail listeners with their PROXY
+# trusted-networks, and the internal-IP ban allowlist) and then does the pieces
+# the plan can't express declaratively:
 #   - SystemSettings default domain/cert (server-generated object IDs, resolved
 #     by querying the live objects — the CLI's in-plan "#ref" resolution is
 #     unreliable for id<Certificate> fields).
@@ -56,6 +57,12 @@
     stalwart_account_local: "bearflinn"
     stalwart_namespace: "stalwart"
     stalwart_plan_dir: "{{ playbook_dir }}/../files/stalwart"
+    # Blob-store and listener (bind / PROXY trusted-networks) changes only take
+    # effect after the pod is rebuilt — ReloadSettings does not re-bind sockets
+    # or rebuild the S3 client. First configuration restarts automatically
+    # (stalwart_fresh_config); set this true when re-running after editing those
+    # parts of plan.json so the change is picked up.
+    stalwart_force_restart: false
 
   vars_files:
     - "{{ playbook_dir }}/../../ansible/inventory/group_vars/all/vault.yml"
@@ -109,7 +116,7 @@
       ansible.builtin.set_fact:
         stalwart_fresh_config: "{{ stalwart_account_local not in stalwart_account_before.stdout }}"
 
-    - name: Apply the declarative plan (blob store, cert, domain, 587 listener)
+    - name: Apply the declarative plan (blob store, cert, domain, listeners, allowlist)
       ansible.builtin.command:
         argv:
           - docker
@@ -366,7 +373,7 @@
           - deploy/stalwart
       environment:
         KUBECONFIG: "{{ kubeconfig }}"
-      when: stalwart_fresh_config | bool
+      when: stalwart_fresh_config | bool or stalwart_force_restart | bool
       changed_when: true
 
     - name: Wait for the Stalwart rollout to complete
@@ -381,5 +388,5 @@
           - --timeout=120s
       environment:
         KUBECONFIG: "{{ kubeconfig }}"
-      when: stalwart_fresh_config | bool
+      when: stalwart_fresh_config | bool or stalwart_force_restart | bool
       changed_when: false
