@@ -4,9 +4,10 @@
 # through, ADR-051), so the cert must live in the cluster — Caddy's VPS wildcard
 # never touches the raw mail ports.
 #
-# Starts on letsencrypt-STAGING to validate the DNS-01 flow without burning the
-# LE prod rate limit; flip issuerRef to letsencrypt-prod before the MX cutover
-# (real IMAP/SMTP clients reject the staging CA).
+# Validated the DNS-01 flow on letsencrypt-STAGING first; now on
+# letsencrypt-prod so real IMAP/SMTP clients trust the CA. Stalwart mounts this
+# Secret and serves it as the default TLS cert (SystemSettings.defaultCertificateId,
+# set by configure-stalwart.yml) via File references (/etc/stalwart/tls/tls.{crt,key}).
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
@@ -15,7 +16,7 @@ metadata:
 spec:
   secretName: stalwart-tls
   issuerRef:
-    name: letsencrypt-staging
+    name: letsencrypt-prod
     kind: ClusterIssuer
   dnsNames:
     - mail.grizzly-endeavors.com
