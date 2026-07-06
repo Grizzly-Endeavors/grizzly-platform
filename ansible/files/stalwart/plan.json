@@ -1,0 +1,4 @@
+{"@type":"upsert","object":"Certificate","matchOn":["subjectAlternativeNames"],"value":{"cert-mail":{"certificate":{"@type":"File","filePath":"/etc/stalwart/tls/tls.crt"},"privateKey":{"@type":"File","filePath":"/etc/stalwart/tls/tls.key"},"subjectAlternativeNames":{"mail.grizzly-endeavors.com":true}}}}
+{"@type":"upsert","object":"Domain","matchOn":["name"],"value":{"domain-main":{"name":"grizzly-endeavors.com","isEnabled":true}}}
+{"@type":"upsert","object":"NetworkListener","matchOn":["name"],"value":{"listener-submission":{"name":"submission","bind":{"[::]:587":true},"protocol":"smtp","useTls":true,"tlsImplicit":false}}}
+{"@type":"update","object":"BlobStore","value":{"@type":"S3","bucket":"stalwart","region":{"@type":"Custom","customRegion":"us-east-1","customEndpoint":"http://10.0.0.200:9000"},"accessKey":"stalwart","secretKey":{"@type":"EnvironmentVariable","variableName":"S3_SECRET_KEY"}}}

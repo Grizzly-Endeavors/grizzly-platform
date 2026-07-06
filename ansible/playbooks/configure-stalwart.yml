@@ -1,0 +1,385 @@
+---
+# Configure the Stalwart mail server via its first-party CLI (Stalwart 0.16).
+#
+# Stalwart 0.16 keeps everything except the data-store object (config.json)
+# in Postgres, applied through the schema-driven CLI (ghcr.io/stalwartlabs/cli).
+# This playbook drives that CLI from the control node against the live server
+# (https://mail.grizzly-endeavors.com), authenticating as the deterministic
+# recovery admin (STALWART_RECOVERY_ADMIN, wired via the stalwart-secrets
+# ExternalSecret → OpenBao platform/stalwart admin_password).
+#
+# It applies the committed declarative plan (files/stalwart/plan.json — blob
+# store, TLS certificate, domain, the submission:587 listener) and then does
+# the pieces the plan can't express declaratively:
+#   - SystemSettings default domain/cert (server-generated object IDs, resolved
+#     by querying the live objects — the CLI's in-plan "#ref" resolution is
+#     unreliable for id<Certificate> fields).
+#   - stdout logging (Stalwart defaults to a file tracer inside the container).
+#   - the bootstrap mailbox + its password (a directory secret can't be an
+#     env reference or committed to this public repo — it is injected here from
+#     OpenBao). TEMPORARY: accounts move to an Authentik-backed directory later.
+#
+# Gotchas baked in (learned the hard way):
+#   - Stalwart 0.16 does NOT expand %{env:...}% macros anywhere; secrets use
+#     typed {"@type":"EnvironmentVariable"} objects (blob-store secretKey) or
+#     are injected as literal values here (mailbox password).
+#   - Changing the blob-store backend needs a POD RESTART, not just
+#     ReloadSettings — the S3 client is built at startup. On first configuration
+#     this playbook restarts the Deployment; re-runs skip it.
+#
+# Prerequisites:
+#   - Stalwart deployed and Running; stalwart-secrets carries a non-empty
+#     STALWART_RECOVERY_ADMIN (PR #109). Verify: kubectl -n stalwart get secret
+#     stalwart-secrets -o jsonpath='{.data.STALWART_RECOVERY_ADMIN}' | base64 -d
+#   - OpenBao platform/stalwart holds admin_password + account_password.
+#   - docker + kubeconfig (~/.kube/config) on the control node (the jumpbox has both).
+#   - Vault decrypted (--vault-password-file or .vault_pass).
+#
+# Usage:
+#   ansible-playbook ansible/playbooks/configure-stalwart.yml \
+#     --vault-password-file .vault_pass -v
+#
+# See docs/runbooks/mail.md and ADR-050.
+
+- name: Configure Stalwart mail server via the first-party CLI
+  hosts: localhost
+  connection: local
+  gather_facts: no
+
+  vars:
+    kubeconfig: "{{ lookup('env', 'HOME') }}/.kube/config"
+    openbao_read_enabled: true
+    stalwart_cli_image: "ghcr.io/stalwartlabs/cli:1.0.10"
+    stalwart_url: "https://mail.grizzly-endeavors.com"
+    stalwart_domain: "grizzly-endeavors.com"
+    stalwart_tls_san: "mail.grizzly-endeavors.com"
+    stalwart_account_local: "bearflinn"
+    stalwart_namespace: "stalwart"
+    stalwart_plan_dir: "{{ playbook_dir }}/../files/stalwart"
+
+  vars_files:
+    - "{{ playbook_dir }}/../../ansible/inventory/group_vars/all/vault.yml"
+    - "{{ playbook_dir }}/../../ansible/inventory/group_vars/all/vars.yml"
+    # OpenBao auth defaults — inert unless openbao_read_enabled is true.
+    - "{{ playbook_dir }}/../vars/openbao_auth.yml"
+
+  pre_tasks:
+    - name: Load OpenBao-sourced platform secrets
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/../vars/openbao_secrets.yml"
+      when: openbao_read_enabled | default(false) | bool
+      tags: [always]
+
+    - name: Assert docker is available on the control node
+      ansible.builtin.command: docker --version
+      changed_when: false
+
+  tasks:
+    # The CLI auth env is passed *through* into the container (docker run -e VAR
+    # with no value inherits from the ansible process env set here), so the
+    # admin password never appears on a command line. no_log guards the rest.
+    - name: Detect whether the bootstrap mailbox already exists
+      ansible.builtin.command:
+        argv:
+          - docker
+          - run
+          - --rm
+          - -e
+          - STALWART_URL
+          - -e
+          - STALWART_USER
+          - -e
+          - STALWART_PASSWORD
+          - "{{ stalwart_cli_image }}"
+          - -k
+          - query
+          - Account
+          - --where
+          - "name={{ stalwart_account_local }}"
+          - --json
+      environment: &cli_env
+        STALWART_URL: "{{ stalwart_url }}"
+        STALWART_USER: admin
+        STALWART_PASSWORD: "{{ vault_stalwart_admin_password }}"
+      register: stalwart_account_before
+      changed_when: false
+      no_log: true
+
+    - name: Record fresh-vs-existing configuration state
+      ansible.builtin.set_fact:
+        stalwart_fresh_config: "{{ stalwart_account_local not in stalwart_account_before.stdout }}"
+
+    - name: Apply the declarative plan (blob store, cert, domain, 587 listener)
+      ansible.builtin.command:
+        argv:
+          - docker
+          - run
+          - --rm
+          - -v
+          - "{{ stalwart_plan_dir }}:/plan:ro"
+          - -e
+          - STALWART_URL
+          - -e
+          - STALWART_USER
+          - -e
+          - STALWART_PASSWORD
+          - "{{ stalwart_cli_image }}"
+          - -k
+          - apply
+          - --file
+          - /plan/plan.json
+      environment: *cli_env
+      register: stalwart_apply
+      changed_when: "'0 updated, 0 created' not in stalwart_apply.stdout"
+      no_log: true
+
+    - name: Look up the domain object id
+      ansible.builtin.command:
+        argv:
+          - docker
+          - run
+          - --rm
+          - -e
+          - STALWART_URL
+          - -e
+          - STALWART_USER
+          - -e
+          - STALWART_PASSWORD
+          - "{{ stalwart_cli_image }}"
+          - -k
+          - query
+          - Domain
+          - --where
+          - "name={{ stalwart_domain }}"
+          - --json
+      environment: *cli_env
+      register: stalwart_domain_q
+      changed_when: false
+      no_log: true
+
+    - name: Look up the TLS certificate object id
+      ansible.builtin.command:
+        argv:
+          - docker
+          - run
+          - --rm
+          - -e
+          - STALWART_URL
+          - -e
+          - STALWART_USER
+          - -e
+          - STALWART_PASSWORD
+          - "{{ stalwart_cli_image }}"
+          - -k
+          - query
+          - Certificate
+          - --where
+          - "subjectAlternativeNames={{ stalwart_tls_san }}"
+          - --json
+      environment: *cli_env
+      register: stalwart_cert_q
+      changed_when: false
+      no_log: true
+
+    - name: Resolve the domain and certificate ids
+      ansible.builtin.set_fact:
+        stalwart_domain_id: "{{ (stalwart_domain_q.stdout_lines | select('match', '.+') | first | from_json).id }}"
+        stalwart_cert_id: "{{ (stalwart_cert_q.stdout_lines | select('match', '.+') | first | from_json).id }}"
+
+    - name: Set SystemSettings default hostname, domain, and certificate
+      ansible.builtin.command:
+        argv:
+          - docker
+          - run
+          - --rm
+          - -e
+          - STALWART_URL
+          - -e
+          - STALWART_USER
+          - -e
+          - STALWART_PASSWORD
+          - "{{ stalwart_cli_image }}"
+          - -k
+          - update
+          - SystemSettings
+          - --json
+          - "{{ {'defaultHostname': stalwart_tls_san, 'defaultDomainId': stalwart_domain_id, 'defaultCertificateId': stalwart_cert_id} | to_json }}"
+      environment: *cli_env
+      register: stalwart_syssettings
+      changed_when: "'Updated' in stalwart_syssettings.stdout"
+      no_log: true
+
+    # --- stdout logging (Stalwart defaults to a file tracer in the container) --
+    - name: List configured tracers
+      ansible.builtin.command:
+        argv:
+          - docker
+          - run
+          - --rm
+          - -e
+          - STALWART_URL
+          - -e
+          - STALWART_USER
+          - -e
+          - STALWART_PASSWORD
+          - "{{ stalwart_cli_image }}"
+          - -k
+          - query
+          - Tracer
+          - --json
+      environment: *cli_env
+      register: stalwart_tracers
+      changed_when: false
+      no_log: true
+
+    - name: Add a stdout tracer (container-runtime logging) if absent
+      ansible.builtin.command:
+        argv:
+          - docker
+          - run
+          - --rm
+          - -e
+          - STALWART_URL
+          - -e
+          - STALWART_USER
+          - -e
+          - STALWART_PASSWORD
+          - "{{ stalwart_cli_image }}"
+          - -k
+          - create
+          - Tracer/Stdout
+          - --json
+          - '{"enable":true,"level":"info","ansi":false}'
+      environment: *cli_env
+      register: stalwart_stdout_tracer
+      when: '"Stdout" not in stalwart_tracers.stdout'
+      changed_when: "'Created' in stalwart_stdout_tracer.stdout"
+      no_log: true
+
+    # --- bootstrap mailbox (TEMPORARY — Authentik-backed directory later) ------
+    - name: Create the bootstrap mailbox account if absent
+      ansible.builtin.command:
+        argv:
+          - docker
+          - run
+          - --rm
+          - -e
+          - STALWART_URL
+          - -e
+          - STALWART_USER
+          - -e
+          - STALWART_PASSWORD
+          - "{{ stalwart_cli_image }}"
+          - -k
+          - create
+          - Account/User
+          - --json
+          - "{{ {'name': stalwart_account_local, 'domainId': stalwart_domain_id, 'description': 'Bootstrap mailbox (temporary; to be replaced by an Authentik-backed directory)'} | to_json }}"
+      environment: *cli_env
+      register: stalwart_account_create
+      when: stalwart_fresh_config | bool
+      changed_when: "'Created' in stalwart_account_create.stdout"
+      no_log: true
+
+    - name: Look up the mailbox account id
+      ansible.builtin.command:
+        argv:
+          - docker
+          - run
+          - --rm
+          - -e
+          - STALWART_URL
+          - -e
+          - STALWART_USER
+          - -e
+          - STALWART_PASSWORD
+          - "{{ stalwart_cli_image }}"
+          - -k
+          - query
+          - Account
+          - --where
+          - "name={{ stalwart_account_local }}"
+          - --json
+      environment: *cli_env
+      register: stalwart_account_q
+      changed_when: false
+      no_log: true
+
+    - name: Inject the mailbox password from OpenBao (directory secret)
+      ansible.builtin.command:
+        argv:
+          - docker
+          - run
+          - --rm
+          - -e
+          - STALWART_URL
+          - -e
+          - STALWART_USER
+          - -e
+          - STALWART_PASSWORD
+          - "{{ stalwart_cli_image }}"
+          - -k
+          - update
+          - Account
+          - "{{ (stalwart_account_q.stdout_lines | select('match', '.+') | first | from_json).id }}"
+          - --field
+          - "credentials/0={{ {'@type': 'Password', 'secret': vault_stalwart_account_password} | to_json }}"
+      environment: *cli_env
+      register: stalwart_account_pw
+      changed_when: "'Updated' in stalwart_account_pw.stdout"
+      no_log: true
+
+    # --- apply / reload -------------------------------------------------------
+    - name: Reload settings and TLS certificates
+      ansible.builtin.command:
+        argv:
+          - docker
+          - run
+          - --rm
+          - -e
+          - STALWART_URL
+          - -e
+          - STALWART_USER
+          - -e
+          - STALWART_PASSWORD
+          - "{{ stalwart_cli_image }}"
+          - -k
+          - create
+          - "Action/{{ item }}"
+      environment: *cli_env
+      loop:
+        - ReloadSettings
+        - ReloadTlsCertificates
+      changed_when: false
+      no_log: true
+
+    # A blob-store backend change only takes effect after the S3 client is
+    # rebuilt at startup, so restart the Deployment on first configuration.
+    - name: Restart Stalwart to rebuild the blob-store client (first config only)
+      ansible.builtin.command:
+        argv:
+          - kubectl
+          - -n
+          - "{{ stalwart_namespace }}"
+          - rollout
+          - restart
+          - deploy/stalwart
+      environment:
+        KUBECONFIG: "{{ kubeconfig }}"
+      when: stalwart_fresh_config | bool
+      changed_when: true
+
+    - name: Wait for the Stalwart rollout to complete
+      ansible.builtin.command:
+        argv:
+          - kubectl
+          - -n
+          - "{{ stalwart_namespace }}"
+          - rollout
+          - status
+          - deploy/stalwart
+          - --timeout=120s
+      environment:
+        KUBECONFIG: "{{ kubeconfig }}"
+      when: stalwart_fresh_config | bool
+      changed_when: false
