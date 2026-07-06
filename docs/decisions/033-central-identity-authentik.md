@@ -4,6 +4,8 @@
 **Status:** accepted
 **Relates to:** [ADR-003](003-foundation-stores-on-r730xd.md), [ADR-019](019-ingress-and-tls-termination.md), [ADR-024](024-platform-secrets-on-openbao.md)
 
+> **Update 2026-07-06:** The shared foundation cache Authentik uses was renamed from the product-named `redis` slot to the backend-agnostic **`kv-cache`** slot (OpenBao path `stores/kv-cache`, Valkey backend) — see [ADR-056](056-redis-to-valkey.md). Authentik addresses it only by `host:port:password` (`10.0.0.200:6379`), unchanged; the `AUTHENTIK_REDIS__*` env keys are Authentik's own config schema. Mentions of "Redis" below are the original historical text.
+
 ## Context
 
 Every self-hosted app manages its own users and auth, so accounts are duplicated per app and there is no central place to issue machine credentials (API keys / OAuth clients) for service-to-service access. We want one identity provider that apps delegate login to (OIDC for apps that speak it, forward-auth for those that don't) and that issues OAuth clients and tokens for machine access.

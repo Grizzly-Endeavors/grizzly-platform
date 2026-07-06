@@ -1,11 +1,11 @@
 ---
 # deploy-foundation-stores.yml — Deploy foundation data stores to R730xd
 #
-# Deploys PostgreSQL, Redis, MinIO Obs, and MinIO Bulk as Docker Compose
-# services on the R730xd storage server.
+# Deploys PostgreSQL, kv-cache (Valkey), MinIO Obs, and MinIO Bulk as Docker
+# Compose services on the R730xd storage server.
 #
 # Storage tiers:
-#   Hot (ZFS):     PostgreSQL, Redis, MinIO Obs — continuous-write workloads
+#   Hot (ZFS):     PostgreSQL, kv-cache, MinIO Obs — continuous-write workloads
 #   Cold (MergerFS): MinIO Bulk — write-once-read-many (registry, artifacts)
 #
 # These services are consumed by K8s workloads (via <r730xd_ip>:<port>)
@@ -27,13 +27,13 @@
 #
 # Deploy individual services:
 #   ... --tags postgres
-#   ... --tags redis
+#   ... --tags kv-cache
 #   ... --tags minio-obs
 #   ... --tags minio-bulk
 #
 # Endpoints (after deploy) — IPs from ansible/group_vars/all/network.yml:
 #   PostgreSQL:        postgresql://postgres:<password>@<r730xd_ip>:5432/
-#   Redis:             redis://:<password>@<r730xd_ip>:6379
+#   kv-cache (Valkey): redis://:<password>@<r730xd_ip>:6379
 #   MinIO Obs API:     http://<r730xd_ip>:9000
 #   MinIO Obs Console: http://<r730xd_ip>:9001
 #   MinIO Bulk API:    http://<r730xd_ip>:9002
@@ -95,8 +95,8 @@
   roles:
     - role: r730xd-postgres
       tags: [foundation, postgres]
-    - role: r730xd-redis
-      tags: [foundation, redis]
+    - role: r730xd-kv-cache
+      tags: [foundation, kv-cache]
     - role: r730xd-minio-obs
       tags: [foundation, minio-obs]
     - role: r730xd-minio-bulk

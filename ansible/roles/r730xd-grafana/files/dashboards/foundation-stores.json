@@ -1,6 +1,6 @@
 {
   "annotations": { "list": [] },
-  "description": "PostgreSQL, Redis, and MinIO health metrics from foundation stores",
+  "description": "PostgreSQL, kv-cache (Valkey), and MinIO health metrics from foundation stores",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
@@ -91,7 +91,7 @@
       "collapsed": false,
       "gridPos": { "h": 1, "w": 24, "x": 0, "y": 13 },
       "id": 101,
-      "title": "Redis",
+      "title": "KV cache (Valkey)",
       "type": "row"
     },
     {
@@ -111,7 +111,7 @@
       "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "showThresholdMarkers": true },
       "title": "Cache Hit Rate",
       "type": "gauge",
-      "targets": [{ "expr": "redis_keyspace_hits_total / (redis_keyspace_hits_total + redis_keyspace_misses_total)", "legendFormat": "hit rate" }]
+      "targets": [{ "expr": "kv_cache_keyspace_hits_total / (kv_cache_keyspace_hits_total + kv_cache_keyspace_misses_total)", "legendFormat": "hit rate" }]
     },
     {
       "datasource": { "type": "prometheus", "uid": "prometheus" },
@@ -130,7 +130,7 @@
       "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "graphMode": "area" },
       "title": "Memory Used",
       "type": "stat",
-      "targets": [{ "expr": "redis_memory_used_bytes", "legendFormat": "used" }]
+      "targets": [{ "expr": "kv_cache_memory_used_bytes", "legendFormat": "used" }]
     },
     {
       "datasource": { "type": "prometheus", "uid": "prometheus" },
@@ -140,7 +140,7 @@
       "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "graphMode": "area" },
       "title": "Connected Clients",
       "type": "stat",
-      "targets": [{ "expr": "redis_connected_clients", "legendFormat": "clients" }]
+      "targets": [{ "expr": "kv_cache_connected_clients", "legendFormat": "clients" }]
     },
     {
       "datasource": { "type": "prometheus", "uid": "prometheus" },
@@ -150,7 +150,7 @@
       "options": { "tooltip": { "mode": "multi" } },
       "title": "Commands / sec",
       "type": "timeseries",
-      "targets": [{ "expr": "rate(redis_commands_processed_total[5m])", "legendFormat": "cmd/s" }]
+      "targets": [{ "expr": "rate(kv_cache_commands_processed_total[5m])", "legendFormat": "cmd/s" }]
     },
     {
       "datasource": { "type": "prometheus", "uid": "prometheus" },
@@ -160,7 +160,7 @@
       "options": { "tooltip": { "mode": "multi" } },
       "title": "Evicted Keys",
       "type": "timeseries",
-      "targets": [{ "expr": "rate(redis_evicted_keys_total[5m])", "legendFormat": "evictions/s" }]
+      "targets": [{ "expr": "rate(kv_cache_evicted_keys_total[5m])", "legendFormat": "evictions/s" }]
     },
     {
       "datasource": { "type": "prometheus", "uid": "prometheus" },
@@ -170,7 +170,7 @@
       "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "graphMode": "none" },
       "title": "Keyspace Size",
       "type": "stat",
-      "targets": [{ "expr": "sum(redis_db_keys)", "legendFormat": "keys" }]
+      "targets": [{ "expr": "sum(kv_cache_db_keys)", "legendFormat": "keys" }]
     },
     {
       "collapsed": false,
@@ -229,7 +229,7 @@
     }
   ],
   "schemaVersion": 39,
-  "tags": ["grizzly-platform", "foundation", "postgres", "redis", "minio"],
+  "tags": ["grizzly-platform", "foundation", "postgres", "kv-cache", "minio"],
   "templating": { "list": [] },
   "time": { "from": "now-6h", "to": "now" },
   "timepicker": {},

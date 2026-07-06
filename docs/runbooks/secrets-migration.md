@@ -56,7 +56,7 @@ run.
 
 ```
 bao kv list secret/grizzly-platform            # shows: platform/ stores/ observability/ cicd/ flux/
-bao kv list secret/grizzly-platform/stores     # shows: postgres redis minio-obs minio-bulk
+bao kv list secret/grizzly-platform/stores     # shows: postgres kv-cache minio-obs minio-bulk
 bao kv get secret/grizzly-platform/stores/postgres   # should return the current password
 ```
 
@@ -77,7 +77,7 @@ confirm credentials work:
 
 ```
 psql -h 10.0.0.200 -U postgres               # password from OpenBao
-redis-cli -h 10.0.0.200 -a "$(bao kv get -field=password secret/grizzly-platform/stores/redis)" ping
+valkey-cli -h 10.0.0.200 -a "$(bao kv get -field=password secret/grizzly-platform/stores/kv-cache)" ping
 mc alias set obs http://10.0.0.200:9000 \
   "$(bao kv get -field=root_user secret/grizzly-platform/stores/minio-obs)" \
   "$(bao kv get -field=root_password secret/grizzly-platform/stores/minio-obs)"

@@ -1,7 +1,7 @@
 ---
 # r730xd-zfs: Create and configure a ZFS raidz1 pool with service datasets
 #
-# Hosts foundation stores (PostgreSQL, Redis, MinIO Obs) and observability
+# Hosts foundation stores (PostgreSQL, kv-cache, MinIO Obs) and observability
 # stack (Prometheus, Loki, Tempo, Grafana) — all continuous-write workloads
 # that are incompatible with SnapRAID's sync-between-writes model.
 #
@@ -40,8 +40,8 @@ zfs_scrub_cron_minute: "0"
 zfs_datasets:
   - name: foundation/postgres
     recordsize: 8K        # matches PostgreSQL 8K page size
-  - name: foundation/redis
-    recordsize: 64K       # sequential AOF append + RDB dumps
+  - name: foundation/kv-cache
+    recordsize: 64K       # sequential AOF append + RDB dumps (Valkey)
   - name: foundation/minio-obs
     recordsize: 1M        # large S3 objects (Loki/Tempo backend)
   - name: observability/prometheus

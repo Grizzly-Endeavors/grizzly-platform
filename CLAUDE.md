@@ -44,7 +44,7 @@ Self-hosted infrastructure for Grizzly Endeavors projects (Infrastructure as Cod
 - All configuration and infrastructure MUST be conducted with IaC. Manual changes must be clearly documented.
 - **Done means deployed.** Writing IaC is not the finish line — run the playbook, verify it works, then report completion. Never stop at "here's the code I wrote."
 - Warnings are blockers. Resolve before considering work complete. If a warning truly cannot be resolved, document why.
-- **Storage: prefer the foundation stores over raw PVCs.** New stateful workloads should back onto the foundation data stores on the R730xd — PostgreSQL, Redis, MinIO (S3) — reached over the LAN, rather than provisioning a raw in-cluster PVC. The foundation stores exist specifically to hold durable app state (diskless PXE nodes hold none); reach for them first. Only provision a dedicated PVC when a workload genuinely can't use an external SQL/KV/S3 backend, and say why. See [ADR-003](docs/decisions/003-foundation-stores-on-r730xd.md).
+- **Storage: prefer the foundation stores over raw PVCs.** New stateful workloads should back onto the foundation data stores on the R730xd — PostgreSQL, kv-cache (Valkey), MinIO (S3) — reached over the LAN, rather than provisioning a raw in-cluster PVC. The foundation stores exist specifically to hold durable app state (diskless PXE nodes hold none); reach for them first. Only provision a dedicated PVC when a workload genuinely can't use an external SQL/KV/S3 backend, and say why. See [ADR-003](docs/decisions/003-foundation-stores-on-r730xd.md).
 - Decision records: When a non-obvious choice is made, write an ADR in `docs/decisions/` (use `/adr` skill).
 
 # Operational Readiness Checklist

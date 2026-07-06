@@ -1,0 +1,19 @@
+# Managed by Ansible — r730xd-kv-cache role
+# Foundation key-value / cache store (Valkey) for grizzly-platform services
+# Data: {{ kv_cache_data_dir }}
+
+services:
+  kv-cache:
+    image: {{ kv_cache_image }}
+    container_name: foundation-kv-cache
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - {{ kv_cache_data_dir }}:/data
+      - {{ kv_cache_compose_dir }}/valkey.conf:/usr/local/etc/valkey/valkey.conf:ro
+    command: ["valkey-server", "/usr/local/etc/valkey/valkey.conf"]
+    healthcheck:
+      test: ["CMD", "valkey-cli", "-p", "{{ kv_cache_port }}", "-a", "{{ kv_cache_password }}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5

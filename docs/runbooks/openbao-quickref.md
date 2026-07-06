@@ -88,7 +88,7 @@ All platform secrets live under `secret/grizzly-platform/<domain>/<name>` (KV v2
 | `secret/grizzly-platform/platform/github-runner` | `pat` |
 | `secret/grizzly-platform/platform/authentik` | `secret_key`, `db_password`, `bootstrap_password`, `bootstrap_token`, `oidc_nextcloud_client_id`, `oidc_nextcloud_client_secret`, `oidc_career_scanner_client_id`, `oidc_career_scanner_client_secret` |
 | `secret/grizzly-platform/stores/postgres` | `password` |
-| `secret/grizzly-platform/stores/redis` | `password` |
+| `secret/grizzly-platform/stores/kv-cache` | `password` |
 | `secret/grizzly-platform/stores/minio-obs` | `root_user`, `root_password` |
 | `secret/grizzly-platform/stores/minio-bulk` | `root_user`, `root_password` |
 | `secret/grizzly-platform/stores/nextcloud` | `db_password`, `s3_access_key`, `s3_secret_key` (foundation grants for the Nextcloud lab app; provisioned by `setup-nextcloud-stores.yml`, read cross-domain by Nextcloud's ExternalSecret) |

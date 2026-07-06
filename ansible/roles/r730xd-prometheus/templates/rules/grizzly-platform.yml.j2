@@ -510,31 +510,31 @@ groups:
         annotations:
           summary: "PostgreSQL exporter cannot connect to database"
 
-      - alert: RedisMemoryHigh
-        expr: redis_memory_used_bytes / redis_memory_max_bytes > 0.85
+      - alert: KvCacheMemoryHigh
+        expr: kv_cache_memory_used_bytes / kv_cache_memory_max_bytes > 0.85
         for: 5m
         labels:
           severity: warning
         annotations:
           summary: >-
-            Redis memory at {{ '{{' }} $value | humanizePercentage {{ '}}' }}
+            kv-cache memory at {{ '{{' }} $value | humanizePercentage {{ '}}' }}
             of limit
 
-      - alert: RedisDown
-        expr: redis_up == 0
+      - alert: KvCacheDown
+        expr: kv_cache_up == 0
         for: 1m
         labels:
           severity: critical
         annotations:
-          summary: "Redis exporter cannot connect to Redis"
+          summary: "kv-cache exporter cannot connect to the store"
 
-      - alert: RedisEvictions
-        expr: rate(redis_evicted_keys_total[5m]) > 0
+      - alert: KvCacheEvictions
+        expr: rate(kv_cache_evicted_keys_total[5m]) > 0
         for: 5m
         labels:
           severity: warning
         annotations:
-          summary: "Redis is evicting keys — memory pressure"
+          summary: "kv-cache is evicting keys — memory pressure"
 
   - name: openbao
     rules:

@@ -45,10 +45,11 @@ spec:
         name: authentik
         user: authentik
         port: 5432
-    # This chart version bundles no Redis subchart — Redis is configured purely
-    # via AUTHENTIK_REDIS__* env (see global.env below). We point at the same
-    # foundation Redis on a dedicated DB index (1) so keys don't collide; the
-    # later Redis->Valkey cutover is transparent (same host:port:password).
+    # This chart version bundles no Redis subchart — the cache is configured
+    # purely via AUTHENTIK_REDIS__* env (authentik's own config keys, RESP wire
+    # protocol). We point at the shared foundation kv-cache (Valkey backend) on a
+    # dedicated DB index (1) so keys don't collide; the store is addressed only
+    # by host:port:password, so the backend is transparent to authentik.
     postgresql:
       enabled: false
 
@@ -78,7 +79,7 @@ spec:
           valueFrom:
             secretKeyRef:
               name: authentik-secrets
-              key: redis_password
+              key: kv_cache_password
         # Initial akadmin bootstrap — only consumed on first migration when no
         # users exist. Safe to leave wired afterward (ignored once seeded).
         - name: AUTHENTIK_BOOTSTRAP_PASSWORD

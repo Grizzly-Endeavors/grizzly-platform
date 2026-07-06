@@ -1,5 +1,5 @@
 ---
-- name: Restart foundation-redis
+- name: Restart foundation-kv-cache
   ansible.builtin.command: docker compose up -d --force-recreate
   args:
-    chdir: "{{ redis_compose_dir }}"
+    chdir: "{{ kv_cache_compose_dir }}"

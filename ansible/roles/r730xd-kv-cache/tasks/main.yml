@@ -1,0 +1,66 @@
+---
+# r730xd-kv-cache: Deploy the key-value / cache store (Valkey) as a Docker Compose service
+
+- name: Create kv-cache directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - "{{ kv_cache_data_dir }}"
+    - "{{ kv_cache_compose_dir }}"
+
+- name: Deploy kv-cache configuration
+  ansible.builtin.template:
+    src: valkey.conf.j2
+    dest: "{{ kv_cache_compose_dir }}/valkey.conf"
+    owner: 999
+    group: 999
+    mode: "0400"
+  no_log: true
+  notify: Restart foundation-kv-cache
+
+- name: Deploy kv-cache docker-compose.yml
+  ansible.builtin.template:
+    src: docker-compose.yml.j2
+    dest: "{{ kv_cache_compose_dir }}/docker-compose.yml"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+  notify: Restart foundation-kv-cache
+
+- name: Ensure kv-cache is running
+  ansible.builtin.command: docker compose up -d
+  args:
+    chdir: "{{ kv_cache_compose_dir }}"
+  register: kv_cache_up
+  changed_when: "'Started' in kv_cache_up.stderr or 'Created' in kv_cache_up.stderr"
+
+- name: Wait for kv-cache to accept connections
+  ansible.builtin.wait_for:
+    port: "{{ kv_cache_port }}"
+    delay: 3
+    timeout: 60
+
+- name: Verify kv-cache health
+  ansible.builtin.command: docker exec foundation-kv-cache valkey-cli -p {{ kv_cache_port }} -a {{ kv_cache_password }} ping
+  register: kv_cache_health
+  retries: 5
+  delay: 5
+  until: kv_cache_health.rc == 0 and 'PONG' in kv_cache_health.stdout
+  changed_when: false
+  no_log: true
+
+- name: Display kv-cache summary
+  ansible.builtin.debug:
+    msg:
+      - "=== kv-cache (Valkey {{ kv_cache_version }}) ==="
+      - ""
+      - "Connection: redis://:<password>@{{ ansible_facts['default_ipv4']['address'] | default(r730xd_ip) }}:{{ kv_cache_port }}"
+      - "Data: {{ kv_cache_data_dir }}"
+      - "Compose: {{ kv_cache_compose_dir }}"
+      - ""
+      - "Config: maxmemory={{ kv_cache_maxmemory }}, policy={{ kv_cache_maxmemory_policy }}, appendonly={{ kv_cache_appendonly }}"

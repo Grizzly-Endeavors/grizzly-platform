@@ -21,7 +21,7 @@ ZFS datasets with per-workload recordsize tuning:
 | Dataset | Recordsize | Rationale |
 |---------|-----------|-----------|
 | `tank/foundation/postgres` | 8K | Matches PostgreSQL 8K page size |
-| `tank/foundation/redis` | 64K | Sequential AOF append + RDB dumps |
+| `tank/foundation/kv-cache` | 64K | Sequential AOF append + RDB dumps (renamed from `redis`; Valkey backend — ADR-056) |
 | `tank/foundation/minio-obs` | 1M | Large S3 objects |
 | `tank/observability/prometheus` | 128K | TSDB blocks |
 | `tank/observability/loki` | 128K | WAL + cache before S3 flush |
