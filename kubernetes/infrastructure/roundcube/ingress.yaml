@@ -1,0 +1,64 @@
+# Forward-auth gate for the whole webmail app. Authentik's embedded outpost
+# (served by authentik-server on /outpost.goauthentik.io) authenticates the user
+# via the nginx external-auth subrequest; the grizzly-webmail blueprint binds a
+# grizzly-admins policy, so only admins pass the gate. Roundcube then does its own
+# mailbox login (IMAP creds) behind the gate — the SSO layer protects the login
+# page from exposure and brute force. Mirrors grizzly-invite's admin gate.
+#
+# The outpost resolves which proxy provider applies from the request host, but
+# nginx's auth subrequest sends Host = the authentik Service, not
+# webmail.grizzly-endeavors.com — so we pass the real host via X-Forwarded-Host
+# through auth-proxy-set-headers (snippet annotations are disabled cluster-wide).
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: roundcube
+  namespace: roundcube
+  labels:
+    app.kubernetes.io/name: roundcube
+  annotations:
+    nginx.ingress.kubernetes.io/auth-url: "http://authentik-server.authentik.svc.cluster.local:80/outpost.goauthentik.io/auth/nginx"
+    nginx.ingress.kubernetes.io/auth-signin: "https://webmail.grizzly-endeavors.com/outpost.goauthentik.io/start?rd=$escaped_request_uri"
+    nginx.ingress.kubernetes.io/auth-response-headers: "Set-Cookie,X-authentik-username,X-authentik-groups,X-authentik-email,X-authentik-uid"
+    nginx.ingress.kubernetes.io/auth-proxy-set-headers: "roundcube/roundcube-auth-headers"
+    # Webmail composes/uploads attachments; allow up to the 25M configured cap
+    # (+ MIME overhead).
+    nginx.ingress.kubernetes.io/proxy-body-size: "30m"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: webmail.grizzly-endeavors.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: roundcube
+                port:
+                  number: 80
+---
+# Unauthenticated route for the forward-auth endpoints themselves — this IS the
+# sign-in surface, so gating it would loop. Routes /outpost.goauthentik.io on
+# webmail.grizzly-endeavors.com to the embedded outpost via the ExternalName
+# bridge. A more specific path than "/", so nginx matches it first.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: roundcube-outpost
+  namespace: roundcube
+  labels:
+    app.kubernetes.io/name: roundcube
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: webmail.grizzly-endeavors.com
+      http:
+        paths:
+          - path: /outpost.goauthentik.io
+            pathType: Prefix
+            backend:
+              service:
+                name: authentik-outpost
+                port:
+                  number: 80

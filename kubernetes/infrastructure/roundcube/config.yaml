@@ -1,0 +1,76 @@
+# Non-secret Roundcube configuration.
+#
+# The roundcube/roundcubemail image builds its config.docker.inc.php from
+# ROUNDCUBEMAIL_* env vars; anything not expressible that way is added as an
+# extra *.inc.php dropped into /var/roundcube/config/ (the image auto-includes
+# files there). We use both: env for the common knobs, and custom.inc.php for the
+# in-cluster TLS trust tweak.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: roundcube-config
+  namespace: roundcube
+  labels:
+    app.kubernetes.io/name: roundcube
+data:
+  # State on foundation Postgres (10.0.0.200:5432, db/role `roundcube`). The
+  # schema is created by the image's initdb on first start.
+  ROUNDCUBEMAIL_DB_TYPE: "pgsql"
+  ROUNDCUBEMAIL_DB_HOST: "10.0.0.200"
+  ROUNDCUBEMAIL_DB_PORT: "5432"
+  ROUNDCUBEMAIL_DB_NAME: "roundcube"
+  ROUNDCUBEMAIL_DB_USER: "roundcube"
+  # A single fixed IMAP/SMTP target hides the "server" field on the login page.
+  # In-cluster hop to Stalwart's mail Service (imaps 993 / submissions 465, both
+  # implicit TLS). The svc name won't match Stalwart's mail.grizzly-endeavors.com
+  # cert SAN, so custom.inc.php relaxes peer-name verification for this hop only.
+  ROUNDCUBEMAIL_DEFAULT_HOST: "ssl://stalwart-mail.stalwart.svc.cluster.local"
+  ROUNDCUBEMAIL_DEFAULT_PORT: "993"
+  ROUNDCUBEMAIL_SMTP_SERVER: "ssl://stalwart-mail.stalwart.svc.cluster.local"
+  ROUNDCUBEMAIL_SMTP_PORT: "465"
+  ROUNDCUBEMAIL_SKIN: "elastic"
+  ROUNDCUBEMAIL_PRODUCT_NAME: "Grizzly Webmail"
+  ROUNDCUBEMAIL_PLUGINS: "archive,zipdownload,newmail_notifier"
+  ROUNDCUBEMAIL_UPLOAD_MAX_FILESIZE: "25M"
+  # Access is fronted by the Authentik forward-auth gate at the ingress, so the
+  # login page itself is never exposed unauthenticated; a modest rate limit is
+  # still good hygiene against a compromised session brute-forcing the mailbox.
+  ROUNDCUBEMAIL_LOGIN_RATE_LIMIT: "3"
+---
+# Extra PHP config the env interface can't express: relax TLS peer-name
+# verification on the in-cluster hop to Stalwart. The connection is still
+# TLS-encrypted with Stalwart's real Let's Encrypt cert; we only skip the
+# hostname match because we dial the ClusterIP Service name, not the cert's
+# mail.grizzly-endeavors.com SAN. Traffic never leaves the cluster.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: roundcube-custom-php
+  namespace: roundcube
+  labels:
+    app.kubernetes.io/name: roundcube
+data:
+  custom.inc.php: |
+    <?php
+    // In-cluster hop to Stalwart: encrypted, but the Service DNS name does not
+    // match the cert SAN (mail.grizzly-endeavors.com), so skip the name check.
+    $ssl = ['verify_peer' => false, 'verify_peer_name' => false, 'allow_self_signed' => true];
+    $config['imap_conn_options'] = ['ssl' => $ssl];
+    $config['smtp_conn_options'] = ['ssl' => $ssl];
+---
+# Extra headers injected into nginx's forward-auth subrequest. The embedded
+# Authentik outpost picks the proxy provider from the request host, but the
+# auth subrequest carries Host = the authentik Service — so we pass the real
+# host via X-Forwarded-Host (snippet annotations are disabled cluster-wide, so
+# this ConfigMap + auth-proxy-set-headers is the supported mechanism). Mirrors
+# grizzly-invite's admin gate.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: roundcube-auth-headers
+  namespace: roundcube
+  labels:
+    app.kubernetes.io/name: roundcube
+data:
+  X-Forwarded-Host: "webmail.grizzly-endeavors.com"
+  X-Forwarded-Proto: "https"

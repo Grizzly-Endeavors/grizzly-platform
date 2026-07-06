@@ -1,0 +1,25 @@
+# Roundcube webmail (ADR-056) as its own Flux Kustomization rather than a member
+# of `infrastructure`. Like stalwart, it has external dependencies (foundation
+# Postgres, and the Stalwart mail Service it dials) that can leave the pod
+# transiently unhealthy; keeping it separate means a not-yet-ready webmail pod
+# never blocks core infrastructure from reaching Ready. dependsOn the stores
+# Kustomization so the ClusterSecretStore exists before the ExternalSecret is
+# applied, and on infrastructure so authentik-server (the forward-auth outpost)
+# is up before the gated ingress goes live.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: roundcube
+  namespace: flux-system
+spec:
+  dependsOn:
+    - name: infrastructure
+    - name: external-secrets-stores
+  interval: 5m
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  path: ./kubernetes/infrastructure/roundcube
+  prune: true
+  wait: true
+  timeout: 5m
