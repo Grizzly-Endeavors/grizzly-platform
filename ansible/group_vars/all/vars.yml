@@ -27,8 +27,8 @@ versitygw_iam_role_secret: "{{ vault_versitygw_iam_secret_id }}"
 
 # Observability stack (R730xd)
 grafana_admin_password: "{{ vault_grafana_admin_password }}"
-minio_observability_access_key: "{{ vault_minio_observability_access_key }}"
-minio_observability_secret_key: "{{ vault_minio_observability_secret_key }}"
+obs_s3_access_key: "{{ vault_obs_s3_access_key }}"
+obs_s3_secret_key: "{{ vault_obs_s3_secret_key }}"
 
 # Alerting — Discord webhook for Alertmanager notifications
 monitoring_discord_webhook_url: "{{ vault_monitoring_discord_webhook_url }}"

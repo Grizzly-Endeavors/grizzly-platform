@@ -97,10 +97,10 @@ All platform secrets live under `secret/grizzly-platform/<domain>/<name>` (KV v2
 | `secret/grizzly-platform/stores/career-scanner` | `db_password`, `s3_access_key`, `s3_secret_key` (foundation grants for the career-scanner first-party app; provisioned by `setup-career-scanner-stores.yml`, read cross-domain by career-scanner's ExternalSecret) |
 | `secret/grizzly-platform/apps/career-scanner` | `session_secret`, `serper_api_key`, `ollama_api_key`, `db_username` (app-owned secrets for the career-scanner first-party app; K8s-consumed only, via its own ExternalSecret. First consumer of the `apps/` domain — see ADR-048) |
 | `secret/grizzly-platform/observability/grafana` | `admin_password` |
-| `secret/grizzly-platform/observability/minio-client` | `access_key`, `secret_key` |
+| `secret/grizzly-platform/observability/s3-client` | `access_key`, `secret_key` |
 | `secret/grizzly-platform/observability/discord-webhook` | `url` |
-| `secret/grizzly-platform/cicd/sccache-minio` | `access_key`, `secret_key` |
-| `secret/grizzly-platform/cicd/argo-minio` | `access_key`, `secret_key` |
+| `secret/grizzly-platform/cicd/sccache-s3` | `access_key`, `secret_key` |
+| `secret/grizzly-platform/cicd/argo-s3` | `access_key`, `secret_key` |
 | `secret/grizzly-platform/flux/discord-webhook` | `url` |
 
 ### Adding a new platform secret

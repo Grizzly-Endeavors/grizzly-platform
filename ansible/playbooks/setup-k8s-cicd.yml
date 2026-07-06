@@ -7,8 +7,8 @@
 # Prerequisites:
 #   - Phases 1-4 complete (control plane + workers + storage + Flux)
 #   - vault_github_runner_pat set in vault.yml (PAT with org runner scope)
-#   - vault_argo_minio_access_key / vault_argo_minio_secret_key set in vault.yml
-#   - vault_sccache_minio_access_key / vault_sccache_minio_secret_key set in vault.yml
+#   - vault_argo_s3_access_key / vault_argo_s3_secret_key set in vault.yml
+#   - vault_sccache_s3_access_key / vault_sccache_s3_secret_key set in vault.yml
 #
 # Usage:
 #   ansible-playbook ansible/playbooks/setup-k8s-cicd.yml
@@ -90,7 +90,7 @@
 # Play 2: Create Argo namespace
 # ============================================================
 # Argo's artifact bucket + account moved to setup-argo-stores.yml (versitygw
-# s3-bulk, ADR-055); the argo-minio-credentials secret is ESO-managed
+# s3-bulk, ADR-055); the argo-s3-credentials secret is ESO-managed
 # (external-secrets-stores/argo-workflows.yaml). This play now only ensures the
 # namespace exists ahead of Flux/ESO reconciliation.
 - name: Create Argo namespace

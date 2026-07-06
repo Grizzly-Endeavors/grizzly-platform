@@ -27,8 +27,8 @@ versitygw_iam_role_secret: "{{ vault_versitygw_iam_secret_id }}"
 
 # Observability stack (R730xd)
 grafana_admin_password: "{{ vault_grafana_admin_password }}"
-minio_observability_access_key: "{{ vault_minio_observability_access_key }}"
-minio_observability_secret_key: "{{ vault_minio_observability_secret_key }}"
+obs_s3_access_key: "{{ vault_obs_s3_access_key }}"
+obs_s3_secret_key: "{{ vault_obs_s3_secret_key }}"
 
 # Alerting — Discord webhook for Alertmanager notifications
 monitoring_discord_webhook_url: "{{ vault_monitoring_discord_webhook_url }}"
@@ -39,13 +39,13 @@ flux_discord_webhook_url: "{{ vault_flux_discord_webhook_url }}"
 # GitHub Actions Runner Controller (ARC v2) — org-level PAT
 github_runner_pat: "{{ vault_github_runner_pat }}"
 
-# Argo Workflows — MinIO bulk instance credentials for artifact storage
-argo_minio_access_key: "{{ vault_argo_minio_access_key }}"
-argo_minio_secret_key: "{{ vault_argo_minio_secret_key }}"
+# Argo Workflows — s3-bulk versitygw account for artifact storage
+argo_s3_access_key: "{{ vault_argo_s3_access_key }}"
+argo_s3_secret_key: "{{ vault_argo_s3_secret_key }}"
 
-# sccache — MinIO bulk instance credentials for Rust build cache
-sccache_minio_access_key: "{{ vault_sccache_minio_access_key }}"
-sccache_minio_secret_key: "{{ vault_sccache_minio_secret_key }}"
+# sccache — s3-bulk versitygw account for Rust build cache
+sccache_s3_access_key: "{{ vault_sccache_s3_access_key }}"
+sccache_s3_secret_key: "{{ vault_sccache_s3_secret_key }}"
 
 # WireGuard ingress tunnel keys (VPS ↔ R730xd)
 # Public keys are safe to expose; private keys stay in vault.yml and are

@@ -26,8 +26,8 @@ tempo_memory_limit: "512m"
 tempo_s3_endpoint: "{{ r730xd_ip }}:7070"
 tempo_s3_bucket: "observability-tempo"
 # Access keys from group_vars (vault-backed)
-# tempo_s3_access_key: "{{ minio_observability_access_key }}"
-# tempo_s3_secret_key: "{{ minio_observability_secret_key }}"
+# tempo_s3_access_key: "{{ obs_s3_access_key }}"
+# tempo_s3_secret_key: "{{ obs_s3_secret_key }}"
 
 # Block retention
 tempo_block_retention: "720h"  # 30 days

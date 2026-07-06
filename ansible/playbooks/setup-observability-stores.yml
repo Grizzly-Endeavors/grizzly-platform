@@ -9,7 +9,7 @@
 # the first call creates the account + observability-loki, the second reuses the
 # account and adds observability-tempo.
 #
-# Credentials: secret/grizzly-platform/observability/minio-client (access_key,
+# Credentials: secret/grizzly-platform/observability/s3-client (access_key,
 # secret_key) — reused as the versitygw account creds so only the Loki/Tempo
 # endpoints change at cutover. s3-hot root creds (admin) from stores/s3-hot.
 #
@@ -17,7 +17,7 @@
 #
 # Prerequisites:
 #   - s3-hot versitygw gateway running (deploy-foundation-stores.yml --tags s3-hot).
-#   - OpenBao seeded: observability/minio-client + stores/s3-hot.
+#   - OpenBao seeded: observability/s3-client + stores/s3-hot.
 #
 # Usage:
 #   ansible-playbook -i ansible/inventory ansible/playbooks/setup-observability-stores.yml \
@@ -42,12 +42,12 @@
     - name: Verify observability + s3-hot credentials are present in OpenBao
       ansible.builtin.assert:
         that:
-          - vault_minio_observability_access_key | default('') | length > 0
-          - vault_minio_observability_secret_key | default('') | length > 0
+          - vault_obs_s3_access_key | default('') | length > 0
+          - vault_obs_s3_secret_key | default('') | length > 0
           - vault_s3_hot_root_access_key | default('') | length > 0
           - vault_s3_hot_root_secret_key | default('') | length > 0
         fail_msg: >
-          observability/minio-client (access_key, secret_key) and stores/s3-hot
+          observability/s3-client (access_key, secret_key) and stores/s3-hot
           (root_access_key, root_secret_key) must be seeded in OpenBao.
         success_msg: "observability + s3-hot credentials are set"
 
@@ -58,8 +58,8 @@
         vgw_instance: s3-hot
         vgw_root_access: "{{ vault_s3_hot_root_access_key }}"
         vgw_root_secret: "{{ vault_s3_hot_root_secret_key }}"
-        vgw_access: "{{ vault_minio_observability_access_key }}"
-        vgw_secret: "{{ vault_minio_observability_secret_key }}"
+        vgw_access: "{{ vault_obs_s3_access_key }}"
+        vgw_secret: "{{ vault_obs_s3_secret_key }}"
         vgw_bucket: observability-loki
 
     - name: Add the Tempo bucket owned by the same observability account
@@ -68,6 +68,6 @@
         vgw_instance: s3-hot
         vgw_root_access: "{{ vault_s3_hot_root_access_key }}"
         vgw_root_secret: "{{ vault_s3_hot_root_secret_key }}"
-        vgw_access: "{{ vault_minio_observability_access_key }}"
-        vgw_secret: "{{ vault_minio_observability_secret_key }}"
+        vgw_access: "{{ vault_obs_s3_access_key }}"
+        vgw_secret: "{{ vault_obs_s3_secret_key }}"
         vgw_bucket: observability-tempo

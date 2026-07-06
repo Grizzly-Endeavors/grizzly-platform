@@ -20,10 +20,8 @@ vault_idrac_password: "your-idrac-password-here"
 # Foundation data stores (R730xd)
 vault_postgres_password: "your-postgres-superuser-password-here"
 vault_kv_cache_password: "your-kv-cache-password-here"
-vault_minio_root_user: "your-minio-root-user-here"
-vault_minio_root_password: "your-minio-root-password-here"
 
 # Observability stack (R730xd)
 vault_grafana_admin_password: "your-grafana-admin-password-here"
-vault_minio_observability_access_key: "your-minio-observability-access-key-here"
-vault_minio_observability_secret_key: "your-minio-observability-secret-key-here"
+vault_obs_s3_access_key: "your-obs-s3-access-key-here"
+vault_obs_s3_secret_key: "your-obs-s3-secret-key-here"

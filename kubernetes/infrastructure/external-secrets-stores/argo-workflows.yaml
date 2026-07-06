@@ -1,7 +1,7 @@
 apiVersion: external-secrets.io/v1
 kind: ExternalSecret
 metadata:
-  name: argo-minio-credentials
+  name: argo-s3-credentials
   namespace: argo
 spec:
   refreshInterval: 1h
@@ -9,14 +9,14 @@ spec:
     kind: ClusterSecretStore
     name: openbao
   target:
-    name: argo-minio-credentials
+    name: argo-s3-credentials
     creationPolicy: Owner
   data:
     - secretKey: accesskey
       remoteRef:
-        key: grizzly-platform/cicd/argo-minio
+        key: grizzly-platform/cicd/argo-s3
         property: access_key
     - secretKey: secretkey
       remoteRef:
-        key: grizzly-platform/cicd/argo-minio
+        key: grizzly-platform/cicd/argo-s3
         property: secret_key

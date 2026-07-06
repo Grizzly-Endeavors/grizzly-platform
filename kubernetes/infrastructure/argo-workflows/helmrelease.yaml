@@ -70,8 +70,8 @@ spec:
         endpoint: "10.0.0.200:7072"
         insecure: true
         accessKeySecret:
-          name: argo-minio-credentials
+          name: argo-s3-credentials
           key: accesskey
         secretKeySecret:
-          name: argo-minio-credentials
+          name: argo-s3-credentials
           key: secretkey
