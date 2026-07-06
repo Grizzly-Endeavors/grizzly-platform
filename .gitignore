@@ -90,3 +90,4 @@ archive/**/*.tfvars
 # Temporary files
 *.bak
 .claude/settings.local.json
+.playwright-mcp/
