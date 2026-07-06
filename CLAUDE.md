@@ -31,6 +31,14 @@ Self-hosted infrastructure for Grizzly Endeavors projects (Infrastructure as Cod
 - **Infisical** holds ONLY the OpenBao unseal keys + root token (bootstrap store). Project ID = `workspaceId` in `.infisical.json` at repo root. Env slug = `prod`. Secrets stored as `--type=shared`. Not a general-purpose secret store here.
 - Secrets must never appear in plaintext in IaC — use `no_log: true` for tasks that handle sensitive values.
 
+# Email / Mail (Stalwart)
+
+**Start here:** `docs/runbooks/mail.md` — deployment status, resume point, and gotchas. **In progress (as of 2026-07-06): Stalwart is deployed and connected to Postgres but in bootstrap mode — not yet functionally configured.**
+
+- Self-hosted [Stalwart](https://stalw.art) mail server (`stalwartlabs/stalwart:v0.16.11`), in-cluster via its own Flux Kustomization (`kubernetes/infrastructure/stalwart/` + `kubernetes/clusters/grizzly-platform/stalwart.yaml`), state on foundation Postgres + MinIO obs. Outbound relays via SMTP2GO; inbound is own-MX via VPS HAProxy + tunnel (not built yet). HTTP surface live at `mail.grizzly-endeavors.com`.
+- **Stalwart 0.16 config is JSON + DB-backed:** the static `config.json` is only the data-store object; blob store, listeners, TLS, domain, accounts, DKIM, relay are configured via the first-party CLI (`stalwartlabs/cli`) into Postgres. Next step is `ansible/playbooks/configure-stalwart.yml` applying that CLI plan.
+- ADRs: `docs/decisions/050-stalwart-mail-server.md`, `051-haproxy-l4-mail-ingress.md`, `052-in-cluster-acme-cert-for-mail.md`, `054-cloudflare-email-routing-interim-inbound.md`.
+
 # Rules
 
 - All configuration and infrastructure MUST be conducted with IaC. Manual changes must be clearly documented.
