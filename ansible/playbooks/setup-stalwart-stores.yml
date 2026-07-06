@@ -5,13 +5,13 @@
 #
 # Stalwart externalizes its state onto the shared foundation stores rather than
 # an in-cluster PVC: its directory + metadata go to the foundation PostgreSQL,
-# and message blobs go to MinIO (S3). This playbook provisions those two
-# resources:
+# and message blobs go to S3. This playbook provisions those two resources:
 #
 #   Play 1  The `stalwart` database + login role on the foundation PostgreSQL.
-#   Play 2  The `stalwart` bucket + a scoped MinIO user on the OBS (ZFS-tier)
-#           instance — mail blobs want the durable hot tier, unlike Nextcloud
-#           which backs onto the bulk MergerFS instance.
+#   Play 2  The `stalwart` bucket + a scoped userplus account on the s3-hot
+#           versitygw gateway (ADR-055) — mail blobs want the durable hot
+#           (ZFS) tier, unlike Nextcloud which backs onto s3-bulk. Provisioned
+#           via the shared versitygw-provision-account task.
 #
 # Credentials come from OpenBao secret/grizzly-platform/stores/stalwart
 # (db_password, s3_access_key, s3_secret_key) — provisioned here, and read
@@ -20,12 +20,10 @@
 # only grants grizzly-platform/* (mirrors nextcloud / career-scanner).
 #
 # Prerequisites:
-#   - Foundation Postgres + MinIO obs running (deploy-foundation-stores.yml).
-#     Play 2 drives minio-obs via `docker exec` on the r730xd — no host-side
-#     mc alias needed.
+#   - Foundation Postgres + s3-hot versitygw running (deploy-foundation-stores.yml).
 #   - OpenBao seeded: secret/grizzly-platform/stores/stalwart with keys
-#     db_password, s3_access_key, s3_secret_key. Generate db_password WITHOUT
-#     single quotes (e.g. `openssl rand -base64 36`).
+#     db_password, s3_access_key, s3_secret_key (+ stores/s3-hot root creds).
+#     Generate db_password WITHOUT single quotes (e.g. `openssl rand -base64 36`).
 #
 # Usage:
 #   ansible-playbook ansible/playbooks/setup-stalwart-stores.yml \
@@ -112,17 +110,12 @@
         -c "CREATE DATABASE stalwart OWNER stalwart"
       when: sw_db.stdout != "1"
 
-- name: Provision Stalwart S3 bucket and scoped user on MinIO obs
+- name: Provision Stalwart S3 bucket and scoped account on s3-hot
   hosts: r730xd
   become: yes
   gather_facts: no
   tags: [s3]
 
-  # minio-obs runs as a Docker container on the r730xd; we drive it via
-  # `docker exec minio-obs mc` against its in-container `local` admin alias
-  # (same approach as deploy-observability.yml) rather than a host-side mc
-  # alias on the control node — so no per-operator alias setup is required.
-  # minio_obs_root_user/password are mapped from OpenBao in group_vars vars.yml.
   vars:
     openbao_read_enabled: true
 
@@ -134,75 +127,26 @@
       ansible.builtin.include_vars:
         file: "{{ playbook_dir }}/../vars/openbao_secrets.yml"
 
-    - name: Verify Stalwart S3 credentials are present in OpenBao
+    - name: Verify Stalwart + s3-hot credentials are present in OpenBao
       ansible.builtin.assert:
         that:
-          - vault_stalwart_s3_access_key is defined and vault_stalwart_s3_access_key | length > 0
-          - vault_stalwart_s3_secret_key is defined and vault_stalwart_s3_secret_key | length > 0
+          - vault_stalwart_s3_access_key | default('') | length > 0
+          - vault_stalwart_s3_secret_key | default('') | length > 0
+          - vault_s3_hot_root_access_key | default('') | length > 0
+          - vault_s3_hot_root_secret_key | default('') | length > 0
         fail_msg: >
-          secret/grizzly-platform/stores/stalwart must define s3_access_key and
-          s3_secret_key. Seed OpenBao before running this play.
-        success_msg: "Stalwart S3 credentials are set"
+          secret/grizzly-platform/stores/stalwart (s3_access_key, s3_secret_key)
+          and stores/s3-hot (root_access_key, root_secret_key) must be seeded in
+          OpenBao.
+        success_msg: "Stalwart + s3-hot credentials are set"
 
   tasks:
-    - name: Configure the MinIO obs admin alias inside the container
-      ansible.builtin.command: >-
-        docker exec minio-obs mc alias set local
-        http://localhost:9000
-        {{ minio_obs_root_user }}
-        {{ minio_obs_root_password }}
-      changed_when: false
-      no_log: true
-
-    - name: Ensure the stalwart bucket exists on MinIO obs
-      ansible.builtin.command: >-
-        docker exec minio-obs mc mb --ignore-existing local/stalwart
-      register: sw_bucket
-      changed_when: "'Bucket created' in sw_bucket.stdout"
-
-    - name: Check whether the stalwart MinIO user exists
-      ansible.builtin.command: >-
-        docker exec minio-obs mc admin user info local {{ vault_stalwart_s3_access_key }}
-      register: sw_user
-      changed_when: false
-      failed_when: false
-      no_log: true
-
-    - name: Create the stalwart MinIO user on the obs instance
-      ansible.builtin.command: >-
-        docker exec minio-obs mc admin user add local
-        {{ vault_stalwart_s3_access_key }}
-        {{ vault_stalwart_s3_secret_key }}
-      when: sw_user.rc != 0
-      no_log: true
-
-    # Scoped policy (bucket-limited) rather than the built-in readwrite, so the
-    # stalwart user cannot touch the observability-loki / -tempo buckets that
-    # share this obs instance. Piped into the container over docker exec -i.
-    - name: Create the scoped stalwart-rw policy on MinIO obs
-      ansible.builtin.shell:
-        cmd: |
-          cat <<'EOF' | docker exec -i minio-obs mc admin policy create local stalwart-rw /dev/stdin
-          {
-            "Version": "2012-10-17",
-            "Statement": [{
-              "Effect": "Allow",
-              "Action": ["s3:*"],
-              "Resource": [
-                "arn:aws:s3:::stalwart",
-                "arn:aws:s3:::stalwart/*"
-              ]
-            }]
-          }
-          EOF
-        executable: /bin/bash
-      changed_when: false
-      failed_when: false
-
-    - name: Attach the stalwart-rw policy to the stalwart user
-      ansible.builtin.command: >-
-        docker exec minio-obs mc admin policy attach local stalwart-rw
-        --user {{ vault_stalwart_s3_access_key }}
-      changed_when: false
-      failed_when: false
-      no_log: true
+    - name: Provision the stalwart account + bucket on s3-hot
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/versitygw-provision-account.yml"
+      vars:
+        vgw_instance: s3-hot
+        vgw_root_access: "{{ vault_s3_hot_root_access_key }}"
+        vgw_root_secret: "{{ vault_s3_hot_root_secret_key }}"
+        vgw_access: "{{ vault_stalwart_s3_access_key }}"
+        vgw_secret: "{{ vault_stalwart_s3_secret_key }}"
+        vgw_bucket: stalwart
