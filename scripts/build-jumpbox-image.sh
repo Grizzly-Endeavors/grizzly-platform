@@ -278,6 +278,7 @@ run_in_chroot "DEBIAN_FRONTEND=noninteractive apt-get install -y -qq nodejs"
 
 # --- Claude Code ---
 info "Installing Claude Code..."
+# shellcheck disable=SC2310 # run_in_chroot is a single command; failure here is meant to be non-fatal
 run_in_chroot "npm install -g @anthropic-ai/claude-code" || warn "Claude Code install failed — can be installed post-boot"
 
 # --- NetBird ---

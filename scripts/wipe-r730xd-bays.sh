@@ -30,6 +30,11 @@
 #   ./scripts/wipe-r730xd-bays.sh --dry-run 0 1 2
 #   ./scripts/wipe-r730xd-bays.sh 0 1 2
 
+# r730xd_ssh and racadm below are both single-pipeline wrapper functions, so
+# invoking them inside `||`/`if` (which check-set-e-suppressed warns about)
+# never masks an internal early-exit — there's only ever one statement to run.
+# shellcheck disable=SC2310
+
 set -euo pipefail
 
 # =============================================================================
@@ -209,20 +214,19 @@ normalize_serial() {
 }
 
 declare -A SERIAL_TO_DEV=()
-declare -A SERIAL_TO_RAW=()
+disk_json="$(python3 -c "
+import sys, json
+data = json.loads(sys.stdin.read())
+for dev in data['blockdevices']:
+    if dev['type'] == 'disk' and dev.get('serial'):
+        print(json.dumps({'name': dev['name'], 'serial': dev['serial'].strip()}))
+" <<< "${lsblk_json}")"
 while IFS= read -r line; do
     name="$(echo "${line}" | python3 -c "import sys,json; print(json.load(sys.stdin)['name'])")"
     serial="$(echo "${line}" | python3 -c "import sys,json; print(json.load(sys.stdin)['serial'])")"
     normalized="$(normalize_serial "${serial}")"
     SERIAL_TO_DEV["${normalized}"]="${name}"
-    SERIAL_TO_RAW["${normalized}"]="${serial}"
-done < <(echo "${lsblk_json}" | python3 -c "
-import sys, json
-data = json.load(sys.stdin)
-for dev in data['blockdevices']:
-    if dev['type'] == 'disk' and dev.get('serial'):
-        print(json.dumps({'name': dev['name'], 'serial': dev['serial'].strip()}))
-")
+done <<< "${disk_json}"
 
 # =============================================================================
 # Build final bay → device resolution

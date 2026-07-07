@@ -69,4 +69,3 @@ caddy_wildcard_domains: []
 # Root domain redirect (e.g., example.com -> www.example.com)
 # caddy_root_domain: "example.com"
 # caddy_root_redirect_target: "www.example.com"
-

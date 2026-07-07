@@ -106,4 +106,3 @@
 - name: Display iSCSI client summary
   ansible.builtin.debug:
     msg: "iSCSI initiator ready: {{ initiator_name.stdout_lines | select('match', '^InitiatorName=') | first | default('unknown') }}"
-

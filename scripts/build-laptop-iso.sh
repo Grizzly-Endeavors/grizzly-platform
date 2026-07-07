@@ -154,7 +154,7 @@ if [[ -n "${USB_DEVICE}" ]]; then
         exit 1
     fi
 
-    if [[ $EUID -ne 0 ]]; then
+    if [[ ${EUID} -ne 0 ]]; then
         error "Must run as root to flash USB. Use: sudo $0 $*"
         exit 1
     fi
@@ -231,7 +231,8 @@ fi
 info "Rebuilding ISO..."
 
 cd "${WORK_DIR}/iso"
-find . -follow -type f ! -name md5sum.txt -print0 | xargs -0 md5sum > md5sum.txt 2>/dev/null || true
+find . -follow -type f ! -name md5sum.txt -print0 | xargs -0 md5sum > md5sum.txt.new 2>/dev/null || true
+mv md5sum.txt.new md5sum.txt
 cd "${REPO_ROOT}"
 
 xorriso -as mkisofs \
@@ -268,9 +269,9 @@ if [[ -n "${USB_DEVICE}" ]]; then
     info "Unmounting ${USB_DEVICE} partitions..."
     umount "${USB_DEVICE}"* 2>/dev/null || true
 
-    info "Flashing ISO to ${USB_DEVICE} ($(du -h "${OUTPUT_ISO}" | cut -f1))..."
+    info "Flashing ISO to ${USB_DEVICE} (${ISO_SIZE})..."
     dd if="${OUTPUT_ISO}" of="${USB_DEVICE}" bs=4M status=none oflag=sync
-    info "Flash complete ($(du -h "${OUTPUT_ISO}" | cut -f1) written)"
+    info "Flash complete (${ISO_SIZE} written)"
 
     info "USB flash complete."
 else

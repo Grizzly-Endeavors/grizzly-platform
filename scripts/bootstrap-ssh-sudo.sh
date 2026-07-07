@@ -187,7 +187,7 @@ echo ""
 detect_ssh_key
 info "Using SSH key: ${SSH_KEY}"
 
-SSH_OPTS="-p ${PORT} -o StrictHostKeyChecking=accept-new"
+SSH_OPTS=(-p "${PORT}" -o StrictHostKeyChecking=accept-new)
 
 # --- Step 1: Deploy SSH key ---
 info "Deploying SSH public key (you will be prompted for a password)..."
@@ -200,7 +200,7 @@ fi
 
 # Verify key auth works
 info "Verifying key-based SSH..."
-if ssh ${SSH_OPTS} -o BatchMode=yes "${USER}@${HOST}" "echo ok" >/dev/null 2>&1; then
+if ssh "${SSH_OPTS[@]}" -o BatchMode=yes "${USER}@${HOST}" "echo ok" >/dev/null 2>&1; then
     info "SSH key auth works"
 else
     error "SSH key auth verification failed"
@@ -222,10 +222,10 @@ REMOTE_SCRIPT="$(build_root_script "${USER}")"
 # Upload the root script to the remote machine first
 info "Uploading setup script..."
 REMOTE_TMP="/tmp/bootstrap-sudo-$$.sh"
-ssh ${SSH_OPTS} -o BatchMode=yes "${USER}@${HOST}" "cat > '${REMOTE_TMP}' && chmod +x '${REMOTE_TMP}'" < <(echo "${REMOTE_SCRIPT}")
+ssh "${SSH_OPTS[@]}" -o BatchMode=yes "${USER}@${HOST}" "cat > '${REMOTE_TMP}' && chmod +x '${REMOTE_TMP}'" < <(echo "${REMOTE_SCRIPT}")
 
 # Check if sudo exists on the remote
-HAS_SUDO=$(ssh ${SSH_OPTS} -o BatchMode=yes "${USER}@${HOST}" \
+HAS_SUDO=$(ssh "${SSH_OPTS[@]}" -o BatchMode=yes "${USER}@${HOST}" \
     "command -v sudo >/dev/null 2>&1 && echo yes || echo no")
 
 SUCCEEDED=false
@@ -233,14 +233,14 @@ SUCCEEDED=false
 if [[ "${HAS_SUDO}" == "yes" ]]; then
     # Try non-interactive sudo first (in case user has NOPASSWD already)
     info "Trying passwordless sudo..."
-    if ssh ${SSH_OPTS} -o BatchMode=yes "${USER}@${HOST}" \
+    if ssh "${SSH_OPTS[@]}" -o BatchMode=yes "${USER}@${HOST}" \
         "sudo -n bash '${REMOTE_TMP}'" 2>/dev/null | grep -q "SUDOERS_OK"; then
         SUCCEEDED=true
         info "Sudo configured (had passwordless sudo)"
     else
         # Try sudo with password — needs TTY for the password prompt
         info "Trying sudo with password..."
-        if ssh ${SSH_OPTS} -tt "${USER}@${HOST}" \
+        if ssh "${SSH_OPTS[@]}" -tt "${USER}@${HOST}" \
             "sudo bash '${REMOTE_TMP}'" 2>&1 | grep -q "SUDOERS_OK"; then
             SUCCEEDED=true
             info "Sudo configured via sudo"
@@ -260,10 +260,10 @@ if [[ "${SUCCEEDED}" != true ]]; then
     # Run su interactively — no pipe so the TTY stays attached for the
     # password prompt. The script writes a marker file on success; we
     # check for that file afterwards instead of grepping output.
-    ssh ${SSH_OPTS} -tt "${USER}@${HOST}" \
+    ssh "${SSH_OPTS[@]}" -tt "${USER}@${HOST}" \
         "su -c 'bash ${REMOTE_TMP} && touch ${REMOTE_TMP}.ok' root" || true
 
-    if ssh ${SSH_OPTS} -o BatchMode=yes "${USER}@${HOST}" \
+    if ssh "${SSH_OPTS[@]}" -o BatchMode=yes "${USER}@${HOST}" \
         "test -f '${REMOTE_TMP}.ok'" 2>/dev/null; then
         SUCCEEDED=true
         info "Sudo configured via su"
@@ -271,7 +271,7 @@ if [[ "${SUCCEEDED}" != true ]]; then
 fi
 
 # Clean up remote temp file
-ssh ${SSH_OPTS} -o BatchMode=yes "${USER}@${HOST}" "rm -f '${REMOTE_TMP}' '${REMOTE_TMP}.ok'" 2>/dev/null || true
+ssh "${SSH_OPTS[@]}" -o BatchMode=yes "${USER}@${HOST}" "rm -f '${REMOTE_TMP}' '${REMOTE_TMP}.ok'" 2>/dev/null || true
 
 if [[ "${SUCCEEDED}" != true ]]; then
     error "Failed to configure sudo (neither sudo nor su worked)"
@@ -280,7 +280,7 @@ fi
 
 # Verify passwordless sudo
 info "Verifying passwordless sudo..."
-if ssh ${SSH_OPTS} -o BatchMode=yes "${USER}@${HOST}" "sudo -n whoami" 2>/dev/null | grep -q "root"; then
+if ssh "${SSH_OPTS[@]}" -o BatchMode=yes "${USER}@${HOST}" "sudo -n whoami" 2>/dev/null | grep -q "root"; then
     info "Passwordless sudo works"
 else
     error "Passwordless sudo verification failed"

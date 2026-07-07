@@ -169,7 +169,7 @@ fi
 
 # Build the /dev/disk/by-id/ path
 # Linux uses ata-<Model>_<Serial> format; spaces in model become underscores
-DISK_MODEL_CLEAN="$(echo "${DISK_MODEL}" | sed 's/ /_/g')"
+DISK_MODEL_CLEAN="${DISK_MODEL// /_}"
 BOOT_DISK_BY_ID="ata-${DISK_MODEL_CLEAN}_${DISK_SERIAL}"
 
 info "Boot drive (bay ${BOOT_DRIVE_BAY}): ${DISK_MODEL} ${DISK_SIZE} (${DISK_MEDIA})"
@@ -192,7 +192,7 @@ if [[ -n "${USB_DEVICE}" ]]; then
     fi
 
     # Check we're running as root for dd
-    if [[ $EUID -ne 0 ]]; then
+    if [[ ${EUID} -ne 0 ]]; then
         error "Must run as root to flash USB. Use: sudo $0 $*"
         exit 1
     fi
@@ -279,7 +279,8 @@ info "Rebuilding ISO..."
 
 # Regenerate md5sum (installer checks this)
 cd "${WORK_DIR}/iso"
-find . -follow -type f ! -name md5sum.txt -print0 | xargs -0 md5sum > md5sum.txt 2>/dev/null || true
+find . -follow -type f ! -name md5sum.txt -print0 | xargs -0 md5sum > md5sum.txt.new 2>/dev/null || true
+mv md5sum.txt.new md5sum.txt
 cd "${REPO_ROOT}"
 
 xorriso -as mkisofs \

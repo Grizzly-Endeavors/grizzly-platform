@@ -36,10 +36,10 @@ ALERTMANAGER_ADDR="${ALERTMANAGER_ADDR:-http://${R730XD_IP:-10.0.0.200}:9093}"
 INSTALL_DIR="${INSTALL_DIR:-/usr/local/bin}"
 
 ARCH="$(uname -m)"
-case "$ARCH" in
+case "${ARCH}" in
     x86_64)  ARCH_SUFFIX="amd64" ;;
     aarch64) ARCH_SUFFIX="arm64" ;;
-    *)       echo "Unsupported architecture: $ARCH"; exit 1 ;;
+    *)       echo "Unsupported architecture: ${ARCH}"; exit 1 ;;
 esac
 
 TMPDIR="$(mktemp -d)"
@@ -55,7 +55,7 @@ warn()  { echo -e "\033[1;33m  !\033[0m $*"; }
 fail()  { echo -e "\033[1;31m  ✗\033[0m $*"; exit 1; }
 
 need_sudo() {
-    if [[ "$INSTALL_DIR" == /usr/local/bin ]] && [[ $EUID -ne 0 ]]; then
+    if [[ "${INSTALL_DIR}" == /usr/local/bin ]] && [[ ${EUID} -ne 0 ]]; then
         echo "sudo"
     fi
 }
@@ -70,8 +70,8 @@ fetch_latest_github_tag() {
 
 install_binary() {
     local name="$1" src="$2"
-    chmod +x "$src"
-    $(need_sudo) install -m 0755 "$src" "${INSTALL_DIR}/${name}"
+    chmod +x "${src}"
+    $(need_sudo) install -m 0755 "${src}" "${INSTALL_DIR}/${name}"
     ok "${name} installed to ${INSTALL_DIR}/${name}"
 }
 
@@ -84,11 +84,11 @@ install_logcli() {
 
     local tag
     tag="$(fetch_latest_github_tag grafana/loki)"
-    [[ -z "$tag" ]] && fail "Could not determine latest Loki release"
+    [[ -z "${tag}" ]] && fail "Could not determine latest Loki release"
 
     local url="https://github.com/grafana/loki/releases/download/${tag}/logcli-linux-${ARCH_SUFFIX}.zip"
     info "  Downloading ${tag}..."
-    curl -sL "$url" -o "${TMPDIR}/logcli.zip"
+    curl -sL "${url}" -o "${TMPDIR}/logcli.zip"
     unzip -qo "${TMPDIR}/logcli.zip" -d "${TMPDIR}"
     install_binary "logcli" "${TMPDIR}/logcli-linux-${ARCH_SUFFIX}"
 }
@@ -102,12 +102,12 @@ install_promtool() {
 
     local tag
     tag="$(fetch_latest_github_tag prometheus/prometheus)"
-    [[ -z "$tag" ]] && fail "Could not determine latest Prometheus release"
+    [[ -z "${tag}" ]] && fail "Could not determine latest Prometheus release"
 
     local version="${tag#v}"
     local url="https://github.com/prometheus/prometheus/releases/download/${tag}/prometheus-${version}.linux-${ARCH_SUFFIX}.tar.gz"
     info "  Downloading ${tag}..."
-    curl -sL "$url" | tar xz -C "${TMPDIR}"
+    curl -sL "${url}" | tar xz -C "${TMPDIR}"
     install_binary "promtool" "${TMPDIR}/prometheus-${version}.linux-${ARCH_SUFFIX}/promtool"
 }
 
@@ -120,12 +120,12 @@ install_amtool() {
 
     local tag
     tag="$(fetch_latest_github_tag prometheus/alertmanager)"
-    [[ -z "$tag" ]] && fail "Could not determine latest Alertmanager release"
+    [[ -z "${tag}" ]] && fail "Could not determine latest Alertmanager release"
 
     local version="${tag#v}"
     local url="https://github.com/prometheus/alertmanager/releases/download/${tag}/alertmanager-${version}.linux-${ARCH_SUFFIX}.tar.gz"
     info "  Downloading ${tag}..."
-    curl -sL "$url" | tar xz -C "${TMPDIR}"
+    curl -sL "${url}" | tar xz -C "${TMPDIR}"
     install_binary "amtool" "${TMPDIR}/alertmanager-${version}.linux-${ARCH_SUFFIX}/amtool"
 }
 

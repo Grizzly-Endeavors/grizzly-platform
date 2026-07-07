@@ -29,7 +29,7 @@ CA_TRUST_DEST="/usr/local/share/ca-certificates/grizzly-platform-openbao-ca.crt"
 log()  { printf '[%s] %s\n' "$(basename "$0")" "$*"; }
 die()  { log "ERROR: $*" >&2; exit 1; }
 
-[ -r "${CONFIGMAP}" ] || die "${CONFIGMAP} not found"
+[[ -r "${CONFIGMAP}" ]] || die "${CONFIGMAP} not found"
 command -v ssh >/dev/null || die "ssh not on PATH"
 command -v sed >/dev/null || die "sed not on PATH"
 
@@ -41,9 +41,12 @@ TMP_CA="${TMPDIR}/ca.crt"
 # file directly. Use sudo cat through ssh — the CA is public (it's the
 # trust anchor, not the signing key), so piping it over ssh is fine.
 log "fetching CA from r730xd via sudo cat"
-ssh r730xd 'sudo cat /etc/openbao/tls/ca.crt' > "${TMP_CA}" \
-    || die "ssh fetch failed — check ssh r730xd + passwordless sudo"
-[ -s "${TMP_CA}" ] || die "fetched CA is empty"
+CA_HOST="${CA_SRC%%:*}"
+CA_PATH="${CA_SRC#*:}"
+# shellcheck disable=SC2029 # CA_PATH is a local script constant, not remote/user input — client-side expansion is intended
+ssh "${CA_HOST}" "sudo cat ${CA_PATH}" > "${TMP_CA}" \
+    || die "ssh fetch failed — check ssh ${CA_HOST} + passwordless sudo"
+[[ -s "${TMP_CA}" ]] || die "fetched CA is empty"
 grep -q 'BEGIN CERTIFICATE' "${TMP_CA}" || die "fetched CA is not PEM-looking"
 
 # --- embed into ConfigMap ---------------------------------------------
@@ -69,9 +72,9 @@ fi
 # --- install into controller trust store ------------------------------
 CA_TRUST_LEGACY="/usr/local/share/ca-certificates/lab-iac-openbao-ca.crt"
 
-if [ -w "$(dirname "${CA_TRUST_DEST}")" ] 2>/dev/null || sudo -n true 2>/dev/null; then
+if [[ -w "$(dirname "${CA_TRUST_DEST}")" ]] 2>/dev/null || sudo -n true 2>/dev/null; then
     log "installing CA into controller trust store at ${CA_TRUST_DEST}"
-    if [ -w "$(dirname "${CA_TRUST_DEST}")" ]; then
+    if [[ -w "$(dirname "${CA_TRUST_DEST}")" ]]; then
         cp "${TMP_CA}" "${CA_TRUST_DEST}"
         rm -f "${CA_TRUST_LEGACY}"
     else

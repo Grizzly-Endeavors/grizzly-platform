@@ -30,20 +30,20 @@ log()  { printf '[%s] %s\n' "$(basename "$0")" "$*"; }
 die()  { log "ERROR: $*" >&2; exit 1; }
 
 # --- preconditions -----------------------------------------------------
-[ -r "${VAULT_FILE}"  ] || die "${VAULT_FILE} not readable"
-[ -r "${VAULT_PASS}"  ] || die "${VAULT_PASS} not found — need the vault password"
+[[ -r "${VAULT_FILE}"  ]] || die "${VAULT_FILE} not readable"
+[[ -r "${VAULT_PASS}"  ]] || die "${VAULT_PASS} not found — need the vault password"
 command -v ansible-vault >/dev/null || die "ansible-vault not on PATH"
 command -v python3       >/dev/null || die "python3 not on PATH"
 
 # --- collect inputs ----------------------------------------------------
-if [ "${1:-}" = "--from-env" ]; then
+if [[ "${1:-}" == "--from-env" ]]; then
     CLIENT_ID="${INFISICAL_OPENBAO_CLIENT_ID:?unset}"
     CLIENT_SECRET="${INFISICAL_OPENBAO_CLIENT_SECRET:?unset}"
 else
     read -rp "Infisical OpenBao client_id: " CLIENT_ID
-    [ -n "${CLIENT_ID}" ] || die "client_id cannot be empty"
+    [[ -n "${CLIENT_ID}" ]] || die "client_id cannot be empty"
     read -rsp "Infisical OpenBao client_secret: " CLIENT_SECRET; echo
-    [ -n "${CLIENT_SECRET}" ] || die "client_secret cannot be empty"
+    [[ -n "${CLIENT_SECRET}" ]] || die "client_secret cannot be empty"
 fi
 
 # --- decrypt to tmp ---------------------------------------------------
@@ -125,7 +125,8 @@ log "verifying round-trip"
 VERIFY="$(ansible-vault view --vault-password-file "${VAULT_PASS}" "${VAULT_FILE}" \
     | grep -E '^vault_infisical_openbao_client_(id|secret):' || true)"
 
-[ "$(printf '%s\n' "${VERIFY}" | wc -l)" = "2" ] \
+VERIFY_COUNT="$(printf '%s\n' "${VERIFY}" | wc -l)"
+[[ "${VERIFY_COUNT}" == "2" ]] \
     || die "expected 2 keys in vault after upsert, got: ${VERIFY}"
 
 log "done — both keys present in ${VAULT_FILE}"

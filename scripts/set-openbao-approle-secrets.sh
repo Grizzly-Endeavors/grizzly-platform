@@ -38,9 +38,9 @@ log()  { printf '[%s] %s\n' "$(basename "$0")" "$*"; }
 die()  { log "ERROR: $*" >&2; exit 1; }
 
 # --- preconditions -----------------------------------------------------
-[ -r "${VAULT_FILE}"     ] || die "${VAULT_FILE} not readable"
-[ -r "${VAULT_PASS}"     ] || die "${VAULT_PASS} not found"
-[ -r "${INFISICAL_JSON}" ] || die "${INFISICAL_JSON} not found (project id)"
+[[ -r "${VAULT_FILE}"     ]] || die "${VAULT_FILE} not readable"
+[[ -r "${VAULT_PASS}"     ]] || die "${VAULT_PASS} not found"
+[[ -r "${INFISICAL_JSON}" ]] || die "${INFISICAL_JSON} not found (project id)"
 command -v ansible-vault >/dev/null || die "ansible-vault not on PATH"
 command -v python3       >/dev/null || die "python3 not on PATH"
 command -v infisical     >/dev/null || die "infisical CLI not on PATH"
@@ -49,12 +49,14 @@ command -v jq            >/dev/null || die "jq not on PATH"
 
 # --- fetch root token from Infisical ----------------------------------
 PROJECT_ID="$(jq -r .workspaceId "${INFISICAL_JSON}")"
-[ -n "${PROJECT_ID}" ] && [ "${PROJECT_ID}" != "null" ] || die "workspaceId missing in .infisical.json"
+if [[ -z "${PROJECT_ID}" ]] || [[ "${PROJECT_ID}" == "null" ]]; then
+    die "workspaceId missing in .infisical.json"
+fi
 
 log "fetching OpenBao root token from Infisical (project=${PROJECT_ID})"
 ROOT_TOKEN="$(infisical secrets get OPENBAO_ROOT_TOKEN \
     --projectId="${PROJECT_ID}" --env=prod --plain --silent 2>/dev/null | tr -d '[:space:]')"
-[ -n "${ROOT_TOKEN}" ] || die "could not fetch OPENBAO_ROOT_TOKEN from Infisical (run 'infisical login' first?)"
+[[ -n "${ROOT_TOKEN}" ]] || die "could not fetch OPENBAO_ROOT_TOKEN from Infisical (run 'infisical login' first?)"
 
 # --- talk to OpenBao --------------------------------------------------
 # Address + CA are the canonical ones from the ADR. If you run this
@@ -74,12 +76,12 @@ for candidate in \
     "/etc/openbao/tls/ca.crt" \
     "/usr/local/share/ca-certificates/grizzly-platform-openbao-ca.crt" \
     "/usr/local/share/ca-certificates/lab-iac-openbao-ca.crt"; do
-    if [ -r "${candidate}" ]; then
+    if [[ -r "${candidate}" ]]; then
         CA_PATH="${candidate}"
         break
     fi
 done
-if [ -n "${CA_PATH}" ]; then
+if [[ -n "${CA_PATH}" ]]; then
     export VAULT_CACERT="${CA_PATH}"
     export BAO_CACERT="${CA_PATH}"
     log "using CA bundle ${CA_PATH}"
@@ -91,11 +93,11 @@ fi
 # --- fetch role_id + issue new secret_id ------------------------------
 log "fetching ansible-iac role_id"
 ROLE_ID="$(bao read -field=role_id auth/approle/role/ansible-iac/role-id)"
-[ -n "${ROLE_ID}" ] || die "empty role_id — is bootstrap-openbao.yml run?"
+[[ -n "${ROLE_ID}" ]] || die "empty role_id — is bootstrap-openbao.yml run?"
 
 log "issuing fresh secret_id"
 SECRET_ID="$(bao write -f -field=secret_id auth/approle/role/ansible-iac/secret-id)"
-[ -n "${SECRET_ID}" ] || die "empty secret_id from bao write"
+[[ -n "${SECRET_ID}" ]] || die "empty secret_id from bao write"
 
 # --- upsert into vault.yml --------------------------------------------
 TMPDIR="$(mktemp -d)"
@@ -162,7 +164,8 @@ ansible-vault encrypt \
 log "verifying round-trip"
 VERIFY="$(ansible-vault view --vault-password-file "${VAULT_PASS}" "${VAULT_FILE}" \
     | grep -E '^vault_openbao_approle_(role_id|secret_id):' || true)"
-[ "$(printf '%s\n' "${VERIFY}" | wc -l)" = "2" ] \
+VERIFY_COUNT="$(printf '%s\n' "${VERIFY}" | wc -l)"
+[[ "${VERIFY_COUNT}" == "2" ]] \
     || die "expected 2 keys in vault after upsert, got: ${VERIFY}"
 
 log "done — role_id + secret_id present in ${VAULT_FILE}"
