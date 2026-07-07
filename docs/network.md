@@ -55,9 +55,9 @@ All lab machines are in the garage on the SR2024 (relocated from the closet 2026
 
 ### WiFi
 
-- AP230 / AP130s / AP630 all factory-reset to standalone mode. Mounting and SSID config still pending.
-- Xfinity gateway WiFi still active as the primary coverage pending AP mounts.
-- PoE to APs will come from SR2024 once mounted (no injectors needed).
+- **AP630 (primary) + one AP130 (secondary) are configured and live** (2026-07-07) as a single standalone roaming hive (`grizzly-hive`, 802.11r/k/v), one flat untagged WPA2-AES-PSK SSID. AP630: 11ax, ch 1/36. AP130: 11ng/11ac, ch 6/149. Configs: `ansible/files/aerohive/ap630.hiveos` / `ap130.hiveos`; procedure: [runbooks/aerohive-ap-setup.md](runbooks/aerohive-ap-setup.md). The spare AP230 is unconfigured.
+- **APs are powered by PoE injectors** — the SR2024's own PoE is not delivering (PSE failure, [#84](https://github.com/Grizzly-Endeavors/grizzly-platform/issues/84)); the earlier "PoE from the SR2024, no injectors" plan does not currently hold.
+- Xfinity gateway WiFi can be retired once the Aerohive coverage is confirmed around the house.
 
 ### DNS
 

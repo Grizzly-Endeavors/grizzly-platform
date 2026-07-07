@@ -9,7 +9,7 @@ CLI syntax reference: [aerohive-cli-reference.md](../aerohive-cli-reference.md).
 ## Prerequisites
 
 - Both APs are factory-reset with CAPWAP disabled (per `docs/hardware.md` / the inventory table in the serial-interface doc). **A factory reset re-enables CAPWAP** — if either AP was reset again, its very first commands must be `no capwap client enable` then `save config` (the committed scripts start with `no capwap client enable`, so a fresh paste covers it).
-- Both APs are powered from the SR2024 (802.3at PoE+, no injectors) and reachable on the LAN. See the PSE-wedge gotcha below.
+- Both APs are powered via **PoE injectors** and reachable on the LAN. The SR2024's own PoE is **not delivering** (bench-confirmed 2026-07-07: ~1.2 W total across all ports, port faults) — the PSE failure tracked in [#84](https://github.com/Grizzly-Endeavors/grizzly-platform/issues/84). Injectors are the standing arrangement until the switch PoE is fixed/replaced; the original "power from the SR2024" plan does not currently hold. See the PSE gotcha below.
 - The home WiFi PSK is set in the vault: `vault_home_wifi_psk` in `ansible/inventory/group_vars/all/vault.yml` (the `.example` shows the slot). It surfaces as `home_wifi_psk` in `vars.yml`.
 - You've picked the SSID and a shared hive secret (see the render step).
 
