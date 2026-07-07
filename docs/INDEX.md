@@ -23,12 +23,6 @@ One line per document. See [`README.md`](README.md) for how the docs are organiz
 - [ex50-dal-interface.md](ex50-dal-interface.md) — Digi EX50 DAL admin CLI interface map.
 - [aerohive-cli-reference.md](aerohive-cli-reference.md) — HiveOS CLI quick reference.
 - [aerohive-serial-interface.md](aerohive-serial-interface.md) — Aerohive serial/management access notes.
-- [ap630-debian-project.md](ap630-debian-project.md) — AP630 Debian-on-aarch64 project (moved to [Grizzly-Endeavors/ap630-debian](https://github.com/Grizzly-Endeavors/ap630-debian)).
-
-## Application integration
-
-- [residuum-feedback-plan.md](residuum-feedback-plan.md) — Residuum feedback-ingest service rollout plan.
-- [residuum-feedback-schema.md](residuum-feedback-schema.md) — Postgres schema for feedback ingestion.
 
 ## Grouped areas (own index)
 

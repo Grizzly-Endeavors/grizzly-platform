@@ -25,6 +25,13 @@ Documentation from the migration process to the current bare-metal infrastructur
 - Step-by-step migration guides
 - Integration documentation
 
+### Completed side-project docs
+
+Rollout plans and one-off notes for finished, self-contained work — kept for the record rather than as live references:
+
+- **ap630-debian-project.md** — the AP630 Debian port; project moved to its own repo and archived (ADR-011).
+- **residuum-feedback-plan.md**, **residuum-feedback-schema.md** — the feedback-ingest service's rollout plan and DB schema design; the service has been live since 2026-04-17.
+
 ## Skills Demonstrated
 
 These archived materials showcase:

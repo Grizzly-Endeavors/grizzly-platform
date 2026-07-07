@@ -1,4 +1,6 @@
-# Residuum Feedback Ingestion — Lab Changes
+# Residuum Feedback Ingestion — Lab Changes (Archived Rollout Plan)
+
+**Archived — this plan has fully landed.** The `feedback-ingest` app has been running live in the `residuum-feedback` namespace (Flux-managed, `kubernetes/apps/feedback-ingest/`) since 2026-04-17. Kept here as a record of the rollout plan as originally written; treat any "pending" language below as historical, not current status. For current architecture, see the live manifests and `docs/monitoring-integration.md`.
 
 What needs to land in `grizzly-platform` to stand up the feedback ingestion feature. See `~/Projects/residuum-feedback-decisions.md` for the architectural decisions this implements.
 
@@ -6,7 +8,7 @@ Database schema is locked in [`residuum-feedback-schema.md`](./residuum-feedback
 
 ---
 
-## Status (2026-04-15)
+## Status (2026-04-15, as originally written — superseded, see banner above)
 
 Nothing in this plan has landed in `grizzly-platform` yet. The feedback-ingest service itself is scaffolded and verified end-to-end against the live `r730xd-postgres` (`residuum_feedback` database + role provisioned by the feedback-ingest repo's bootstrap workflow), but every item below is still pending:
 
