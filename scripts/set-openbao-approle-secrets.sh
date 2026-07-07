@@ -73,8 +73,7 @@ CA_PATH=""
 for candidate in \
     "/etc/openbao/tls/ca.crt" \
     "/usr/local/share/ca-certificates/grizzly-platform-openbao-ca.crt" \
-    "/usr/local/share/ca-certificates/lab-iac-openbao-ca.crt" \
-    "${REPO_ROOT}/ansible/roles/r730xd-openbao/files/ca.crt"; do
+    "/usr/local/share/ca-certificates/lab-iac-openbao-ca.crt"; do
     if [ -r "${candidate}" ]; then
         CA_PATH="${candidate}"
         break
