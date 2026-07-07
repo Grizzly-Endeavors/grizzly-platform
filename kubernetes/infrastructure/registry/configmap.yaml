@@ -6,24 +6,18 @@ metadata:
   labels:
     app.kubernetes.io/name: registry
 data:
-  # zot registry config. We keep this registry anonymous + plain-HTTP +
-  # in-cluster only (same posture as the registry:2.8.3 it replaces) so the
+  # zot registry config. Anonymous + plain-HTTP + in-cluster only, so the
   # containerd mirror (ansible/roles/k8s-registry-trust), the DinD sidecar's
   # --insecure-registry, and kaniko's anonymous push all keep working
-  # unchanged. The reason for the swap is the OCI 1.1 referrers API, which the
-  # CI gate needs to attach cosign signatures to image digests. Adding auth is
-  # a separate, later change (it ripples into containerd/DinD/kaniko creds).
+  # unchanged. Anonymous access is required for the OCI 1.1 referrers API,
+  # which the CI gate uses to attach cosign signatures to image digests.
+  # Adding auth is a separate, later change (it ripples into
+  # containerd/DinD/kaniko creds).
   #
-  # rootdirectory /lab-registry-v2: fresh prefix created during the zot v2.1.18
-  # migration. We exported the in-use images (latest per repo) to OCI archives,
-  # pointed zot at this empty prefix so it boots with nothing to reconcile (no
-  # dedupe-restore storm), then re-pushed the keepers. The old /lab-registry
-  # prefix (full 34 GiB store) and the registry:2.8.3 data at the bucket root are
-  # retained as a rollback net until the migration is verified, then pruned.
   # dedupe MUST be false: with S3 remote storage zot requires a remote cache DB
   # for dedupe, which we don't run. fastRestart skips the startup storage->metaDB
   # walk on a clean restart (metaDB persists on the cache PVC); combined with
-  # v2.1.18's dedupe-restore-complete marker, restarts no longer storm.
+  # the dedupe-restore-complete marker, restarts don't storm.
   #
   # extensions.sync (onDemand): transparent pull-through cache for docker.io +
   # gcr.io. On a cache miss zot fetches from upstream and stores it here, then
@@ -32,8 +26,6 @@ data:
   # local dir before the S3 push) — pointed at the cache PVC. Nodes route
   # docker.io/gcr.io pulls here via containerd certs.d (k8s-registry-trust) and
   # CI DinD via --registry-mirror. See docs/decisions/032-registry-pullthrough-cache.md.
-  # (The v2.1.2 attempt stalled on the S3 sync push under the dedupe-restore
-  # write lock; that lock is gone on v2.1.18 — see ADR-031.)
   config.json: |
     {
       "distSpecVersion": "1.1.0",

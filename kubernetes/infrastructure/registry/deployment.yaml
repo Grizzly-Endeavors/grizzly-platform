@@ -20,12 +20,9 @@ spec:
     spec:
       containers:
         - name: registry
-          # zot replaces registry:2.8.3 to gain the OCI 1.1 referrers API
-          # (cosign signatures attached to digests) + a Prometheus metrics
-          # extension. v2.1.18: adds the dedupe-restore-complete marker + the
-          # fastRestart flag that together eliminate the startup reconciliation
-          # storm v2.1.2 hit on the S3 backend. Pinned tag; re-pin to a digest
-          # once mirrored locally.
+          # zot gives us the OCI 1.1 referrers API (cosign signatures attached
+          # to digests) + a Prometheus metrics extension. Pinned tag; re-pin
+          # to a digest once mirrored locally.
           image: ghcr.io/project-zot/zot-linux-amd64:v2.1.18
           imagePullPolicy: IfNotPresent
           args: ["serve", "/etc/zot/config.json"]
