@@ -1,7 +1,7 @@
 # ADR-004: ZFS + iSCSI for K8s Block Storage
 
 **Date:** 2026-04-02
-**Status:** Accepted (ZFS pool created 2026-04-03, iSCSI pending)
+**Status:** Accepted (ZFS pool created 2026-04-03; iSCSI provisioning implemented per ADR-015)
 **Related:** [ADR-012](012-hot-services-on-zfs-minio-split.md) — hot services moved onto ZFS datasets
 
 ## Context
