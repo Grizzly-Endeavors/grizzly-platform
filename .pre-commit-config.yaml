@@ -60,15 +60,15 @@ repos:
         args: [--external-sources]
         exclude: ^archive/
 
-  # Terraform formatting (if terraform files exist outside archive)
-  # Uncomment if you add active Terraform files
-  # - repo: https://github.com/antonbabenko/pre-commit-terraform
-  #   rev: v1.96.1
-  #   hooks:
-  #     - id: terraform_fmt
-  #       exclude: ^archive/
-  #     - id: terraform_validate
-  #       exclude: ^archive/
+# Terraform formatting (if terraform files exist outside archive)
+# Uncomment if you add active Terraform files
+# - repo: https://github.com/antonbabenko/pre-commit-terraform
+#   rev: v1.96.1
+#   hooks:
+#     - id: terraform_fmt
+#       exclude: ^archive/
+#     - id: terraform_validate
+#       exclude: ^archive/
 
 # Configuration
 ci:
