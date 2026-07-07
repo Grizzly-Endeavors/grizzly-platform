@@ -19,9 +19,9 @@ disaster-recovery runbook.
 
 ```
 ansible-galaxy collection install -r ansible/requirements.yml
-ansible-playbook -i ansible/inventory/r730xd.yml \
+ansible-playbook -i ansible/inventory \
   ansible/playbooks/deploy-openbao.yml --vault-password-file .vault_pass
-ansible-playbook -i ansible/inventory/r730xd.yml \
+ansible-playbook -i ansible/inventory \
   ansible/playbooks/bootstrap-openbao.yml --vault-password-file .vault_pass
 scripts/set-openbao-approle-secrets.sh
 ansible-playbook ansible/playbooks/setup-openbao-k8s-auth.yml \
@@ -67,7 +67,7 @@ Per-playbook, starting with the lowest-risk one. Set
 `--extra-vars`:
 
 ```
-ansible-playbook -i ansible/inventory/r730xd.yml \
+ansible-playbook -i ansible/inventory \
   ansible/playbooks/deploy-foundation-stores.yml \
   --vault-password-file .vault_pass -e openbao_read_enabled=true
 ```

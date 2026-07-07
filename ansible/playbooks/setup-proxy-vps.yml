@@ -14,7 +14,7 @@
 # exposing the full home LAN to the VPS. See ADR-019.
 #
 # Usage:
-#   ansible-playbook -i ansible/inventory/proxy-vps.yml \
+#   ansible-playbook -i ansible/inventory \
 #     ansible/playbooks/setup-proxy-vps.yml --vault-password-file .vault_pass
 
 - name: Setup Proxy VPS

@@ -21,7 +21,7 @@
 #     openbao-disaster-recovery.md, "Manual prerequisites")
 #
 # Usage:
-#   ansible-playbook -i ansible/inventory/r730xd.yml \
+#   ansible-playbook -i ansible/inventory \
 #     ansible/playbooks/deploy-openbao.yml \
 #     --vault-password-file .vault_pass -v
 

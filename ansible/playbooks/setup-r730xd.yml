@@ -8,7 +8,7 @@
 #   - Adds storage-oriented packages (smartmontools, lm-sensors, hdparm)
 #
 # Usage:
-#   ansible-playbook -i ansible/inventory/r730xd.yml ansible/playbooks/setup-r730xd.yml -v
+#   ansible-playbook -i ansible/inventory ansible/playbooks/setup-r730xd.yml -v
 
 - name: R730xd baseline setup
   hosts: all

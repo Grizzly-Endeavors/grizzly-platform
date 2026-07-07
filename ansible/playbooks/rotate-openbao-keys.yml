@@ -26,7 +26,7 @@
 #     (or INFISICAL_TOKEN exported)
 #
 # Usage:
-#   ansible-playbook -i ansible/inventory/r730xd.yml \
+#   ansible-playbook -i ansible/inventory \
 #     ansible/playbooks/rotate-openbao-keys.yml \
 #     --vault-password-file .vault_pass -v
 #

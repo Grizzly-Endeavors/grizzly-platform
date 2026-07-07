@@ -1,8 +1,10 @@
-# Monitoring Integration Guide
+# Monitoring — Operations
 
 > **IP addresses:** Authoritative values are in `ansible/group_vars/all/network.yml`.
 
-How the platform monitoring system works today, and how to evolve it as the infrastructure grows.
+How the platform monitors **its own hosts** — the exporters, cron health checks, Prometheus alert rules, Grafana dashboards, and log/trace pipelines that keep the machines observable — and how to extend that as the infrastructure grows. This is the operator's view.
+
+> **Building an app that needs to emit telemetry?** That's a consumer task, not an operator one — see the integration guide [`integration/observability.md`](integration/observability.md) for how a workload ships logs, metrics, and traces into this stack. This doc is about operating the stack itself and monitoring the hosts.
 
 ## Current Architecture
 

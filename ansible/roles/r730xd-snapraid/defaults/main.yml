@@ -58,7 +58,12 @@ snapraid_scrub_min_age: 10
 # Prevents accidental mass deletion (e.g. an unmounted data disk) from
 # propagating to parity. Enforced by the snapraid-sync.sh wrapper, since
 # `snapraid` itself has no equivalent CLI flag.
-snapraid_delete_threshold: 40
+#
+# Sized above routine bulk churn (registry blob GC, backup rotation on
+# foundation/s3-bulk can remove 100-150 files in a single run) while staying
+# far below what a genuinely lost data disk would show (tens of thousands of
+# files, given each bay holds hundreds of GB to multiple TB).
+snapraid_delete_threshold: 500
 
 # Path to the sync wrapper script (runs `snapraid diff` then `snapraid sync`,
 # enforcing snapraid_delete_threshold). Called by snapraid-sync.service.

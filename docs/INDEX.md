@@ -10,7 +10,7 @@ One line per document. See [`README.md`](README.md) for how the docs are organiz
 
 ## Operations & standup
 
-- [monitoring-integration.md](monitoring-integration.md) — observability stack architecture (Prometheus/Loki/Tempo/Grafana).
+- [monitoring.md](monitoring.md) — operator view of host monitoring: exporters, cron checks, alert rules, Grafana dashboards (Prometheus/Loki/Tempo/Grafana).
 
 ## CI Gate
 
@@ -27,7 +27,8 @@ One line per document. See [`README.md`](README.md) for how the docs are organiz
 ## Grouped areas (own index)
 
 - [decisions/INDEX.md](decisions/INDEX.md) — ADRs (why).
-- [runbooks/INDEX.md](runbooks/INDEX.md) — operator procedures (how).
+- [integration/INDEX.md](integration/INDEX.md) — integration guides (how to consume a platform service from an app).
+- [runbooks/INDEX.md](runbooks/INDEX.md) — operator procedures (how to run a service).
 - [in-progress/INDEX.md](in-progress/INDEX.md) — active multi-phase work (what's in flight).
 - [exploration/INDEX.md](exploration/INDEX.md) — researched-but-not-committed ideas.
 - [templates/app-deploy/](templates/app-deploy/) — starter files for deploying a new app to the cluster.

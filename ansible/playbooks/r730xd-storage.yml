@@ -11,7 +11,7 @@
 #   - iDRAC accessible at idrac_host with credentials in vault
 #
 # Usage:
-#   ansible-playbook -i ansible/inventory/r730xd.yml ansible/playbooks/r730xd-storage.yml \
+#   ansible-playbook -i ansible/inventory ansible/playbooks/r730xd-storage.yml \
 #     --vault-password-file .vault_pass -v
 #
 # After first run:
