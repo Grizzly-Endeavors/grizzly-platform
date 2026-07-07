@@ -19,14 +19,14 @@ Two versitygw gateways run as Docker Compose services on the R730xd, each owned 
 
 ```
 # 1. ZFS dataset for the hot tier (adds tank/foundation/s3-hot):
-ansible-playbook -i ansible/inventory/r730xd.yml ansible/playbooks/r730xd-zfs.yml \
+ansible-playbook -i ansible/inventory ansible/playbooks/r730xd-zfs.yml \
   --vault-password-file .vault_pass
 
 # 2. OpenBao Vault-IAM backend (mount + policy + AppRole + root creds):
 ansible-playbook ansible/playbooks/setup-versitygw-iam.yml --vault-password-file .vault_pass
 
 # 3. Deploy the gateways:
-ansible-playbook -i ansible/inventory/r730xd.yml ansible/playbooks/deploy-foundation-stores.yml \
+ansible-playbook -i ansible/inventory ansible/playbooks/deploy-foundation-stores.yml \
   --tags s3-hot,s3-bulk --vault-password-file .vault_pass
 
 # 4. Monitoring (statsd-exporter scrape jobs + /health blackbox probes).

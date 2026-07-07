@@ -8,7 +8,7 @@
 #   - iDRAC accessible at idrac_host with credentials in vault
 #
 # Usage:
-#   ansible-playbook -i ansible/inventory/r730xd.yml ansible/playbooks/r730xd-zfs.yml \
+#   ansible-playbook -i ansible/inventory ansible/playbooks/r730xd-zfs.yml \
 #     --vault-password-file .vault_pass -v
 
 - name: R730xd ZFS pool setup

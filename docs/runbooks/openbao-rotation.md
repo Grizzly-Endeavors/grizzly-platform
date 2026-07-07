@@ -26,7 +26,7 @@ infisical secrets --projectId=$(jq -r .workspaceId .infisical.json) --env=prod
 ## Flow 1 — Rekey unseal keys
 
 ```
-ansible-playbook -i ansible/inventory/r730xd.yml \
+ansible-playbook -i ansible/inventory \
   ansible/playbooks/rotate-openbao-keys.yml \
   --tags rekey \
   --vault-password-file .vault_pass -v
@@ -53,7 +53,7 @@ After:
 ## Flow 2 — Rotate the root token
 
 ```
-ansible-playbook -i ansible/inventory/r730xd.yml \
+ansible-playbook -i ansible/inventory \
   ansible/playbooks/rotate-openbao-keys.yml \
   --tags root-token \
   --vault-password-file .vault_pass -v
@@ -91,7 +91,7 @@ This is the only flow that requires a manual step first, because Infisical issue
    - Do NOT revoke the old secret yet.
 2. Run the rotation:
 ```
-ansible-playbook -i ansible/inventory/r730xd.yml \
+ansible-playbook -i ansible/inventory \
   ansible/playbooks/rotate-openbao-keys.yml \
   --tags infisical-identity \
   --extra-vars openbao_infisical_new_client_secret="$NEW_SECRET" \

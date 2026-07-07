@@ -5,15 +5,15 @@
 #
 # Usage:
 #   # Against a specific inventory:
-#   ansible-playbook -i ansible/inventory/r730xd.yml \
+#   ansible-playbook -i ansible/inventory \
 #     ansible/playbooks/setup-claude-user.yml -v
 #
 #   # Against all lab nodes:
-#   ansible-playbook -i ansible/inventory/lab-nodes.yml \
+#   ansible-playbook -i ansible/inventory \
 #     ansible/playbooks/setup-claude-user.yml -v
 #
 #   # Limit to a single host:
-#   ansible-playbook -i ansible/inventory/lab-nodes.yml \
+#   ansible-playbook -i ansible/inventory \
 #     ansible/playbooks/setup-claude-user.yml -l r730xd -v
 
 - name: Setup Claude Code user

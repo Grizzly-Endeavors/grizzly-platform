@@ -18,8 +18,8 @@
 #   - Lid-close handling (for laptops like the Inspiron)
 #
 # Usage:
-#   ansible-playbook -i ansible/inventory/lab-nodes.yml -l quanta ansible/playbooks/setup-k8s-worker.yml -v
-#   ansible-playbook -i ansible/inventory/lab-nodes.yml -l k8s_workers ansible/playbooks/setup-k8s-worker.yml -v
+#   ansible-playbook -i ansible/inventory -l quanta ansible/playbooks/setup-k8s-worker.yml -v
+#   ansible-playbook -i ansible/inventory -l k8s_workers ansible/playbooks/setup-k8s-worker.yml -v
 
 - name: K8s worker node setup
   hosts: all

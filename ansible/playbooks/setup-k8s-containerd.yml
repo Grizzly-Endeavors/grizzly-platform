@@ -4,8 +4,8 @@
 # Run AFTER setup-k8s-worker.yml and BEFORE kubeadm init/join.
 #
 # Usage:
-#   ansible-playbook -i ansible/inventory/lab-nodes.yml -l k8s_cluster ansible/playbooks/setup-k8s-containerd.yml -v
-#   ansible-playbook -i ansible/inventory/lab-nodes.yml -l dell-inspiron-15 ansible/playbooks/setup-k8s-containerd.yml -v
+#   ansible-playbook -i ansible/inventory -l k8s_cluster ansible/playbooks/setup-k8s-containerd.yml -v
+#   ansible-playbook -i ansible/inventory -l dell-inspiron-15 ansible/playbooks/setup-k8s-containerd.yml -v
 
 - name: Install container runtime for Kubernetes
   hosts: k8s_cluster

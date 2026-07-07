@@ -9,7 +9,7 @@
 # want to preserve tight SLO-style availability.
 #
 # Usage:
-#   ansible-playbook -i ansible/inventory/lab-nodes.yml \
+#   ansible-playbook -i ansible/inventory \
 #     ansible/playbooks/setup-k8s-registry-trust.yml
 #
 # See:
