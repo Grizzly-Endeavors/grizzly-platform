@@ -16,6 +16,7 @@ The rule is mechanical on purpose: **INDEX to find a doc, README to understand t
 | Area | Shape | Listing | What lives there |
 |------|-------|---------|------------------|
 | **Decisions** | [decisions/README.md](decisions/README.md) | [decisions/INDEX.md](decisions/INDEX.md) | ADRs — *why* the platform is the way it is. |
+| **Integration** | [integration/README.md](integration/README.md) | [integration/INDEX.md](integration/INDEX.md) | Consumer guides — *how to leverage* a platform service (DB, secrets, SSO, mail, storage, telemetry) from an app. |
 | **Runbooks** | [runbooks/README.md](runbooks/README.md) | [runbooks/INDEX.md](runbooks/INDEX.md) | Operator procedures — *how* to deploy, drive, rotate, recover live systems. |
 | **In-progress** | [in-progress/README.md](in-progress/README.md) | [in-progress/INDEX.md](in-progress/INDEX.md) | Active, multi-phase work and where we left off. The only place transient status lives. |
 | **Exploration** | [exploration/README.md](exploration/README.md) | [exploration/INDEX.md](exploration/INDEX.md) | Researched-but-not-committed ideas. |
@@ -26,6 +27,7 @@ The rule is mechanical on purpose: **INDEX to find a doc, README to understand t
 Three homes, one question each — keep content in the right one and none of them rots:
 
 - **Why we chose this** → an [ADR](decisions/). Permanent.
+- **How to consume this from an app** → an [integration guide](integration/). Permanent. (Distinct from a runbook: consumer-facing, not operator-facing.)
 - **How to operate/recover this** → a [runbook](runbooks/). Permanent.
 - **What's in flight and where we left off** → an [in-progress thread](in-progress/). Ephemeral; deleted when the work lands.
 - **A discrete bug or small follow-up** → a GitHub issue. Docs link to issues rather than duplicating them.
