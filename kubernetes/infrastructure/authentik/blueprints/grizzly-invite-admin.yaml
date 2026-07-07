@@ -15,16 +15,10 @@ entries:
       authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
       invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
 
-  # ADR-043 originally left this unbound so a signed-in non-admin would see the
-  # broker's own friendly "not allowed" page instead of the outpost's generic
-  # deny (the broker still checks grizzly-admins from X-authentik-groups
-  # in-app, as defense in depth). Superseded by ADR-049: the app library on
-  # sso.grizzly-endeavors.com shows every app any authenticated user can reach, so
-  # leaving this unbound meant friends saw an admin-only provisioning tool in
-  # their launcher. The group binding below scopes both library visibility and
-  # access to grizzly-admins; a non-admin now gets the outpost's generic 403 if
-  # they hit the URL directly, trading the polished deny page for a clean
-  # app library.
+  # Scopes both app-library visibility and access to grizzly-admins (ADR-049) —
+  # the broker also checks grizzly-admins from X-authentik-groups in-app, as
+  # defense in depth. A non-admin who hits the URL directly gets the outpost's
+  # generic 403.
   - model: authentik_core.application
     id: invite-admin-app
     identifiers:
@@ -45,9 +39,7 @@ entries:
       enabled: true
       negate: false
 
-  # NOTE: the embedded-outpost provider binding used to live here, listing only
-  # invite-admin-provider. With a second proxy provider now in play (Roundcube
-  # webmail), the outpost's provider list must enumerate BOTH — a single blueprint
-  # replaces the M2M wholesale, so two files each setting it would clobber each
-  # other. The binding was consolidated into blueprints/grizzly-webmail.yaml,
-  # which references this provider via !Find. Do not re-add an outpost entry here.
+  # NOTE: the embedded-outpost provider binding lives in
+  # blueprints/grizzly-webmail.yaml, which enumerates every proxy provider (a
+  # blueprint replaces the M2M list wholesale, so only one file may own it).
+  # Do not add an outpost entry here.
