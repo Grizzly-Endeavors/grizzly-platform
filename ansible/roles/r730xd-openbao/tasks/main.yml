@@ -150,9 +150,8 @@
     mode: "0644"
   register: openbao_ca_installed
 
-# Remove the legacy lab-iac-openbao-ca.crt name installed before the
-# 2026-04 grizzly-platform rename. Same CA bytes, just under the old
-# filename — leaving it would clutter the trust store.
+# Ensures no orphaned lab-iac-openbao-ca.crt (same CA bytes, old
+# filename) lingers and clutters the trust store.
 - name: Remove legacy lab-iac CA bundle from trust store
   ansible.builtin.file:
     path: /usr/local/share/ca-certificates/lab-iac-openbao-ca.crt
