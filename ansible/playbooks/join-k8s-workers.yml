@@ -21,7 +21,7 @@
 #   kubectl -n kube-system get pods        # Cilium agents on all nodes
 #   cilium status                          # All green
 #
-# See: docs/k8s-cluster-standup.md (Phase 2)
+# See: docs/runbooks/k8s-cluster-ops.md
 # Decisions: ADR-014 (stack), ADR-016 (single CP)
 
 # ============================================================

@@ -17,7 +17,7 @@
 #   kubectl get sc
 #   kubectl get pods -n democratic-csi
 #
-# See: docs/k8s-cluster-standup.md (Phase 3)
+# See: docs/runbooks/k8s-cluster-ops.md
 # ADRs: 004 (ZFS + iSCSI), 015 (dynamic storage provisioning)
 
 # ============================================================

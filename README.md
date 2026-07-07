@@ -49,6 +49,8 @@ ansible-playbook -i ansible/inventory/r730xd.yml ansible/playbooks/deploy-observ
 ansible-playbook -i ansible/inventory/proxy-vps.yml ansible/playbooks/setup-proxy-vps.yml -v
 ```
 
+K8s cluster standup/rejoin/upgrade is its own multi-step sequence — see [docs/runbooks/k8s-cluster-ops.md](docs/runbooks/k8s-cluster-ops.md).
+
 ## Documentation
 
 Docs follow a **README = shape, INDEX = listing** convention — read a `README.md` to understand an area, its `INDEX.md` to find a specific doc. **[`INDEX.md`](INDEX.md) (repo root) is the navigation map** — subsystems → their decisions, runbooks, and code. From there:

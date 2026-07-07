@@ -18,7 +18,7 @@
 #   kubectl get pods -n arc-systems
 #   kubectl get pods -n argo
 #
-# See: docs/k8s-cluster-standup.md (Phase 5)
+# See: docs/runbooks/k8s-cluster-ops.md
 # ADR: 017 (ARC v2), 018 (Argo Workflows)
 
 # ============================================================

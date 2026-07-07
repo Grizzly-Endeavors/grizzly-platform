@@ -27,7 +27,7 @@
 #   kubectl get ds -n monitoring
 #   logcli query '{namespace="flux-system"}' --limit=5
 #
-# See: docs/k8s-cluster-standup.md (Phase 4 + Phase 7a)
+# See: docs/runbooks/k8s-cluster-ops.md
 # ADRs: 014 (Flux CD chosen for CLI-first GitOps), 020 (per-repo app delivery)
 
 # ============================================================
