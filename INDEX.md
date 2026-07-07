@@ -1,0 +1,60 @@
+# Platform Index — where things live
+
+The navigation map for the repo. [`README.md`](README.md) is the platform's *shape* (architecture, machines, traffic flow); this is the *map* — when you need to work on a subsystem, start here to find its docs (why + how) and its code. Nothing here is loaded on every task; consult the entry for what you're actually touching.
+
+Docs follow **README = shape, INDEX = listing**. The docs map is [`docs/README.md`](docs/README.md); the full doc listing is [`docs/INDEX.md`](docs/INDEX.md).
+
+## Subsystems
+
+Each entry: what it is → decisions (*why*) · runbook (*how*) · code.
+
+### CI Gate
+Centralized CI gate — versioned `grizzly-gate` image runs per-language checks + SCA, cosign-signs passing image digests, Kyverno refuses unsigned images at admission. Gate *source* lives in its own repo ([Grizzly-Endeavors/grizzly-gate](https://github.com/Grizzly-Endeavors/grizzly-gate)); this platform owns the *integration*.
+- **Why:** [ADR-028](docs/decisions/028-centralized-ci-gate.md) (gate + cosign + Kyverno), [029](docs/decisions/029-gate-config-honest-map.md) (honest map), [030](docs/decisions/030-cross-ecosystem-sca.md) (SCA), [027](docs/decisions/027-registry-zot.md) (zot registry).
+- **How:** [runbooks/ci-gate.md](docs/runbooks/ci-gate.md) (operate) · overview [ci-gate.md](docs/ci-gate.md), threat model [ci-gate-coverage.md](docs/ci-gate-coverage.md).
+- **Code:** `.github/workflows/gate.yaml` (reusable), `kubernetes/infrastructure/argo-workflows/build-gate-image.yaml` (build), `kubernetes/infrastructure/kyverno{,-policies}/` (admission), `docker/grizzly-gate/` (pointer stub). Signing key: OpenBao `secret/grizzly-platform/cicd/cosign`.
+
+### Secrets (OpenBao)
+OpenBao on the R730xd (LAN-only) is the platform secrets source of truth. K8s reads via External Secrets Operator; Ansible reads via AppRole. Infisical holds *only* the unseal keys (bootstrap).
+- **Why:** [ADR-023](docs/decisions/023-self-hosted-openbao-on-r730xd.md) (self-hosted OpenBao), [024](docs/decisions/024-platform-secrets-on-openbao.md) (ESO + AppRole), [035](docs/decisions/035-internal-tls-openbao-pki.md) (PKI), [048](docs/decisions/048-first-party-app-secrets-domain.md) (app secrets domain).
+- **How:** [openbao-quickref.md](docs/runbooks/openbao-quickref.md) (**start here** — paths, policies, auth, rotate/add), [openbao-add-secret.md](docs/runbooks/openbao-add-secret.md), [openbao-rotation.md](docs/runbooks/openbao-rotation.md), [openbao-disaster-recovery.md](docs/runbooks/openbao-disaster-recovery.md), [secrets-migration.md](docs/runbooks/secrets-migration.md).
+- **Code:** `ansible/roles/r730xd-openbao/`, `ansible/playbooks/{deploy,bootstrap,rotate-openbao-keys,setup-openbao-k8s-auth}*.yml`, `kubernetes/infrastructure/external-secrets/`.
+
+### Mail (Stalwart)
+Self-hosted Stalwart mail server, in-cluster, own-MX inbound (VPS HAProxy → WG tunnel) + SMTP2GO outbound smarthost, SPF/DKIM/DMARC aligned. Roundcube webmail behind Authentik. State on foundation Postgres + s3-hot blob store.
+- **Why:** [ADR-050](docs/decisions/050-stalwart-mail-server.md) (Stalwart), [051](docs/decisions/051-haproxy-l4-mail-ingress.md) (HAProxy L4 ingress), [052](docs/decisions/052-in-cluster-acme-cert-for-mail.md) (ACME cert), [054](docs/decisions/054-cloudflare-email-routing-interim-inbound.md) (interim inbound, superseded), [058](docs/decisions/058-roundcube-webmail.md) (webmail).
+- **How:** [mail.md](docs/runbooks/mail.md) (**start here**), [stalwart-cli.md](docs/runbooks/stalwart-cli.md) (config CLI).
+- **Code:** `kubernetes/infrastructure/stalwart/` + `kubernetes/clusters/grizzly-platform/stalwart.yaml`, `ansible/playbooks/configure-stalwart.yml` + `ansible/files/stalwart/plan.json`.
+
+### Storage & foundation stores
+Durable app state lives on the R730xd foundation stores, never node disks: Postgres, kv-cache (Valkey), and versitygw S3 (s3-hot on ZFS `:7070`, s3-bulk on MergerFS `:7072`).
+- **Why:** [ADR-003](docs/decisions/003-foundation-stores-on-r730xd.md) (foundation stores), [004-zfs](docs/decisions/004-zfs-iscsi-for-k8s-storage.md), [015](docs/decisions/015-dynamic-storage-provisioning.md) (democratic-csi), [055](docs/decisions/055-s3-object-store-versitygw.md) (versitygw), [056](docs/decisions/056-redis-to-valkey.md) (Valkey).
+- **How:** [versitygw-deploy.md](docs/runbooks/versitygw-deploy.md), [versitygw-cli.md](docs/runbooks/versitygw-cli.md).
+- **Code:** `ansible/roles/r730xd-{zfs,s3-hot,s3-bulk,snapraid}/`, `ansible/playbooks/deploy-foundation-stores.yml`.
+
+### Identity & invites (Authentik)
+Authentik is the central IdP; invitation-gated enrollment via a cookie-bridged invite broker; app-library visibility scoped by group policy.
+- **Why:** [ADR-033](docs/decisions/033-central-identity-authentik.md), [037](docs/decisions/037-authentik-config-as-code-blueprints.md) (config-as-code), [039](docs/decisions/039-authentik-social-federation-invitation-enrollment.md)–[043](docs/decisions/043-invite-admin-ui-forward-auth.md) (federation/invites), [049](docs/decisions/049-app-visibility-scoped-via-group-policy-bindings.md).
+- **How:** [invite-authentik-reader.md](docs/runbooks/invite-authentik-reader.md).
+- **Code:** `kubernetes/infrastructure/authentik/`; invite broker in the sibling `grizzly-invite` repo.
+
+### Observability
+Prometheus / Loki / Tempo / Grafana on the R730xd.
+- **Why:** [ADR-004](docs/decisions/004-observability-stack-on-r730xd.md). **How/what:** [monitoring-integration.md](docs/monitoring-integration.md). **Code:** `ansible/roles/r730xd-{prometheus,loki,tempo,grafana}/`, `ansible/playbooks/deploy-observability.yml`.
+
+### Cluster, ingress & networking
+Four-node kubeadm cluster (Cilium, Flux, ingress-nginx). Public ingress: VPS Caddy → WireGuard tunnel → R730xd DNAT → NodePort → ingress-nginx.
+- **Why:** [ADR-014](docs/decisions/014-k8s-cluster-stack.md) (stack), [016](docs/decisions/016-single-control-plane.md), [019](docs/decisions/019-ingress-and-tls-termination.md) (ingress/TLS), [034](docs/decisions/034-in-cluster-wireguard-encryption.md)–[036](docs/decisions/036-internal-dns-zone.md) (in-cluster net). **How:** [k8s-cluster-standup.md](docs/k8s-cluster-standup.md), [network.md](docs/network.md), [nodeport-allocation.md](docs/nodeport-allocation.md).
+
+## Active work
+
+In-flight, multi-phase threads and where we left off: [docs/in-progress/INDEX.md](docs/in-progress/INDEX.md). Discrete bugs/blockers are GitHub issues.
+
+## Repo areas
+
+- `ansible/` — playbooks, roles, inventory for R730xd + VPS.
+- `kubernetes/` — Flux-managed apps + infrastructure (`infrastructure/`, `clusters/grizzly-platform/`).
+- `docker/` — Compose projects on the R730xd (foundation stores, observability).
+- `configs/`, `scripts/` — machine configs and shell utilities.
+- `docs/` — architecture, operations, decisions ([map](docs/README.md)).
+- `archive/` — pre-2026 configs + the completed 2026 migration record.
