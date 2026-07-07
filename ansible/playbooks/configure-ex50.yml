@@ -20,11 +20,18 @@
 # IPv6 link-local on the LAN segment; post-cutover it's 10.0.0.1. SSH key auth
 # for bearflinn@gmail.com is enrolled. See docs/runbooks/ex50-console-access.md.
 #
+# ⚠ SAFE-APPLY: the delta sets LAN 10.0.0.1/24 and enables the DHCP server —
+# applying it while the EX50's LAN port shares the LIVE 10.0.0.0/24 creates a
+# duplicate 10.0.0.1 + a rogue DHCP server (ARP war for the gateway). Run the
+# full apply only (a) on a LAN-ISOLATED bench, or (b) at the cutover instant
+# with the Xfinity gateway already in bridge mode. Unplugging only the WAN is
+# NOT enough — the hazard is LAN-side. See the delta template's ⚠ note.
+#
 # Usage:
-#   # bench (WAN unplugged), reach via IPv6 link-local:
+#   # bench (LAN-ISOLATED — not sharing the live 10.0.0.0/24), IPv6 link-local:
 #   ansible-playbook ansible/playbooks/configure-ex50.yml \
 #     -e ex50_host='fe80::XXXX:XXXX:XXXX:XXXX%<iface>'
-#   # after cutover:
+#   # at/after cutover (Xfinity bridged first):
 #   ansible-playbook ansible/playbooks/configure-ex50.yml -e ex50_host=10.0.0.1
 #
 # Idempotent: re-applying stages the same values (no-ops) and re-saves; a `del`
@@ -101,7 +108,7 @@
           ── apply output (per-line; a benign `# ERROR` on a re-run `del` is expected) ──
           {{ ex50_apply.stdout | default('') }}
           {{ ex50_apply.stderr | default('') }}
-          ── resulting `show config` delta (verify: LAN {{ ex50_lan_ip }}/{{ ex50_lan_netmask }},
+          ── resulting `show config` delta (verify: LAN {{ ex50_lan_ip }}/{{ ex50_lan_prefix }},
              DHCP {{ ex50_dhcp_pool_start }}–{{ ex50_dhcp_pool_end }}, no `firewall filter 2`,
              modem disabled) ──
           {{ ex50_after.stdout | default('') }}

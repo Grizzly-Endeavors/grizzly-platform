@@ -17,7 +17,9 @@ lab_dns:
 # ansible/playbooks/configure-ex50.yml. See docs/ex50-dal-interface.md and
 # docs/runbooks/garage-relocation-cutover.md (Checkpoint C).
 ex50_lan_ip: "10.0.0.1"
-ex50_lan_netmask: "255.255.255.0"
+# CIDR prefix for the LAN — the EX50's ipv4 `address` leaf is a single CIDR
+# value (10.0.0.1/24); there is no separate netmask leaf (verified on-device).
+ex50_lan_prefix: "24"
 
 # DHCP dynamic pool the EX50 serves on the flat 10.0.0.0/24 net. Deliberately
 # carved to contain NONE of the OS-static node IPs (.46, .153, .187, .200–.203,
