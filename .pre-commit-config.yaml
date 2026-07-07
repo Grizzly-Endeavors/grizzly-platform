@@ -13,13 +13,10 @@ repos:
       - id: end-of-file-fixer
         exclude: ^archive/
       - id: check-yaml
-        args: [--allow-multiple-documents]
-        exclude: |
-          (?x)^(
-            archive/|
-            kubernetes/nfs-provisioner/|
-            kubernetes/ingress-nginx/
-          )
+        # --unsafe: skip construction (only parse), so Authentik blueprints'
+        # custom !Env/!Find tags don't fail a plain syntax check.
+        args: [--allow-multiple-documents, --unsafe]
+        exclude: ^archive/
       - id: check-added-large-files
         args: ['--maxkb=1000']
       - id: check-merge-conflict
@@ -31,12 +28,7 @@ repos:
     hooks:
       - id: yamllint
         args: [-c, .yamllint]
-        exclude: |
-          (?x)^(
-            archive/|
-            kubernetes/nfs-provisioner/|
-            kubernetes/ingress-nginx/
-          )
+        exclude: ^archive/
 
   # Ansible linting
   - repo: https://github.com/ansible/ansible-lint
