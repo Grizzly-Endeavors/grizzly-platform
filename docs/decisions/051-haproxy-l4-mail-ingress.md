@@ -1,7 +1,7 @@
 # ADR-051: HAProxy L4 Mail Ingress with PROXY Protocol on the VPS
 
 **Date:** 2026-07-05
-**Status:** Accepted (implementation pending)
+**Status:** Accepted
 **Relates to:** [ADR-019](019-ingress-and-tls-termination.md), [ADR-050](050-stalwart-mail-server.md)
 
 ## Context
