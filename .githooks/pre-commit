@@ -1,29 +1,30 @@
 #!/usr/bin/env bash
-# Pre-commit hook: ensure all vault.yml files are encrypted before commit.
+# Ensures all vault.yml files are encrypted before commit.
 # If a staged vault.yml is plaintext, encrypt it automatically and re-stage.
 #
-# Setup: git config core.hooksPath .githooks
+# Run via the `vault-encrypt` local hook in .pre-commit-config.yaml.
 
 set -euo pipefail
 
 VAULT_PASS_FILE="$(git rev-parse --show-toplevel)/.vault_pass"
 
-if [ ! -f "$VAULT_PASS_FILE" ]; then
+if [[ ! -f "${VAULT_PASS_FILE}" ]]; then
     echo "ERROR: .vault_pass not found at repo root. Cannot verify vault encryption."
     exit 1
 fi
 
 vault_files=$(git diff --cached --name-only --diff-filter=ACM | grep 'vault\.yml$' || true)
 
-if [ -z "$vault_files" ]; then
+if [[ -z "${vault_files}" ]]; then
     exit 0
 fi
 
-for vf in $vault_files; do
-    header=$(head -1 "$vf")
-    if [ "$header" != '$ANSIBLE_VAULT;1.1;AES256' ]; then
-        echo "Encrypting $vf before commit..."
-        ansible-vault encrypt "$vf" --vault-password-file "$VAULT_PASS_FILE" --encrypt-vault-id default
-        git add "$vf"
+for vf in ${vault_files}; do
+    header=$(head -1 "${vf}")
+    # shellcheck disable=SC2016 # literal ansible-vault header, not meant to expand
+    if [[ "${header}" != '$ANSIBLE_VAULT;1.1;AES256' ]]; then
+        echo "Encrypting ${vf} before commit..."
+        ansible-vault encrypt "${vf}" --vault-password-file "${VAULT_PASS_FILE}" --encrypt-vault-id default
+        git add "${vf}"
     fi
 done

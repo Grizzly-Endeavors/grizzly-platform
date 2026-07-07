@@ -4,12 +4,23 @@
 # Reference: https://pre-commit.com/
 
 repos:
+  # Ansible Vault: ensure staged vault.yml files are encrypted before commit
+  - repo: local
+    hooks:
+      - id: vault-encrypt
+        name: ansible-vault encrypt
+        entry: .githooks/pre-commit
+        language: script
+        files: vault\.yml$
+        pass_filenames: false
+
   # General file fixers
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.6.0
     hooks:
       - id: trailing-whitespace
         args: [--markdown-linebreak-ext=md]
+        exclude: ^archive/
       - id: end-of-file-fixer
         exclude: ^archive/
       - id: check-yaml
