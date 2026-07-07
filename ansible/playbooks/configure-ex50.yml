@@ -1,0 +1,121 @@
+---
+# Configure the Digi EX50 border router via its DAL Admin CLI (ADR-044).
+#
+# The EX50's config "stays in IaC": the version-controlled artifact is the
+# DAL config delta at ansible/files/ex50/config.dal.j2 (rendered from
+# group_vars/all/network.yml). This playbook drives the DAL Admin CLI from the
+# control node exactly the way configure-stalwart.yml drives the Stalwart CLI —
+# it renders the delta, pipes it into `ssh admin@<ex50>` (DAL mode 2: multi-line
+# stdin, staged edits committed atomically by the trailing `save`), and reads
+# `show config` back for verification.
+#
+# Scope: the FLAT-cutover (Checkpoint C) posture only — LAN 10.0.0.1/24, DHCP
+# with the #80 pool carve-out, and pre-cutover hardening. Segmentation (home
+# VLAN, Ckpt D) and the ingress-tunnel move (Ckpt E) are separate work.
+#
+# This config carries NO secrets (SSH is key-auth, already enrolled; the EX50's
+# own WiFi radios stay off), so nothing here reads OpenBao/vault.
+#
+# Reaching the CLI: pre-cutover the box has no IPv4 on 10.0.0.0/24, so use its
+# IPv6 link-local on the LAN segment; post-cutover it's 10.0.0.1. SSH key auth
+# for bearflinn@gmail.com is enrolled. See docs/runbooks/ex50-console-access.md.
+#
+# ⚠ SAFE-APPLY: the delta sets LAN 10.0.0.1/24 and enables the DHCP server —
+# applying it while the EX50's LAN port shares the LIVE 10.0.0.0/24 creates a
+# duplicate 10.0.0.1 + a rogue DHCP server (ARP war for the gateway). Run the
+# full apply only (a) on a LAN-ISOLATED bench, or (b) at the cutover instant
+# with the Xfinity gateway already in bridge mode. Unplugging only the WAN is
+# NOT enough — the hazard is LAN-side. See the delta template's ⚠ note.
+#
+# Usage:
+#   # bench (LAN-ISOLATED — not sharing the live 10.0.0.0/24), IPv6 link-local:
+#   ansible-playbook ansible/playbooks/configure-ex50.yml \
+#     -e ex50_host='fe80::XXXX:XXXX:XXXX:XXXX%<iface>'
+#   # at/after cutover (Xfinity bridged first):
+#   ansible-playbook ansible/playbooks/configure-ex50.yml -e ex50_host=10.0.0.1
+#
+# Idempotent: re-applying stages the same values (no-ops) and re-saves; a `del`
+# of an already-absent node prints a benign per-line `# ERROR` and is expected.
+#
+# After it runs, ALSO do the manual SSH-ACL hardening flagged in the rendered
+# delta and the cutover runbook (restrict SSH to the LAN zone; verify SSH is
+# unreachable from WAN). That step is intentionally interactive to avoid a
+# lock-out over the apply session.
+
+- name: Configure the Digi EX50 router (flat cutover / Checkpoint C)
+  hosts: localhost
+  connection: local
+  gather_facts: no
+
+  vars:
+    ex50_ssh_user: admin
+    ex50_ssh_opts: "-o StrictHostKeyChecking=accept-new -o BatchMode=yes -o ConnectTimeout=15"
+
+  vars_files:
+    # ex50_* + lab_dns live in the network topology source of truth.
+    - "{{ playbook_dir }}/../inventory/group_vars/all/network.yml"
+
+  tasks:
+    - name: Require ex50_host
+      ansible.builtin.assert:
+        that:
+          - ex50_host is defined
+          - (ex50_host | default('')) | length > 0
+        fail_msg: >-
+          Pass the EX50 address:
+          -e ex50_host='<ipv6-link-local%iface>' (bench) or -e ex50_host=10.0.0.1
+          (post-cutover). See docs/runbooks/ex50-console-access.md.
+
+    - name: Build the SSH base command
+      ansible.builtin.set_fact:
+        ex50_ssh: "ssh {{ ex50_ssh_opts }} {{ ex50_ssh_user }}@{{ ex50_host }}"
+
+    - name: Capture current config (pre-apply — rollback reference)
+      ansible.builtin.command: "{{ ex50_ssh }} show config"
+      register: ex50_before
+      changed_when: false
+
+    - name: Create a temp file for the rendered delta
+      ansible.builtin.tempfile:
+        state: file
+        suffix: .dal
+      register: ex50_rendered
+
+    - name: Render the DAL config delta
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../files/ex50/config.dal.j2"
+        dest: "{{ ex50_rendered.path }}"
+        mode: "0600"
+
+    - name: Apply the delta over SSH (staged edits → save → exit)
+      ansible.builtin.shell: "{{ ex50_ssh }} < {{ ex50_rendered.path }}"
+      register: ex50_apply
+      changed_when: true
+
+    - name: Re-capture config (post-apply verification)
+      ansible.builtin.command: "{{ ex50_ssh }} show config"
+      register: ex50_after
+      changed_when: false
+
+    - name: Remove the rendered delta from the control node
+      ansible.builtin.file:
+        path: "{{ ex50_rendered.path }}"
+        state: absent
+
+    - name: Report apply output and resulting config
+      ansible.builtin.debug:
+        msg: |-
+          ── apply output (per-line; a benign `# ERROR` on a re-run `del` is expected) ──
+          {{ ex50_apply.stdout | default('') }}
+          {{ ex50_apply.stderr | default('') }}
+          ── resulting `show config` delta (verify: LAN {{ ex50_lan_ip }}/{{ ex50_lan_prefix }},
+             DHCP {{ ex50_dhcp_pool_start }}–{{ ex50_dhcp_pool_end }}, no `firewall filter 2`,
+             modem disabled) ──
+          {{ ex50_after.stdout | default('') }}
+
+    - name: Remind about the manual SSH-ACL hardening
+      ansible.builtin.debug:
+        msg: >-
+          NEXT (manual, interactive on the bench): restrict `service ssh` to the
+          LAN/internal zone and confirm SSH is unreachable from WAN. See the
+          rendered delta's note and the cutover runbook's Checkpoint C step.

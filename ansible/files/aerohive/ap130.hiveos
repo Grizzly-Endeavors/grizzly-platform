@@ -1,0 +1,58 @@
+# Aerohive AP130 — standalone home WiFi (802.11ac Wave 1)
+#
+# HiveOS CLI config for the secondary AP (garage/workshop coverage). Applied by
+# pasting over legacy-SSH per docs/runbooks/aerohive-ap-setup.md — the render
+# step substitutes the __PLACEHOLDER__ tokens and strips these `#` comment lines
+# + blank lines before sending (HiveOS does not treat `#` as a comment). HiveOS
+# is ORDER-SENSITIVE; keep this sequence. `save config` persists at the end.
+#
+# Same SSID / PSK / hive as ap630.hiveos so the two APs form one roaming network:
+#   __WIFI_SSID__  home SSID name (identical to the AP630's)
+#   __WIFI_PSK__   WPA2 PSK — from ansible-vault (vault_home_wifi_psk)
+#   __HIVE_PW__    shared inter-AP hive secret (identical to the AP630's)
+#
+# Flat / untagged today; VLAN tagging to 10.20.0.0/24 arrives at Checkpoint D.
+
+# Standalone mode — never look for a controller/cloud
+no capwap client enable
+
+# 1. Radio profiles. AP130 is Wave 1: 2.4 GHz = 11ng (802.11n), 5 GHz = 11ac.
+radio profile rp-2g
+radio profile rp-2g phymode 11ng
+radio profile rp-2g band-steering enable
+radio profile rp-2g band-steering mode prefer-5g
+radio profile rp-5g
+radio profile rp-5g phymode 11ac
+radio profile rp-5g channel-width 40
+
+# 2. Security object — WPA2-AES-PSK (must match the AP630's for one SSID)
+security-object home-sec
+security-object home-sec security protocol-suite wpa2-aes-psk ascii-key __WIFI_PSK__
+
+# 3. SSID + bind the security object
+ssid __WIFI_SSID__
+ssid __WIFI_SSID__ security-object home-sec
+
+# 4. Assign radio profiles to the interfaces (wifi0 = 2.4 GHz, wifi1 = 5 GHz)
+interface wifi0 radio profile rp-2g
+interface wifi1 radio profile rp-5g
+
+# 5. Broadcast the SSID on both bands
+interface wifi0 ssid __WIFI_SSID__
+interface wifi1 ssid __WIFI_SSID__
+
+# 6. Static channels — AP130 owns 2.4:ch6 / 5:ch149 (off the AP630's 1 / 36)
+interface wifi0 radio channel 6
+interface wifi1 radio channel 149
+
+# 7. Hive — same name+password as the AP630 for seamless roaming
+hive grizzly-hive
+hive grizzly-hive password __HIVE_PW__
+interface mgt0 hive grizzly-hive
+
+# 8. Management — DNS/NTP at the platform gateway (EX50 post-cutover, 10.0.0.1)
+dns server-ip 10.0.0.1
+ntp server 10.0.0.1
+
+# Persist
+save config

@@ -11,6 +11,27 @@ lab_dns:
   - "8.8.8.8"
   - "8.8.4.4"
 
+# Digi EX50 border router (ADR-044) — becomes the platform gateway at
+# 10.0.0.1 at the garage cutover (replaces the Xfinity gateway's routing;
+# Xfinity → bridge mode). Config is IaC via the DAL Admin CLI, applied by
+# ansible/playbooks/configure-ex50.yml. See docs/ex50-dal-interface.md and
+# docs/runbooks/garage-relocation-cutover.md (Checkpoint C).
+ex50_lan_ip: "10.0.0.1"
+# CIDR prefix for the LAN — the EX50's ipv4 `address` leaf is a single CIDR
+# value (10.0.0.1/24); there is no separate netmask leaf (verified on-device).
+ex50_lan_prefix: "24"
+
+# DHCP dynamic pool the EX50 serves on the flat 10.0.0.0/24 net. Deliberately
+# carved to contain NONE of the OS-static node IPs (.46, .153, .187, .200–.203,
+# .226, .249), so a router/lease-table reset can never hand a statically-held
+# address to a DHCP client — the durable fix for issue #80 (pool carve-out, no
+# per-host MAC reservations). .50–.150 = 101 addresses for home/dynamic clients.
+ex50_dhcp_pool_start: "10.0.0.50"
+ex50_dhcp_pool_end: "10.0.0.150"
+
+# Upstream resolvers the EX50 DNS forwarder points at (reuses lab_dns).
+ex50_dns_upstreams: "{{ lab_dns }}"
+
 # Machine IPs
 r730xd_ip: "10.0.0.200"
 r730xd_idrac_ip: "10.0.0.203"
@@ -20,6 +41,15 @@ dell_inspiron_ip: "10.0.0.226"
 intel_nuc_ip: "10.0.0.46"
 tower_pc_ip: "10.0.0.249"
 optiplex_ip: "10.0.0.187"
+
+# Aerohive SR2024 lab-backbone switch management interface.
+# NOTE: today this is a DHCP lease from the Xfinity gateway. At the EX50
+# cutover the dynamic pool (ex50_dhcp_pool_*) excludes .153, so the switch is
+# given a STATIC mgmt IP on the switch itself (HiveOS: interface mgt0 ip
+# 10.0.0.153 255.255.255.0) rather than a DHCP reservation — see issue #80 and
+# docs/runbooks/aerohive-ap-setup.md. CLI access needs legacy SSH algorithms;
+# default creds admin/aerohive. See docs/aerohive-cli-reference.md.
+sr2024_ip: "10.0.0.153"
 # staging_vm_ip removed 2026-04-09 — staging VM decommissioned after
 # Phase 7b migration; see ADR-002 (Superseded) and archive/staging-vm/.
 

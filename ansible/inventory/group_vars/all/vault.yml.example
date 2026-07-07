@@ -34,6 +34,11 @@ vault_grafana_admin_password: "your-grafana-admin-password-here"
 vault_obs_s3_access_key: "your-obs-s3-access-key-here"
 vault_obs_s3_secret_key: "your-obs-s3-secret-key-here"
 
+# Home WiFi PSK for the Aerohive APs (AP630 + AP130). Rendered into the
+# committed HiveOS scripts (ansible/files/aerohive/) at paste time, per
+# docs/runbooks/aerohive-ap-setup.md. WPA2-AES-PSK — 8..63 ASCII chars.
+vault_home_wifi_psk: "your-home-wifi-psk-here"
+
 # OpenBao bootstrap — Infisical universal-auth machine identity credentials.
 # These are the ONLY secrets the IaC layer needs once OpenBao is live; they
 # grant read access to the Infisical project that holds the OpenBao unseal

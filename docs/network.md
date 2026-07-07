@@ -45,6 +45,7 @@ All lab machines are in the garage on the SR2024 (relocated from the closet 2026
 
 - **Xfinity gateway still handles routing, DHCP, and upstream DNS.** This is interim — an off-the-shelf router ([ADR-021](decisions/021-off-the-shelf-router-tower-pc-as-worker.md)) will replace it, at which point the gateway goes into bridge mode.
 - Lab machines use static IPs configured at the OS level (Ansible-managed).
+- **DHCP plan at the EX50 cutover (issue #80):** the EX50 serves a dynamic pool of **`10.0.0.50–10.0.0.150`**, deliberately carved to contain **none** of the OS-static node IPs (`.46`, `.153`, `.187`, `.200–.203`, `.226`, `.249`). Statics are "reserved by exclusion" — outside the assignable pool, so a router or lease-table reset can never hand a statically-held address to a DHCP client. No per-host MAC reservations. The one platform device that *leases* today, the SR2024 switch (`.153`), is given a static mgmt IP on the switch itself at cutover (it sits above the pool). Boundaries live in `ansible/group_vars/all/network.yml` (`ex50_dhcp_pool_*`); applied by `ansible/playbooks/configure-ex50.yml`.
 
 ### Switching
 
@@ -54,9 +55,9 @@ All lab machines are in the garage on the SR2024 (relocated from the closet 2026
 
 ### WiFi
 
-- AP230 / AP130s / AP630 all factory-reset to standalone mode. Mounting and SSID config still pending.
-- Xfinity gateway WiFi still active as the primary coverage pending AP mounts.
-- PoE to APs will come from SR2024 once mounted (no injectors needed).
+- **AP630 (primary) + one AP130 (secondary) are configured and live** (2026-07-07) as a single standalone roaming hive (`grizzly-hive`, 802.11r/k/v), one flat untagged WPA2-AES-PSK SSID. AP630: 11ax, ch 1/36. AP130: 11ng/11ac, ch 6/149. Configs: `ansible/files/aerohive/ap630.hiveos` / `ap130.hiveos`; procedure: [runbooks/aerohive-ap-setup.md](runbooks/aerohive-ap-setup.md). The spare AP230 is unconfigured.
+- **APs are powered by PoE injectors** — the SR2024's own PoE is not delivering (PSE failure, [#84](https://github.com/Grizzly-Endeavors/grizzly-platform/issues/84)); the earlier "PoE from the SR2024, no injectors" plan does not currently hold.
+- Xfinity gateway WiFi can be retired once the Aerohive coverage is confirmed around the house.
 
 ### DNS
 
