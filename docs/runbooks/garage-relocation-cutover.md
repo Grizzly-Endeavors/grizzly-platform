@@ -85,7 +85,7 @@ curl -I https://<some>.bearflinn.com   # external ingress still green (tunnel re
 
 ## Checkpoint B — APs up on the garage switch
 
-**Done — 2026-07-07.** APs are live and roaming on the standalone `grizzly-hive` SSID, powered via PoE injectors (SR2024's own PoE is not delivering — [#84](https://github.com/Grizzly-Endeavors/grizzly-platform/issues/84)). See [aerohive-ap-setup.md](aerohive-ap-setup.md).
+**Done — 2026-07-07.** APs are live and roaming on the standalone house SSID (shared hive secret + 802.11r/k/v), powered via PoE injectors (SR2024's own PoE is not delivering — [#84](https://github.com/Grizzly-Endeavors/grizzly-platform/issues/84)). See [aerohive-ap-setup.md](aerohive-ap-setup.md).
 
 Goal: house WiFi served by the Aerohive APs, independent of the Xfinity gateway, so bridging Xfinity in C doesn't black out WiFi.
 
