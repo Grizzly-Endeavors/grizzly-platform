@@ -10,7 +10,6 @@ One line per document. See [`README.md`](README.md) for how the docs are organiz
 
 ## Operations & standup
 
-- [k8s-cluster-standup.md](k8s-cluster-standup.md) — how the cluster was built; smoke tests.
 - [monitoring-integration.md](monitoring-integration.md) — observability stack architecture (Prometheus/Loki/Tempo/Grafana).
 
 ## CI Gate

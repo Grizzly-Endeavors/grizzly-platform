@@ -8,6 +8,7 @@ Record of the 2026 homelab migration from the pre-migration Docker-Compose-and-b
 
 - [migration-plan.md](migration-plan.md) — The phased plan as executed: assessment, storage build-out, cluster standup, staging-VM bridge, app migration, decommissioning. Includes the risk register, the dependency graph, and a running status log.
 - [new-setup-planning.md](new-setup-planning.md) — Role-assignment rationale: why the R730xd became the storage/observability host, why the Inspiron runs the control plane, why the Tower PC is "just a worker", why the GPU fleet moved off-cluster, etc. Kept for reference when building out similar infrastructure.
+- [k8s-cluster-standup.md](k8s-cluster-standup.md) — The 8-phase build log for the original K8s cluster standup (control plane bootstrap through registry + QoL). Moved here from `docs/` once standup was long complete — no longer a live operational doc.
 
 ## What moved out of here
 

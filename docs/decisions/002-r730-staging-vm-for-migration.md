@@ -1,7 +1,7 @@
 # ADR-002: R730 Staging VM for Migration Continuity
 
 **Date:** 2026-03-27
-**Status:** Superseded (2026-04-09) — staging VM decommissioned at the end of Phase 7b after landing-page, caz-portfolio, and resume-site were migrated onto the new K8s cluster. See `archive/staging-vm/ansible/playbooks/` for the historical create/deploy/destroy playbooks and `docs/k8s-cluster-standup.md` §7b.4 for the teardown steps.
+**Status:** Superseded (2026-04-09) — staging VM decommissioned at the end of Phase 7b after landing-page, caz-portfolio, and resume-site were migrated onto the new K8s cluster. See `archive/staging-vm/ansible/playbooks/` for the historical create/deploy/destroy playbooks and `archive/migration-2026/k8s-cluster-standup.md` §7b.4 for the teardown steps.
 
 ## Context
 

@@ -5,7 +5,7 @@
 
 ## Context
 
-Phase 6 of the K8s cluster standup (`docs/k8s-cluster-standup.md`) needs to put external HTTP(S) traffic in front of cluster workloads. The question is not *whether* to run nginx-ingress — ADR-014 already picked it — but how traffic reaches the cluster from the public internet, where TLS terminates, and how the VPS bridges to a cluster on a private LAN.
+Phase 6 of the K8s cluster standup (`archive/migration-2026/k8s-cluster-standup.md`) needs to put external HTTP(S) traffic in front of cluster workloads. The question is not *whether* to run nginx-ingress — ADR-014 already picked it — but how traffic reaches the cluster from the public internet, where TLS terminates, and how the VPS bridges to a cluster on a private LAN.
 
 The relevant existing pieces:
 - **Hetzner VPS** (`proxy-vps`) has a public IP, runs Caddy with a `*.bearflinn.com` wildcard certificate issued via Cloudflare DNS-01.

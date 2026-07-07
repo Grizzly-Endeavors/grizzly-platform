@@ -5,7 +5,7 @@
 
 ## Context
 
-Phase 7 of the K8s cluster standup (`docs/k8s-cluster-standup.md`) migrates workloads from the staging VM and old cluster onto the new cluster. The question is how application manifests get from a developer's `git push` to a running pod.
+Phase 7 of the K8s cluster standup (`archive/migration-2026/k8s-cluster-standup.md`) migrates workloads from the staging VM and old cluster onto the new cluster. The question is how application manifests get from a developer's `git push` to a running pod.
 
 The prior cluster used a CI-driven flow: actions-runner-controller runners had `helm` and a kubeconfig baked in, and on push to a production branch the runner would build the container image and run `helm upgrade` directly against the API server. Every app repo contained its own Helm chart; grizzly-platform did not know or care about application-level resources.
 
@@ -45,7 +45,7 @@ grizzly-platform currently lives under a personal GitHub account. App repos live
 
 ## References
 
-- `docs/k8s-cluster-standup.md` — Phase 7 uses this model.
+- `archive/migration-2026/k8s-cluster-standup.md` — Phase 7 uses this model.
 - `kubernetes/clusters/grizzly-platform/infrastructure.yaml` — existing pattern for a top-level Flux Kustomization, mirrored for apps.
 - `kubernetes/apps/` — new directory; created during Phase 7 setup.
 - `.github/workflows/register-app.yaml` — new reusable onboarding workflow, created during Phase 7 setup.
