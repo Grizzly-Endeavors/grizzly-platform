@@ -2,7 +2,7 @@
 
 How to get onto the EX50's scriptable **DAL Admin CLI** before/during the garage cutover. Companion to [garage-relocation-cutover.md](garage-relocation-cutover.md) (the "Bench-configure the EX50" / "Capture the DAL shell config commands into the IaC" prerequisites) and [ADR-044](../decisions/044-digi-ex50-as-off-the-shelf-router.md).
 
-Last updated: 2026-07-03 · Status: **bench bring-up in progress.** Network SSH path proven and key-auth enrolled; full interface mapped in [../reference/ex50-dal-interface.md](../reference/ex50-dal-interface.md); serial console blocked on cable pinout (see discrepancy below).
+Last updated: 2026-07-07 · Status: **bench bring-up complete.** Network SSH path proven and key-auth enrolled; full interface mapped in [../ex50-dal-interface.md](../ex50-dal-interface.md); the flat-cutover config is authored and validated on-device ([`ansible/playbooks/configure-ex50.yml`](../../ansible/playbooks/configure-ex50.yml) + [`ansible/files/ex50/config.dal.j2`](../../ansible/files/ex50/config.dal.j2)) — only the physical swap remains, see [garage-relocation-cutover.md](garage-relocation-cutover.md). Serial console still blocked on cable pinout (see discrepancy below; off critical path).
 
 ---
 
@@ -87,6 +87,6 @@ Alternative (cleaner IPv4): put a laptop on the EX50's default LAN subnet (stati
 
 - [x] Enroll an SSH public key (`bearflinn@gmail.com`) on `auth user admin` — key auth working over link-local.
 - [x] Confirm firmware against the WireGuard gate — **25.11.10.42 ≥ 24.3.28.88**, satisfied.
-- [x] Map the scriptable surface (config model, domains, cutover paths) → [../reference/ex50-dal-interface.md](../reference/ex50-dal-interface.md).
-- [ ] Bench-config per the cutover runbook (LAN → `10.0.0.1/24`, home DHCP/VLAN, zone firewall, remove the "Allow all for testing" rule, tighten the SSH `wan` ACL) and template it into the future EX50 Ansible role.
+- [x] Map the scriptable surface (config model, domains, cutover paths) → [../ex50-dal-interface.md](../ex50-dal-interface.md).
+- [x] Bench-config per the cutover runbook (LAN → `10.0.0.1/24`, DHCP pool carve-out, zone firewall, "Allow all for testing" rule dropped, SSH `wan` ACL removed) and templated into `ansible/playbooks/configure-ex50.yml` — validated on-device, not yet applied (see [garage-relocation-cutover.md](garage-relocation-cutover.md) Checkpoint C).
 - [ ] (Optional) Fix the serial console per the discrepancy section, for true out-of-band access.
