@@ -6,3 +6,4 @@ resources:
   - alloy-configmap.yaml
   - alloy-daemonset.yaml
   - flux-external-scraping.yaml
+  - flux-metrics-services.yaml

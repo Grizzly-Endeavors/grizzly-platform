@@ -12,4 +12,5 @@ resources:
   - storage
   - kyverno
   - metrics-server
+  - kube-state-metrics
   - authentik

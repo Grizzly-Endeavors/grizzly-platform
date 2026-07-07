@@ -1,0 +1,33 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: kube-state-metrics
+  namespace: flux-system
+spec:
+  # releaseName pinned to match the pre-existing bare `helm install` release
+  # in kube-system, so Flux adopts and upgrades it in place instead of
+  # installing a second, colliding release (Flux's default release name would
+  # be `kube-system-kube-state-metrics`, not `kube-state-metrics`).
+  releaseName: kube-state-metrics
+  interval: 30m
+  chart:
+    spec:
+      chart: kube-state-metrics
+      version: "7.5.1"
+      sourceRef:
+        kind: HelmRepository
+        name: prometheus-community
+  targetNamespace: kube-system
+  install:
+    createNamespace: false
+  values:
+    image:
+      tag: v2.14.0
+    resources:
+      requests:
+        memory: 64Mi
+      limits:
+        memory: 128Mi
+    service:
+      type: NodePort
+      nodePort: 30080
