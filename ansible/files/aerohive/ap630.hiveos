@@ -1,0 +1,64 @@
+# Aerohive AP630 — standalone home WiFi (WiFi 6 / 802.11ax)
+#
+# HiveOS CLI config for the primary AP. Applied by pasting over legacy-SSH per
+# docs/runbooks/aerohive-ap-setup.md — the runbook's render step substitutes the
+# __PLACEHOLDER__ tokens and strips these `#` comment lines + blank lines before
+# sending (HiveOS does not treat `#` as a comment). HiveOS is ORDER-SENSITIVE;
+# keep this sequence (radio profiles -> security -> SSID -> bind -> assign ->
+# hive), and note `save config` only persists at the very end.
+#
+# Placeholders (rendered at paste time, NEVER committed):
+#   __WIFI_SSID__  home SSID name (recommend: match the existing house SSID so
+#                  clients roam over seamlessly at cutover)
+#   __WIFI_PSK__   WPA2 PSK — from ansible-vault (vault_home_wifi_psk)
+#   __HIVE_PW__    shared inter-AP hive secret (same value on AP630 + AP130)
+#
+# Flat / untagged: no VLAN tagging here — the SSID rides the flat 10.0.0.0/24
+# today. VLAN-to-10.20.0.0/24 tagging is added at Checkpoint D (later PR).
+
+# Standalone mode — never look for a controller/cloud (would override local cfg)
+no capwap client enable
+
+# 1. Radio profiles (WiFi 6). 2.4 GHz nudges clients to 5 GHz via band steering.
+radio profile rp-2g
+radio profile rp-2g phymode 11ax-2g
+radio profile rp-2g band-steering enable
+radio profile rp-2g band-steering mode prefer-5g
+radio profile rp-5g
+radio profile rp-5g phymode 11ax-5g
+radio profile rp-5g channel-width 40
+radio profile rp-5g short-guard-interval
+
+# 2. Security object — WPA2-AES-PSK (chosen for hive compatibility with the
+#    older AP130; WPA3 is not reliable across both firmware generations).
+security-object home-sec
+security-object home-sec security protocol-suite wpa2-aes-psk ascii-key __WIFI_PSK__
+
+# 3. SSID + bind the security object
+ssid __WIFI_SSID__
+ssid __WIFI_SSID__ security-object home-sec
+
+# 4. Assign radio profiles to the interfaces (wifi0 = 2.4 GHz, wifi1 = 5 GHz)
+interface wifi0 radio profile rp-2g
+interface wifi1 radio profile rp-5g
+
+# 5. Broadcast the SSID on both bands
+interface wifi0 ssid __WIFI_SSID__
+interface wifi1 ssid __WIFI_SSID__
+
+# 6. Static channels — AP630 owns 2.4:ch1 / 5:ch36; AP130 uses 6 / 149 so the
+#    two APs in the hive never share a channel.
+interface wifi0 radio channel 1
+interface wifi1 radio channel 36
+
+# 7. Hive — seamless roaming (802.11r/k/v) across APs sharing this name+password
+hive grizzly-hive
+hive grizzly-hive password __HIVE_PW__
+interface mgt0 hive grizzly-hive
+
+# 8. Management — DNS/NTP at the platform gateway (EX50 post-cutover, 10.0.0.1)
+dns server-ip 10.0.0.1
+ntp server 10.0.0.1
+
+# Persist
+save config

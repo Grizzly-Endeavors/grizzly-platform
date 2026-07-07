@@ -45,6 +45,7 @@ All lab machines are in the garage on the SR2024 (relocated from the closet 2026
 
 - **Xfinity gateway still handles routing, DHCP, and upstream DNS.** This is interim — an off-the-shelf router ([ADR-021](decisions/021-off-the-shelf-router-tower-pc-as-worker.md)) will replace it, at which point the gateway goes into bridge mode.
 - Lab machines use static IPs configured at the OS level (Ansible-managed).
+- **DHCP plan at the EX50 cutover (issue #80):** the EX50 serves a dynamic pool of **`10.0.0.50–10.0.0.150`**, deliberately carved to contain **none** of the OS-static node IPs (`.46`, `.153`, `.187`, `.200–.203`, `.226`, `.249`). Statics are "reserved by exclusion" — outside the assignable pool, so a router or lease-table reset can never hand a statically-held address to a DHCP client. No per-host MAC reservations. The one platform device that *leases* today, the SR2024 switch (`.153`), is given a static mgmt IP on the switch itself at cutover (it sits above the pool). Boundaries live in `ansible/group_vars/all/network.yml` (`ex50_dhcp_pool_*`); applied by `ansible/playbooks/configure-ex50.yml`.
 
 ### Switching
 

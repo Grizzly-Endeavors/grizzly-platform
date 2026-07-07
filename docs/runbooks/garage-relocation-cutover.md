@@ -48,12 +48,12 @@ Last updated: 2026-07-02 · Status: **planned, not yet executed.**
 ## Prerequisites (do ahead — zero downtime)
 
 - [ ] **EX50 firmware ≥ 24.3.28.88** (required for WireGuard, Checkpoint E). Update if lower.
-- [ ] **Bench-configure the EX50** with WAN unplugged: LAN `10.0.0.1/24`, DHCP scope for home on `10.20.0.0/24` (keep the platform range static/reserved), DNS forwarding, firewall default-deny home→platform. Flat first — do **not** enable the home VLAN yet. Getting onto the Admin CLI to do this: [ex50-console-access.md](ex50-console-access.md).
+- [ ] **Bench-configure the EX50** with WAN unplugged, via the IaC playbook: `ansible-playbook ansible/playbooks/configure-ex50.yml -e ex50_host='<ipv6-link-local%iface>'`. This applies the flat-cutover delta (`ansible/files/ex50/config.dal.j2`): LAN `10.0.0.1/24`, DHCP pool `10.0.0.50–10.0.0.150` carved off the platform statics (issue #80), and pre-cutover hardening (drop the "allow all" test rule, disable the empty modem, NTP on). Then do the **manual, interactive** SSH-ACL restriction (LAN-only, done by hand to avoid a lock-out over the apply session) per the playbook's note and Checkpoint C below. Segmentation (home VLAN / default-deny, Checkpoint D) is a later pass — **flat first**. Getting onto the Admin CLI: [ex50-console-access.md](ex50-console-access.md).
 - [ ] **Verify on the bench** that DAL supports what later steps rely on: a WireGuard peer + DNAT from the wg interface to a LAN host (E), multiple VLAN interfaces + inter-VLAN firewall (D), DHCP reservations, and (optionally) local DNS records. Capture the DAL shell config commands into the IaC now.
 - [ ] **Garage physical prep — operator-handled:** sturdy shelving is already in place (gear sits off the slab); the garage dehumidifier (hosed outside) holds ~43% RH year-round, with a closet-specific unit as contingency; 20 A circuit near the panel with headroom to add another. **These environmental logistics are settled (ADR-045) — do not relitigate.** Remaining prep for the window: PDU sizing, confirm ventilation, small UPS for the network core (Xfinity + EX50 + SR2024 + APs), and place humidity + leak sensors (as verification signals, not gating decisions).
 - [ ] **Extend the coax** to the garage (available slack).
 - [ ] **Pre-pull AP cable runs** from the garage SR2024 location to AP mount points (the only long runs; can be fully done in advance).
-- [ ] **Pre-configure Aerohive APs** standalone SSID (SSID/PSK), CAPWAP disabled (already factory-reset per `docs/hardware.md`).
+- [ ] **Pre-configure the Aerohive APs** (AP630 + AP130) — standalone SSID, CAPWAP disabled — per [aerohive-ap-setup.md](aerohive-ap-setup.md). Recommend matching the existing house SSID + PSK so clients roam over seamlessly when Xfinity is bridged.
 - [ ] **Snapshot current state** for rollback reference: `wg show`, iptables counters on R730xd, `kubectl get nodes -o wide`, `kubectl get pv`, and confirm `*.bearflinn.com` is green from an external host.
 
 ---
@@ -85,7 +85,7 @@ curl -I https://<some>.bearflinn.com   # external ingress still green (tunnel re
 
 Goal: house WiFi served by the Aerohive APs, independent of the Xfinity gateway, so bridging Xfinity in C doesn't black out WiFi.
 
-1. Mount/connect APs to the SR2024 (PoE); bring up the standalone SSID.
+1. Mount/connect APs to the SR2024 (PoE); bring up the standalone SSID per [aerohive-ap-setup.md](aerohive-ap-setup.md).
 2. Verify coverage on the Aerohive SSID from around the house.
 
 **Verify:** clients associate to the Aerohive SSID, get internet (still via Xfinity→SR2024), and roam acceptably.
@@ -99,7 +99,9 @@ Goal: EX50 is the router; network still flat on `10.0.0.0/24`.
 
 1. Put the Xfinity gateway into **bridge mode** (confirmed supported on this model).
 2. Insert the EX50: WAN → Xfinity gateway LAN; EX50 LAN (trunk) → SR2024 uplink. EX50 = `10.0.0.1`.
-3. EX50 serves DHCP/DNS for non-static clients; platform statics unchanged.
+3. EX50 serves DHCP/DNS for non-static clients; platform statics unchanged. The DHCP pool (`10.0.0.50–10.0.0.150`) is carved to exclude every OS-static, so a lease-table reset can't hand out a held address (issue #80).
+4. **Give the SR2024 a static mgmt IP** (`interface mgt0 ip 10.0.0.153 255.255.255.0` → `save config`) — it's the one platform device that leased its address, and `.153` is now outside the DHCP pool (issue #80, no reservation). See [aerohive-ap-setup.md](aerohive-ap-setup.md) Step 0.
+5. **Harden EX50 SSH** (interactive, on the box): restrict `service ssh` to the LAN/internal zone so it isn't reachable on the now-public WAN. Gate: from an external host, `ssh admin@<public-ip>` must **fail**.
 
 **Verify:**
 ```
