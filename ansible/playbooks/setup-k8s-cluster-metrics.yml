@@ -15,7 +15,7 @@
 #   curl -s 'http://10.0.0.200:9090/api/v1/targets' | \
 #     jq '[.data.activeTargets[] | select(.scrapePool | test("kubelet|cilium|hubble|kube-state"))]'
 #
-# See: docs/k8s-cluster-standup.md (Phase 2.5)
+# See: docs/runbooks/k8s-cluster-ops.md
 
 # ============================================================
 # Play 1: Deploy kube-state-metrics & expand RBAC

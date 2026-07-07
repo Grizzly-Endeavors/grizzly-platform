@@ -44,7 +44,7 @@ Prometheus / Loki / Tempo / Grafana on the R730xd.
 
 ### Cluster, ingress & networking
 Four-node kubeadm cluster (Cilium, Flux, ingress-nginx). Public ingress: VPS Caddy → WireGuard tunnel → R730xd DNAT → NodePort → ingress-nginx.
-- **Why:** [ADR-014](docs/decisions/014-k8s-cluster-stack.md) (stack), [016](docs/decisions/016-single-control-plane.md), [019](docs/decisions/019-ingress-and-tls-termination.md) (ingress/TLS), [034](docs/decisions/034-in-cluster-wireguard-encryption.md)–[036](docs/decisions/036-internal-dns-zone.md) (in-cluster net). **How:** [k8s-cluster-standup.md](docs/k8s-cluster-standup.md), [network.md](docs/network.md), [nodeport-allocation.md](docs/nodeport-allocation.md).
+- **Why:** [ADR-014](docs/decisions/014-k8s-cluster-stack.md) (stack), [016](docs/decisions/016-single-control-plane.md), [019](docs/decisions/019-ingress-and-tls-termination.md) (ingress/TLS), [034](docs/decisions/034-in-cluster-wireguard-encryption.md)–[036](docs/decisions/036-internal-dns-zone.md) (in-cluster net). **How:** [runbooks/k8s-cluster-ops.md](docs/runbooks/k8s-cluster-ops.md) (standup/rejoin/upgrade), [network.md](docs/network.md), [nodeport-allocation.md](docs/nodeport-allocation.md).
 
 ## Active work
 

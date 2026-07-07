@@ -12,7 +12,7 @@ Last updated: 2026-07-05 (platform relocated from closet to garage; EX50 router 
 
 ## Active K8s Cluster Nodes
 
-All four nodes are live on v1.33.10. Cilium CNI, Flux GitOps. See [k8s-cluster-standup.md](k8s-cluster-standup.md) for how the cluster was built.
+All four nodes are live on v1.33.10. Cilium CNI, Flux GitOps.
 
 ### dell-inspiron-15 — Control Plane
 

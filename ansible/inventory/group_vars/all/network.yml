@@ -50,15 +50,11 @@ optiplex_ip: "10.0.0.187"
 # docs/runbooks/aerohive-ap-setup.md. CLI access needs legacy SSH algorithms;
 # default creds admin/aerohive. See docs/aerohive-cli-reference.md.
 sr2024_ip: "10.0.0.153"
-# staging_vm_ip removed 2026-04-09 — staging VM decommissioned after
-# Phase 7b migration; see ADR-002 (Superseded) and archive/staging-vm/.
 
 # External / VPN
 proxy_vps_public_ip: "178.156.217.91"
 home_public_ip: "98.251.87.200"
 netbird_home_assistant_ip: "100.96.217.175"
-# netbird_palworld_ip removed 2026-04-17 — Palworld decommissioned
-# indefinitely per ADR-022. VPS UDP 8211 forward retired in the same pass.
 
 # WireGuard point-to-point tunnel: VPS ↔ R730xd
 # Used by Caddy on VPS to reach K8s ingress via iptables DNAT on R730xd.

@@ -1,4 +1,10 @@
-# Residuum Feedback — Database Schema
+# Residuum Feedback — Database Schema (Archived)
+
+**Archived — this schema is live.** Kept as the design record for the
+`feedback-ingest` service's Postgres schema. The authoritative, evolving
+copy of this schema lives in the `feedback-ingest` service repo's own
+migrations, not here — check there for anything added since this was
+written.
 
 Locked spec for the Postgres schema backing the residuum feedback ingestion
 feature. See `residuum-feedback-plan.md` for the broader lab-side plan and

@@ -23,7 +23,7 @@
 #   # groups['k8s_control_plane'].
 #   ansible-playbook ansible/playbooks/setup-k8s-ingress.yml
 #
-# See: docs/k8s-cluster-standup.md (Phase 6)
+# See: docs/runbooks/k8s-cluster-ops.md
 # ADR: 019 (ingress & TLS termination)
 
 - name: Deploy Phase 6 Prometheus targets and alert rules

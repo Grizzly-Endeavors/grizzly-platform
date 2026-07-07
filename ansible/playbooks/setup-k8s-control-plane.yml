@@ -16,7 +16,7 @@
 #   cilium status                         # All green
 #   hubble observe --follow               # Flows visible
 #
-# See: docs/k8s-cluster-standup.md (Phase 1)
+# See: docs/runbooks/k8s-cluster-ops.md
 # Decisions: ADR-014 (stack), ADR-016 (single CP)
 
 # ============================================================

@@ -16,7 +16,7 @@
 #   kubernetes/infrastructure/registry/      — cluster-side registry
 #   ansible/roles/k8s-registry-trust/        — the role this playbook invokes
 #   docs/decisions/020-app-delivery-model.md — delivery model context
-#   docs/k8s-cluster-standup.md              — Phase 7b registry detour
+#   docs/runbooks/k8s-cluster-ops.md         — cluster standup/rejoin/upgrade sequence
 
 - name: Configure containerd to trust the in-cluster OCI registry
   hosts: k8s_cluster

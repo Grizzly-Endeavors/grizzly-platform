@@ -1,7 +1,7 @@
 # ADR-050: Stalwart as the Platform Mail Server
 
 **Date:** 2026-07-05
-**Status:** Accepted (implementation pending)
+**Status:** Accepted
 
 ## Context
 

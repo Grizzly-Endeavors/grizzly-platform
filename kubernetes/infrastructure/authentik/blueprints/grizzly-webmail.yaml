@@ -41,13 +41,13 @@ entries:
       negate: false
 
   # Embedded outpost provider list. This entry OWNS the list for the whole
-  # homelab now that there are two proxy providers: it must enumerate every one,
-  # because the blueprint replaces the M2M wholesale (a partial list would
-  # silently drop the other app's gate). grizzly-invite-admin.yaml previously
-  # declared this with just its own provider; that entry was removed there and
-  # consolidated here. webmail-provider resolves via !KeyOf (same file, above);
-  # grizzly-invite-admin via !Find (it already exists in the DB from its own
-  # blueprint, so this resolves on the first pass).
+  # homelab: it must enumerate every proxy provider, because the blueprint
+  # replaces the M2M wholesale (a partial list would silently drop the other
+  # app's gate) — see blueprints/CLAUDE.md's !KeyOf-is-same-file-only note for
+  # why the list can't be split across files. webmail-provider resolves via
+  # !KeyOf (same file, above); grizzly-invite-admin via !Find (it already
+  # exists in the DB from its own blueprint, so this resolves on the first
+  # pass).
   #
   # authentik_host MUST be set or the outpost builds its sign-in redirect against
   # http://localhost (the internal API URL) and the browser 404s.

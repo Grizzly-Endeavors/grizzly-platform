@@ -286,8 +286,7 @@
       changed_when: "'Success' in bootstrap_policy.stdout"
       no_log: true
 
-    # Remove the legacy lab-iac-admin policy name (replaced by
-    # grizzly-platform-admin in the 2026-04 rename). Safe even if absent.
+    # Ensures no orphaned lab-iac-admin policy lingers. Safe even if absent.
     - name: Delete legacy lab-iac-admin policy
       ansible.builtin.command:
         argv:

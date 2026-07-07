@@ -59,9 +59,8 @@
     mode: "0644"
   notify: Restart observability-prometheus
 
-# Remove the legacy rendered rules file (rules/homelab.yml) left over
-# from before the 2026-04 grizzly-platform rename. Prometheus loads
-# rules/*.yml so leaving it would double-evaluate the rules.
+# Ensures no orphaned rules/homelab.yml lingers — Prometheus loads
+# rules/*.yml, so a stray copy would double-evaluate the rules.
 - name: Remove legacy homelab rules file
   ansible.builtin.file:
     path: "{{ prometheus_compose_dir }}/rules/homelab.yml"

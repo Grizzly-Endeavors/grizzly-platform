@@ -7,8 +7,7 @@
 # must live in git. The CA is generated on r730xd by the r730xd-openbao
 # role and rotates every ~10 years. This script pulls the current PEM
 # over ssh and updates the ConfigMap in place. The local trust-store
-# install also cleans up the legacy lab-iac-openbao-ca.crt filename
-# left over from before the 2026-04 grizzly-platform rename.
+# install also ensures no orphaned lab-iac-openbao-ca.crt lingers.
 #
 # Also writes the CA to the controller's trust store path so
 # community.hashi_vault lookups from Ansible can verify it (the

@@ -28,7 +28,7 @@ First-stop pointer for "where do I find / do X with OpenBao?" Everything else li
 | Rotation runbook | `docs/runbooks/openbao-rotation.md` |
 | DR runbook | `docs/runbooks/openbao-disaster-recovery.md` |
 | Prometheus target | `ansible/roles/r730xd-prometheus/templates/targets.d/openbao.yml.j2` |
-| Prometheus alerts | `rules/grizzly-platform.yml.j2` → `openbao` group |
+| Prometheus alerts | `ansible/roles/r730xd-prometheus/templates/rules/grizzly-platform.yml.j2` → `openbao` group |
 
 ## Infisical bootstrap project
 
@@ -75,6 +75,7 @@ Applied by `bootstrap-openbao.yml`. Re-apply by re-running that playbook (idempo
 | approle | Ansible IaC plays | `ansible-iac` | `ansible-platform-read` | CIDR-bound to 10.0.0.0/24. role_id + secret_id in vault.yml (via scripts/set-openbao-approle-secrets.sh). Rotate with rotate-openbao-keys.yml --tags approle-secret |
 | approle | Prometheus (via OpenBao Agent) | `prometheus-metrics` | `prometheus-readonly` | secret_id CIDR-bound to 10.0.0.0/24. The `r730xd-openbao-agent` container (network_mode host) auto-auths and writes a short-TTL token to `/opt/observability/openbao-agent/sink/token`, which Prometheus bind-mounts to scrape `sys/metrics`. Provision/rotate with `setup-openbao-prometheus-agent.yml` (add `-e force_remint_secret_id=true` to rotate). |
 | kubernetes | External Secrets Operator | `external-secrets` | `eso-platform-read` | SA `external-secrets:external-secrets`. Reviewer-JWT from `openbao-auth:openbao-auth-token` Secret. Refresh with rotate-openbao-keys.yml --tags k8s-auth-jwt |
+| approle | versitygw (s3-hot + s3-bulk Vault-IAM) | `versitygw` | `versitygw-iam` | Shared AppRole both gateways use for their Vault-IAM account stores (namespaced by `--iam-vault-secret-storage-path`). Provisioned by `setup-versitygw-iam.yml`; see `docs/runbooks/versitygw-deploy.md`. |
 
 ## Secret path layout
 
@@ -87,6 +88,10 @@ All platform secrets live under `secret/grizzly-platform/<domain>/<name>` (KV v2
 | `secret/grizzly-platform/platform/github-app` | `app_id`, `installation_id`, `private_key` |
 | `secret/grizzly-platform/platform/github-runner` | `pat` |
 | `secret/grizzly-platform/platform/authentik` | `secret_key`, `db_password`, `bootstrap_password`, `bootstrap_token`, `oidc_nextcloud_client_id`, `oidc_nextcloud_client_secret`, `oidc_career_scanner_client_id`, `oidc_career_scanner_client_secret` |
+| `secret/grizzly-platform/platform/cloudflare-certmanager` | `api_token` (cert-manager's DNS-01 solver credential; scoped separately from `platform/cloudflare`) |
+| `secret/grizzly-platform/platform/invite` | `admin_token`, `authentik_api_token`, `db_password`, `signing_key` (grizzly-invite broker) |
+| `secret/grizzly-platform/platform/roundcube` | `des_key` |
+| `secret/grizzly-platform/platform/stalwart` | `account_password`, `admin_password` |
 | `secret/grizzly-platform/stores/postgres` | `password` |
 | `secret/grizzly-platform/stores/kv-cache` | `password` |
 | `secret/grizzly-platform/stores/s3-hot` | `root_access_key`, `root_secret_key` (versitygw hot gateway root creds; ADR-055) |
@@ -95,12 +100,18 @@ All platform secrets live under `secret/grizzly-platform/<domain>/<name>` (KV v2
 | `secret/grizzly-platform/stores/registry` | `access_key`, `secret_key` (scoped s3-bulk account owning `lab-registry`; provisioned by `setup-registry-stores.yml`) |
 | `secret/grizzly-platform/stores/nextcloud` | `db_password`, `s3_access_key`, `s3_secret_key` (foundation grants for the Nextcloud lab app; provisioned by `setup-nextcloud-stores.yml`, read cross-domain by Nextcloud's ExternalSecret) |
 | `secret/grizzly-platform/stores/career-scanner` | `db_password`, `s3_access_key`, `s3_secret_key` (foundation grants for the career-scanner first-party app; provisioned by `setup-career-scanner-stores.yml`, read cross-domain by career-scanner's ExternalSecret) |
+| `secret/grizzly-platform/stores/roundcube` | `db_password` |
+| `secret/grizzly-platform/stores/smtp2go` | `username`, `password` (SMTP2GO outbound smarthost creds; ADR-050) |
+| `secret/grizzly-platform/stores/stalwart` | `db_password`, `s3_access_key`, `s3_secret_key` |
 | `secret/grizzly-platform/apps/career-scanner` | `session_secret`, `serper_api_key`, `ollama_api_key`, `db_username` (app-owned secrets for the career-scanner first-party app; K8s-consumed only, via its own ExternalSecret. First consumer of the `apps/` domain — see ADR-048) |
 | `secret/grizzly-platform/observability/grafana` | `admin_password` |
 | `secret/grizzly-platform/observability/s3-client` | `access_key`, `secret_key` |
 | `secret/grizzly-platform/observability/discord-webhook` | `url` |
 | `secret/grizzly-platform/cicd/sccache-s3` | `access_key`, `secret_key` |
 | `secret/grizzly-platform/cicd/argo-s3` | `access_key`, `secret_key` |
+| `secret/grizzly-platform/cicd/cosign` | `password`, `private_key`, `public_key` (image-signing key; ADR-028) |
+| `secret/grizzly-platform/gameservers/discord` | `bot_token`, `guild_id`, `admin_user_ids` |
+| `secret/grizzly-platform/gameservers/ollama` | `api_key` |
 | `secret/grizzly-platform/flux/discord-webhook` | `url` |
 
 ### Adding a new platform secret

@@ -48,11 +48,11 @@ entries:
       authentication: none
 
   # --- Invitation gate (expression policy, re-evaluated on the user-write stage)
-  # Replaces the old paste-a-code prompt + invitation stage. The broker plants a
-  # signed `grizzly_invite` cookie at invite.grizzly-endeavors.com/i/<token>; that cookie
-  # survives the OAuth round-trip (Authentik flow context does not), so this
-  # policy reads it and consumes it via /verify. Fail closed: no cookie, a
-  # bad/used invite, or a broker error all deny.
+  # The broker plants a signed `grizzly_invite` cookie at
+  # invite.grizzly-endeavors.com/i/<token>; that cookie survives the OAuth
+  # round-trip (Authentik flow context does not), so this policy reads it and
+  # consumes it via /verify. Fail closed: no cookie, a bad/used invite, or a
+  # broker error all deny.
   #
   # CRITICAL — where this policy is bound and how it writes to the plan:
   # This is bound as a RE-EVALUATED policy on the user-write flowstagebinding
