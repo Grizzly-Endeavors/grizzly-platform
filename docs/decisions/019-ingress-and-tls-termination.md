@@ -43,7 +43,7 @@ The relevant existing pieces:
 
 - `ansible/roles/ingress-tunnel/` — WireGuard + iptables role (server/client variants).
 - `kubernetes/infrastructure/ingress-nginx/helmrelease.yaml` — NodePort DaemonSet config.
-- `kubernetes/infrastructure/cert-manager/cluster-issuer.yaml` — self-signed issuer.
+- `kubernetes/infrastructure/cert-manager-issuers/cluster-issuer.yaml` — self-signed issuer.
 - `ansible/roles/caddy/templates/Caddyfile-k8s.j2` — VPS wildcard catch-all and upstream header handling.
 - ADR-021 (off-the-shelf router; Tower PC as worker) — supersedes ADR-001; future router may or may not take over R730xd's bridge role.
 - ADR-014 (K8s cluster stack) — establishes nginx-ingress + VPS-side TLS termination.
