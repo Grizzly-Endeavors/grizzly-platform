@@ -2,10 +2,11 @@
 
 Self-hosted infrastructure for Grizzly Endeavors projects (Infrastructure as Code). See `README.md` for architecture, machines, repo structure, and common commands.
 
-**Finding things: start from `INDEX.md` (repo root) — the navigation map.** It points to each subsystem's decisions (*why*, ADRs in `docs/decisions/`), runbooks (*how to operate*, `docs/runbooks/`), and code — so subsystem detail (the CI gate, secrets/OpenBao, mail, storage, identity, …) is retrieved when you work on it rather than carried here. `docs/hardware.md` has the live machine inventory, `docs/network.md` the network topology. **Active multi-phase work lives in `docs/in-progress/`** — when the user references something as in-flight or asks you to pick up a prior thread, check there first. The completed 2026 migration record is in `archive/migration-2026/`.
+**Finding things: start from `INDEX.md` (repo root) — the navigation map.** It points to each subsystem's decisions (*why*, ADRs in `docs/decisions/`), runbooks (*how to operate*, `docs/runbooks/`), and code — so subsystem detail (the CI gate, secrets/OpenBao, mail, storage, identity, …) is retrieved when you work on it rather than carried here. `docs/hardware.md` has the live machine inventory, `docs/network.md` the network topology. **Active multi-phase work lives in `docs/in-progress/`** — when the user references something as in-flight or asks you to pick up a prior thread, check there first. The completed 2026 migration record is in `archive/migration-2026/`. **`TOOLS.md` (repo root) is the terrain map of what's callable from the control node and how to reach every remote host/BMC/service** — check it before assuming a CLI or access path doesn't exist.
 
 # Rules
 
+- **Read-only SSH to any host in this repo's inventory is always allowed without asking first** — this includes BMCs/iDRACs (e.g. `racadm get`/`storage get` diagnostics), switches, and cluster nodes. Status checks, log reads, and other non-mutating commands don't need per-host sign-off. Mutating actions (config changes, resets, power actions, writes) still follow the standard destructive-action confirmation rules.
 - All configuration and infrastructure MUST be conducted with IaC. Manual changes must be clearly documented.
 - **Done means deployed.** Writing IaC is not the finish line — run the playbook, verify it works, then report completion. Never stop at "here's the code I wrote."
 - Warnings are blockers. Resolve before considering work complete. If a warning truly cannot be resolved, document why.

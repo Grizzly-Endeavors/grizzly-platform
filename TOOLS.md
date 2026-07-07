@@ -15,7 +15,7 @@ Everything below is on `PATH` here. No "why" column — check the relevant runbo
 **Kubernetes:** `kubectl`, `helm`, `flux`, `k9s`, `cilium`, `hubble`, `argo`
 - `kubectl kustomize` covers standalone kustomize — no separate `kustomize` binary.
 
-**Secrets:** `bao` (OpenBao — persistent root session via `~/.vault-token` + CA on this node, `bao kv put/get/patch` directly), `infisical` (bootstrap-only: unseal keys)
+**Secrets:** `bao` (OpenBao — server runs on r730xd, `BAO_ADDR=https://10.0.0.200:8200`; persistent root session via `~/.vault-token` + CA on this node, `bao kv put/get/patch` directly — see `docs/runbooks/openbao-add-secret.md`), `infisical` (bootstrap-only: unseal keys)
 
 **IaC / linting:** `ansible`, `ansible-playbook`, `ansible-vault`, `ansible-lint`, `pre-commit`, `shellcheck`, `yamllint`
 - Ansible collections: `community.crypto`, `community.general`, `community.hashi_vault`, `community.aws`, `community.dns`, `community.docker`, `kubernetes.core`, `ansible.posix` — see `ansible/requirements.yml` for version floors.
