@@ -1,40 +1,35 @@
 # Documentation
 
-## Reference
+How the platform's docs are organized, and where to look for what. This page is the **shape**; [`INDEX.md`](INDEX.md) is the **listing** — one line per document.
 
-- [hardware.md](hardware.md) — machine inventory, specs, live roles
-- [network.md](network.md) — topology, IPs, tunnels
-- [nodeport-allocation.md](nodeport-allocation.md) — K8s NodePort registry
+## The README / INDEX convention
 
-## Operations
+Every docs area follows the same two-file rule, so you can always guess where to look:
 
-- [k8s-cluster-standup.md](k8s-cluster-standup.md) — how the cluster was built, smoke tests
-- [monitoring-integration.md](monitoring-integration.md) — observability stack (Prometheus, Loki, Tempo, Grafana)
+- **`README.md`** — the *shape* of an area: what it's for, how it's organized, the conventions that govern it. Read it to orient.
+- **`INDEX.md`** — the *listing*: one terse line per item in that area. Read it to find a specific doc fast.
 
-## Application integration
+The rule is mechanical on purpose: **INDEX to find a doc, README to understand the area.** When you add a doc, add its line to the local `INDEX.md`; when an area's organization changes, update its `README.md`.
 
-- [residuum-feedback-plan.md](residuum-feedback-plan.md) — Residuum feedback-ingest service rollout plan
-- [residuum-feedback-schema.md](residuum-feedback-schema.md) — Postgres schema for feedback ingestion
+## Areas
 
-## Decisions
+| Area | Shape | Listing | What lives there |
+|------|-------|---------|------------------|
+| **Decisions** | [decisions/README.md](decisions/README.md) | [decisions/INDEX.md](decisions/INDEX.md) | ADRs — *why* the platform is the way it is. |
+| **Runbooks** | [runbooks/README.md](runbooks/README.md) | [runbooks/INDEX.md](runbooks/INDEX.md) | Operator procedures — *how* to deploy, drive, rotate, recover live systems. |
+| **In-progress** | [in-progress/README.md](in-progress/README.md) | [in-progress/INDEX.md](in-progress/INDEX.md) | Active, multi-phase work and where we left off. The only place transient status lives. |
+| **Exploration** | [exploration/README.md](exploration/README.md) | [exploration/INDEX.md](exploration/INDEX.md) | Researched-but-not-committed ideas. |
+| **Reference & operations** | *(this file)* | [INDEX.md](INDEX.md) | Loose reference docs (hardware, network, ports) and standing operations guides. |
 
-- [decisions/](decisions/) — Architectural Decision Records. Start here when you need to know *why* something was done.
+## Where the durable "why" and "how" split
 
-## Exploration (not yet implemented)
+Three homes, one question each — keep content in the right one and none of them rots:
 
-- [exploration/network-vlans.md](exploration/network-vlans.md) — VLAN redesign, gated on router purchase
-- [exploration/distributed-compute-argo-ray.md](exploration/distributed-compute-argo-ray.md) — Argo Workflows + Ray for distributed compute
-
-## Hardware research
-
-- [ap630-debian-project.md](ap630-debian-project.md) — AP630 Debian-on-aarch64 experimentation (archived; source extracted to [Grizzly-Endeavors/ap630-debian](https://github.com/Grizzly-Endeavors/ap630-debian))
-- [aerohive-cli-reference.md](aerohive-cli-reference.md) — HiveOS CLI quick reference
-- [aerohive-serial-interface.md](aerohive-serial-interface.md) — Serial access notes
-
-## Templates
-
-- [templates/app-deploy/](templates/app-deploy/) — Starter files for deploying a new app to the cluster
+- **Why we chose this** → an [ADR](decisions/). Permanent.
+- **How to operate/recover this** → a [runbook](runbooks/). Permanent.
+- **What's in flight and where we left off** → an [in-progress thread](in-progress/). Ephemeral; deleted when the work lands.
+- **A discrete bug or small follow-up** → a GitHub issue. Docs link to issues rather than duplicating them.
 
 ## Archive
 
-- [../archive/](../archive/) — Pre-2026 configs (`pre-migration-2026/`), the completed 2026 migration record (`migration-2026/`), and superseded one-off projects (`proxmox-playground/`, `staging-vm/`, `migration-docs/`).
+Historical material lives in [`../archive/`](../archive/): pre-2026 configs (`pre-migration-2026/`), the completed 2026 migration record (`migration-2026/`), and superseded one-off projects.

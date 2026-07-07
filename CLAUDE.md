@@ -1,43 +1,8 @@
 # grizzly-platform
 
-Self-hosted infrastructure for Grizzly Endeavors projects (Infrastructure as Code). See `README.md` for architecture, machines, repo structure, and common commands. `docs/hardware.md` has the live machine inventory, `docs/network.md` the network topology, and `docs/decisions/` the architectural rationale. The completed 2026 migration record lives in `archive/migration-2026/`.
+Self-hosted infrastructure for Grizzly Endeavors projects (Infrastructure as Code). See `README.md` for architecture, machines, repo structure, and common commands.
 
-# CI Gate
-
-**Start here:** `docs/runbooks/ci-gate.md` — bootstrap, Audit→Enforce rollout, key rotation, gate version bump, deploy-denied diagnosis.
-
-- **Gate source lives in its own public repo:** [Grizzly-Endeavors/grizzly-gate](https://github.com/Grizzly-Endeavors/grizzly-gate) (Dockerfile, `config/` tree, Rust `harness/`, design docs + ADRs). This platform owns the *integration*, not the source. The Argo build (`kubernetes/infrastructure/argo-workflows/build-gate-image.yaml`) clones that repo; the build *trigger* workflow lives there too. `docker/grizzly-gate/` here is now just a pointer stub.
-- The versioned `grizzly-gate` container image owns the per-language checks + scanners (rules live in the gate repo's `config/` tree — one self-describing `manifest.toml` + native config per tool under `languages/` and `util/`; harness in Rust). The gate's config is authoritative: it is forced onto each tool and ignores the scanned repo's own config of the same kind. Apps call the reusable `.github/workflows/gate.yaml` after building; on a clean pass the gate cosign-signs the image **digest**. Kyverno (`kubernetes/infrastructure/kyverno{,-policies}/`) refuses unsigned images at admission in namespaces labelled `grizzly.io/gated=true`. Signing key in OpenBao `secret/grizzly-platform/cicd/cosign`; registry is zot (OCI referrers).
-- **Honest map (gate ≥ v0.3.0):** every gated repo must ship a root `gate-config.json` declaring its projects (`languages/`+`path`, node containing TS must add `tsconfig`). The harness (`detect.rs`) walks the whole tree and fails closed on undeclared code or unsupported languages (denylist in `config/detect.toml`); per-adapter `[detect]` blocks drive what counts as that language's evidence. No repo-controlled exclusions. Adding a language = new adapter **and** detect rules.
-- **TS type-aware lint (≥ v0.4.0)** via typescript-eslint (`strictTypeChecked`), and **cross-ecosystem SCA (≥ v0.5.0)** via `osv-scanner` (vuln + license allowlist mirroring `deny.toml`) + `trivy fs` (second vuln DB) — both fetch fresh advisory data at scan time (online, fail-closed), max-denial (all severities, deny-unknown licenses).
-- ADRs: `docs/decisions/028-centralized-ci-gate.md`, `docs/decisions/029-gate-config-honest-map.md`, `docs/decisions/030-cross-ecosystem-sca.md`, `docs/decisions/027-registry-zot.md`. Enforcement starts in **Audit**; flip to Enforce only after live first-party images are signed.
-
-# Secrets Management
-
-**Start here:** `docs/runbooks/openbao-quickref.md` — addresses, file paths, policies, auth methods, path layout, rotate/add how-tos, deploy-time gotchas.
-**Migration playbook:** `docs/runbooks/secrets-migration.md` — Phase A–E operator guide for moving consumers onto OpenBao.
-
-- **OpenBao** (on R730xd, LAN-only at `https://10.0.0.200:8200`) is the platform secrets source of truth. Scripted unseal via Infisical bootstrap secrets (`openbao-auto-unseal.service`). Audit device enabled declaratively in `openbao.hcl` (file sink on the ZFS hot tier).
-  - Role: `ansible/roles/r730xd-openbao/`
-  - Playbooks: `deploy-openbao.yml`, `bootstrap-openbao.yml`, `rotate-openbao-keys.yml`, `setup-openbao-k8s-auth.yml`, `migrate-platform-secrets-to-openbao.yml`, `rollback-openbao-migration.yml`
-  - Helpers: `scripts/set-openbao-bootstrap-secrets.sh` (Infisical creds), `scripts/set-openbao-approle-secrets.sh` (Ansible AppRole creds), `scripts/fetch-openbao-ca.sh` (CA → ConfigMap + controller trust store)
-  - ADRs: `docs/decisions/023-self-hosted-openbao-on-r730xd.md`, `docs/decisions/024-platform-secrets-on-openbao.md`
-  - Runbooks: `docs/runbooks/openbao-{quickref,rotation,disaster-recovery}.md`, `docs/runbooks/secrets-migration.md`
-- **Ansible consumers:** `ansible/vars/openbao_secrets.yml` redefines in-scope `vault_*` as `community.hashi_vault.vault_kv2_get` lookups; opt-in per playbook via `openbao_read_enabled` (default false). Auth: AppRole `ansible-iac` bound to `ansible-platform-read` (CIDR-locked to 10.0.0.0/24).
-- **Kubernetes consumers:** External Secrets Operator, deployed via Flux at `kubernetes/infrastructure/external-secrets/`. ClusterSecretStore `openbao` authenticates via K8s auth method using the `openbao-auth` ServiceAccount (TokenReview delegated). `ExternalSecret` manifests live next to the consuming HelmRelease.
-- **Path layout:** `secret/grizzly-platform/<domain>/<name>` under KV v2. Domains: `platform/`, `stores/`, `observability/`, `cicd/`, `flux/`. Full layout in the quickref.
-- **Ansible Vault** (`ansible/inventory/group_vars/all/vault.yml`, encrypted, decrypted via `.vault_pass`) post-migration holds only: Infisical bootstrap creds (chicken-and-egg with OpenBao unseal), OpenBao AppRole creds, WireGuard private keys (ingress-tunnel role references them directly — not migrated), and app-level secrets (out of scope for this migration).
-- **Vault password file:** Must exist at repo root, git-ignored.
-- **Infisical** holds ONLY the OpenBao unseal keys + root token (bootstrap store). Project ID = `workspaceId` in `.infisical.json` at repo root. Env slug = `prod`. Secrets stored as `--type=shared`. Not a general-purpose secret store here.
-- Secrets must never appear in plaintext in IaC — use `no_log: true` for tasks that handle sensitive values.
-
-# Email / Mail (Stalwart)
-
-**Start here:** `docs/runbooks/mail.md` — deployment status, resume point, and gotchas. **CLI reference:** `docs/runbooks/stalwart-cli.md` — driving the schema-driven config CLI (verbs, object model, recipes). **As of 2026-07-06: own-MX inbound LIVE (MX cut over to Stalwart, CF Email Routing retired, verified real mail delivery). Remaining: Phase 5 Part B/C — SMTP2GO signup (⏸ parked: domain must be >3 days old, retry ~2026-07-08) then outbound smarthost + sender-auth DNS.**
-
-- Self-hosted [Stalwart](https://stalw.art) mail server (`stalwartlabs/stalwart:v0.16.11`), in-cluster via its own Flux Kustomization (`kubernetes/infrastructure/stalwart/` + `kubernetes/clusters/grizzly-platform/stalwart.yaml`), state on foundation Postgres + s3-hot versitygw (blob store; ADR-055). Outbound relays via SMTP2GO; inbound is own-MX via VPS HAProxy + tunnel (not built yet). HTTP surface live at `mail.grizzly-endeavors.com`.
-- **Stalwart 0.16 config is JSON + DB-backed:** the static `config.json` is only the data-store object; blob store, listeners, TLS, domain, accounts, DKIM, security live in Postgres, applied via the first-party CLI (`stalwartlabs/cli`; see `docs/runbooks/stalwart-cli.md`). `ansible/playbooks/configure-stalwart.yml` applies the declarative `ansible/files/stalwart/plan.json`. **Gotchas:** no `%{env:}%` macro expansion (use typed `EnvironmentVariable`/`File` secret objects); blob-store + listener changes need a pod restart (not `ReloadSettings`); the http surface shares the ingress-nginx IP so Stalwart's auto-ban can wedge it — internal ranges are allowlisted (`AllowedIp 10.0.0.0/8`).
-- ADRs: `docs/decisions/050-stalwart-mail-server.md`, `051-haproxy-l4-mail-ingress.md`, `052-in-cluster-acme-cert-for-mail.md`, `054-cloudflare-email-routing-interim-inbound.md`.
+**Finding things: start from `INDEX.md` (repo root) — the navigation map.** It points to each subsystem's decisions (*why*, ADRs in `docs/decisions/`), runbooks (*how to operate*, `docs/runbooks/`), and code — so subsystem detail (the CI gate, secrets/OpenBao, mail, storage, identity, …) is retrieved when you work on it rather than carried here. `docs/hardware.md` has the live machine inventory, `docs/network.md` the network topology. **Active multi-phase work lives in `docs/in-progress/`** — when the user references something as in-flight or asks you to pick up a prior thread, check there first. The completed 2026 migration record is in `archive/migration-2026/`.
 
 # Rules
 

@@ -7,7 +7,7 @@ Self-hosted infrastructure for Grizzly Endeavors projects. Bare-metal IaC on rep
 ## Infrastructure
 
 - **K8s cluster** — v1.33.10. `dell-inspiron-15` (control plane) + `quanta`, `intel-nuc`, `optiplex` (workers). Cilium CNI, Flux GitOps, democratic-csi for storage, cert-manager, ingress-nginx, ARC v2 runners, Argo Workflows, in-cluster OCI registry. See [docs/k8s-cluster-standup.md](docs/k8s-cluster-standup.md).
-- **Dell R730xd** — Storage server (Debian 13, 32 GB ECC, 14 drive bays). Two storage tiers: ZFS raidz1 for latency-sensitive services (Postgres, kv-cache, MinIO Obs, Prometheus, Loki, Tempo, Grafana), MergerFS + SnapRAID for bulk (MinIO Bulk, NFS for K8s PVCs). Also terminates the VPS → home ingress WireGuard tunnel.
+- **Dell R730xd** — Storage server (Debian 13, 32 GB ECC, 14 drive bays). Two storage tiers: ZFS raidz1 for latency-sensitive services (Postgres, kv-cache, s3-hot object store, Prometheus, Loki, Tempo, Grafana), MergerFS + SnapRAID for bulk (s3-bulk object store, NFS for K8s PVCs). The s3-hot/s3-bulk object stores are versitygw S3 gateways ([ADR-055](docs/decisions/055-s3-object-store-versitygw.md)). Also terminates the VPS → home ingress WireGuard tunnel.
 - **Hetzner VPS** — Caddy reverse proxy with per-domain wildcard TLS (`*.grizzly-endeavors.com` for platform services, `*.bearflinn.com` for personal apps — both via Cloudflare DNS-01). Routes to the cluster through the WG tunnel.
 
 Full machine list with specs in [docs/hardware.md](docs/hardware.md). Network topology in [docs/network.md](docs/network.md).
@@ -51,15 +51,18 @@ ansible-playbook -i ansible/inventory/proxy-vps.yml ansible/playbooks/setup-prox
 
 ## Documentation
 
+Docs follow a **README = shape, INDEX = listing** convention — read a `README.md` to understand an area, its `INDEX.md` to find a specific doc. **[`INDEX.md`](INDEX.md) (repo root) is the navigation map** — subsystems → their decisions, runbooks, and code. From there:
+
 | Document | Contents |
 |----------|----------|
-| [docs/README.md](docs/README.md) | Documentation index |
+| [INDEX.md](INDEX.md) | Navigation map — where each subsystem's docs & code live |
+| [docs/README.md](docs/README.md) | Docs map — how the docs are organized |
+| [docs/INDEX.md](docs/INDEX.md) | One-line listing of every doc |
+| [docs/decisions/INDEX.md](docs/decisions/INDEX.md) | ADRs — *why* things are the way they are |
+| [docs/runbooks/INDEX.md](docs/runbooks/INDEX.md) | Runbooks — *how* to operate & recover live systems |
+| [docs/in-progress/INDEX.md](docs/in-progress/INDEX.md) | Active multi-phase work in flight |
 | [docs/hardware.md](docs/hardware.md) | Machine inventory, specs, live roles |
 | [docs/network.md](docs/network.md) | Network topology, IPs, tunnels |
-| [docs/k8s-cluster-standup.md](docs/k8s-cluster-standup.md) | How the cluster was built; smoke tests |
-| [docs/monitoring-integration.md](docs/monitoring-integration.md) | Observability stack architecture |
-| [docs/nodeport-allocation.md](docs/nodeport-allocation.md) | K8s NodePort registry |
-| [docs/decisions/](docs/decisions/) | ADRs — why things are the way they are |
 | [archive/](archive/) | Pre-2026 configs and the 2026 migration record |
 
 ## License
