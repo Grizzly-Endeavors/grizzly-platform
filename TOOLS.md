@@ -69,7 +69,7 @@ DAL Admin CLI over SSH (IPv6 link-local for bench access, LAN IP `10.0.0.1` post
 ## Verifying the local list
 
 ```fish
-for t in git gh docker kubectl helm flux k9s cilium hubble argo bao infisical ansible ansible-lint pre-commit shellcheck yamllint yq jq envsubst psql mc logcli promtool amtool wg nmap dig sshpass netbird gpg openssl terraform cosign aws valkey-cli
+for t in git gh docker kubectl helm flux k9s cilium hubble argo bao infisical ansible ansible-lint pre-commit shellcheck yamllint yq jq envsubst psql mc logcli promtool amtool wg nmap dig nslookup sshpass netbird gpg openssl terraform cosign aws valkey-cli
     if command -v $t >/dev/null
         echo "OK   $t"
     else
