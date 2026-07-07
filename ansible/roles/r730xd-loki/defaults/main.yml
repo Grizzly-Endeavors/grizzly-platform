@@ -18,7 +18,7 @@ loki_compose_dir: "/opt/observability/loki"
 # Memory limit
 loki_memory_limit: "512m"
 
-# S3 backend (s3-hot versitygw gateway; was MinIO Obs :9000 pre-ADR-055)
+# S3 backend (s3-hot versitygw gateway)
 loki_s3_endpoint: "{{ r730xd_ip }}:7070"
 loki_s3_bucket: "observability-loki"
 loki_s3_region: "us-east-1"

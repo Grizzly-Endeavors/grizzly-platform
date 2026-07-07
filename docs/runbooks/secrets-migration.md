@@ -56,7 +56,7 @@ run.
 
 ```
 bao kv list secret/grizzly-platform            # shows: platform/ stores/ observability/ cicd/ flux/
-bao kv list secret/grizzly-platform/stores     # shows: postgres kv-cache minio-obs minio-bulk
+bao kv list secret/grizzly-platform/stores     # shows: postgres kv-cache s3-hot s3-bulk
 bao kv get secret/grizzly-platform/stores/postgres   # should return the current password
 ```
 
@@ -78,9 +78,9 @@ confirm credentials work:
 ```
 psql -h 10.0.0.200 -U postgres               # password from OpenBao
 valkey-cli -h 10.0.0.200 -a "$(bao kv get -field=password secret/grizzly-platform/stores/kv-cache)" ping
-mc alias set obs http://10.0.0.200:9000 \
-  "$(bao kv get -field=root_user secret/grizzly-platform/stores/minio-obs)" \
-  "$(bao kv get -field=root_password secret/grizzly-platform/stores/minio-obs)"
+mc alias set hot http://10.0.0.200:7070 \
+  "$(bao kv get -field=root_access_key secret/grizzly-platform/stores/s3-hot)" \
+  "$(bao kv get -field=root_secret_key secret/grizzly-platform/stores/s3-hot)"
 ```
 
 Once verified, proceed to the next playbook in order:

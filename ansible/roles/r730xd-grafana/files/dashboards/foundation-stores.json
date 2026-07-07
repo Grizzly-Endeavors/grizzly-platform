@@ -1,6 +1,6 @@
 {
   "annotations": { "list": [] },
-  "description": "PostgreSQL, kv-cache (Valkey), and MinIO health metrics from foundation stores",
+  "description": "PostgreSQL, kv-cache (Valkey), and versitygw S3 health metrics from foundation stores",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
@@ -176,60 +176,62 @@
       "collapsed": false,
       "gridPos": { "h": 1, "w": 24, "x": 0, "y": 26 },
       "id": 102,
-      "title": "MinIO",
+      "title": "Object storage (versitygw)",
       "type": "row"
     },
     {
       "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "fieldConfig": { "defaults": { "unit": "s", "custom": { "lineWidth": 2, "fillOpacity": 20, "gradientMode": "scheme" } } },
+      "fieldConfig": { "defaults": { "unit": "Bps", "custom": { "lineWidth": 2, "fillOpacity": 20, "gradientMode": "scheme" } } },
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 27 },
       "id": 20,
       "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"] } },
-      "title": "S3 Request Latency",
+      "title": "S3 Throughput (read/write)",
       "type": "timeseries",
       "targets": [
-        { "expr": "rate(minio_s3_requests_ttfb_seconds_distribution_sum[5m]) / rate(minio_s3_requests_ttfb_seconds_distribution_count[5m])", "legendFormat": "avg ttfb" }
+        { "expr": "sum by (job) (rate(versitygw_bytes_written[5m]))", "legendFormat": "{{ job }} write" },
+        { "expr": "sum by (job) (rate(versitygw_bytes_read[5m]))", "legendFormat": "{{ job }} read" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "lineWidth": 2, "fillOpacity": 20 } } },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 27 },
+      "id": 21,
+      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "table", "placement": "bottom" } },
+      "title": "S3 Requests / sec (by action)",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "sum by (action) (rate(versitygw_success_count[5m]))", "legendFormat": "{{ action }}" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "lineWidth": 2, "fillOpacity": 20 } } },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 35 },
+      "id": 22,
+      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "table", "placement": "bottom" } },
+      "title": "S3 Errors / sec (by bucket + status)",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "sum by (bucket, status) (rate(versitygw_failed_count[5m]))", "legendFormat": "{{ bucket }} {{ status }}" }
       ]
     },
     {
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": { "defaults": { "unit": "ops", "custom": { "lineWidth": 2, "fillOpacity": 20 } } },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 27 },
-      "id": 21,
-      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "table", "placement": "bottom" } },
-      "title": "S3 Requests / sec",
-      "type": "timeseries",
-      "targets": [
-        { "expr": "rate(minio_s3_requests_total[5m])", "legendFormat": "{{ api }}" }
-      ]
-    },
-    {
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "fieldConfig": { "defaults": { "unit": "short", "custom": { "lineWidth": 2, "fillOpacity": 20 } } },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 35 },
-      "id": 22,
-      "options": { "tooltip": { "mode": "multi" } },
-      "title": "S3 Errors / sec",
-      "type": "timeseries",
-      "targets": [
-        { "expr": "rate(minio_s3_requests_errors_total[5m])", "legendFormat": "{{ api }}" }
-      ]
-    },
-    {
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "fieldConfig": { "defaults": { "unit": "bytes" } },
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 35 },
       "id": 23,
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "graphMode": "none" },
-      "title": "Bucket Sizes",
-      "type": "stat",
+      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "table", "placement": "bottom" } },
+      "title": "Object churn / sec (created/removed)",
+      "type": "timeseries",
       "targets": [
-        { "expr": "minio_bucket_usage_total_bytes", "legendFormat": "{{ bucket }}" }
+        { "expr": "sum by (job) (rate(versitygw_object_created_count[5m]))", "legendFormat": "{{ job }} created" },
+        { "expr": "sum by (job) (rate(versitygw_object_removed_count[5m]))", "legendFormat": "{{ job }} removed" }
       ]
     }
   ],
   "schemaVersion": 39,
-  "tags": ["grizzly-platform", "foundation", "postgres", "kv-cache", "minio"],
+  "tags": ["grizzly-platform", "foundation", "postgres", "kv-cache", "versitygw", "s3"],
   "templating": { "list": [] },
   "time": { "from": "now-6h", "to": "now" },
   "timepicker": {},

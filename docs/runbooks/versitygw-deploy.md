@@ -1,6 +1,6 @@
-# versitygw — Deployment & Migration Runbook
+# versitygw — Deployment & Operations Runbook
 
-Deployment/operations counterpart to [`versitygw-cli.md`](versitygw-cli.md) (which is "how to drive the tool"). This page is "how the stores are stood up here and how the MinIO→versitygw cutover runs" ([ADR-055](../decisions/055-s3-object-store-versitygw.md)).
+Deployment/operations counterpart to [`versitygw-cli.md`](versitygw-cli.md) (which is "how to drive the tool"). This page is "how the stores are stood up and operated here" ([ADR-055](../decisions/055-s3-object-store-versitygw.md)).
 
 ## What's deployed
 
@@ -11,10 +11,9 @@ Two versitygw gateways run as Docker Compose services on the R730xd, each owned 
 | **s3-hot** | `r730xd-s3-hot` | ZFS `tank/foundation/s3-hot` (recordsize 1M) | `10.0.0.200:7070` | `:7071` (container-internal) | `:9102` | `/mnt/zfs/foundation/s3-hot/{data,versions}` |
 | **s3-bulk** | `r730xd-s3-bulk` | MergerFS+SnapRAID `/mnt/pool` | `10.0.0.200:7072` | `:7073` (container-internal) | `:9103` | `/mnt/pool/foundation/s3-bulk/{data,versions}` |
 
-- **Coexistence:** these stand up *alongside* live MinIO (obs `:9000`, bulk `:9002`) on distinct ports and data dirs, so the stand-up disrupts nothing. MinIO is retired only after the cutover below.
 - **IAM:** OpenBao Vault mode. Shared `versitygw` AppRole (policy `versitygw-iam`, CRUD+list on the `versitygw-iam` kv-v2 mount); each gateway namespaces its accounts by `--iam-vault-secret-storage-path` (`s3-hot` / `s3-bulk`). Root creds per instance in `secret/grizzly-platform/stores/{s3-hot,s3-bulk}`; AppRole creds in `secret/grizzly-platform/stores/versitygw-iam`. All three generated once by `setup-versitygw-iam.yml`.
 - **Config:** 100% flags/env (versitygw is stateless) rendered into `/opt/foundation/<inst>/docker-compose.yml` (secrets in a sibling `versitygw.env`, 0600). No live reload — a config change is `systemctl restart foundation-<inst>`.
-- **Metrics:** versitygw has no native Prometheus endpoint, so each gateway has a `statsd-exporter` sidecar (StatsD → Prometheus). The statsd→prom mapping (`/etc/versitygw/<inst>/statsd-mapping.yml`) starts as a pass-through — **tighten it once emitted metric names are observed**.
+- **Metrics:** versitygw has no native Prometheus endpoint, so each gateway has a `statsd-exporter` sidecar (StatsD → Prometheus, scraped at `:9102`/`:9103`). The statsd→prom mapping (`/etc/versitygw/<inst>/statsd-mapping.yml`) is a pass-through: versitygw emits well-labelled counters — `versitygw_{bytes_read,bytes_written,success_count,failed_count,object_created_count,object_removed_count}` with `action`/`api`/`bucket`/`method`/`status` labels — so no per-metric mapping is needed. (There is no request-latency or bucket-size gauge.) These feed the `foundation-stores` Grafana dashboard.
 
 ## Standing up from scratch (order matters)
 
@@ -54,35 +53,6 @@ docker exec -e ADMIN_ACCESS_KEY_ID=$AK -e ADMIN_SECRET_KEY=$SK foundation-s3-hot
 ```
 
 The account lands in OpenBao at `versitygw-iam/<storage-path>/<access>` (`bao kv list -mount=versitygw-iam s3-hot`). New (uncached) keys resolve immediately; *changes* to an existing key lag up to `--iam-cache-ttl` (120s).
-
-## Cutover checklist (MinIO → versitygw, next phase)
-
-Per-consumer this is an endpoint + bucket + credential swap (all consumers are S3-compatible), not an app rewrite. For each consumer:
-
-1. Create its scoped account on the target gateway (above); mirror its bucket(s). Provisioning is scripted per consumer via `ansible/tasks/versitygw-provision-account.yml` (create-user `userplus` + create-bucket owned by it, through the admin port) — each `setup-<app>-stores.yml` includes it.
-2. Migrate objects. **Use `rclone sync`, not `mc mirror`, for any bucket with large (multipart) objects.** `mc mirror` streams S3→S3 by piping a source GET straight into a destination multipart PUT; on the R730xd that truncated large registry blobs (`ContentLength=16777216 with Body length …`) and, because `mc mirror` aborts the whole run on the first error, it barely progressed. `rclone sync` retries per object and continues, so it converges. Recipe (env-config remotes, path-style):
-
-   ```
-   export RCLONE_CONFIG_SRC_TYPE=s3 RCLONE_CONFIG_SRC_PROVIDER=Minio  RCLONE_CONFIG_SRC_ENDPOINT=http://10.0.0.200:9002
-   export RCLONE_CONFIG_DST_TYPE=s3 RCLONE_CONFIG_DST_PROVIDER=Other  RCLONE_CONFIG_DST_ENDPOINT=http://10.0.0.200:7072 RCLONE_CONFIG_DST_FORCE_PATH_STYLE=true
-   # + RCLONE_CONFIG_{SRC,DST}_ACCESS_KEY_ID / _SECRET_ACCESS_KEY from OpenBao
-   rclone sync src:<bucket> dst:<bucket> --transfers 8 --checkers 16 --retries 5 --low-level-retries 10
-   rclone check src:<bucket> dst:<bucket> --one-way   # size parity; multipart ETags differ so some "hashes could not be checked" — size match is authoritative
-   ```
-
-   Small buckets (Nextcloud's 585 objects) copy fine with `mc mirror`. For a **live-written** store (the zot registry takes CI image pushes), run a final catch-up **immediately before** flipping the endpoint, and use `rclone copy` (not `sync`) for any catch-up *after* the flip so it never deletes newly-written destination objects.
-3. Re-point the consumer's endpoint (`:9000`→`:7070`, `:9002`→`:7072`) + swap creds, then verify. For K8s consumers the flip lands on Flux reconcile after merge; MinIO stays up until PR 3 as a live rollback (revert the endpoint edit → old data still there).
-
-Consumers to move (ADR-055): **hot (`:9000`→`:7070`)** — Loki (`r730xd-loki` defaults/template), Tempo (`r730xd-tempo`), Stalwart blob store (via Stalwart CLI + `setup-stalwart-stores.yml`). **bulk (`:9002`→`:7072`)** — zot registry (`kubernetes/infrastructure/registry/configmap.yaml`), Argo artifacts (`kubernetes/infrastructure/argo-workflows/helmrelease.yaml`), sccache, Nextcloud (manifests in the **lab-apps** repo). Each has an OpenBao path + (for k8s) an ExternalSecret `remoteRef.key` to re-point.
-
-After all consumers are migrated and verified — **done 2026-07-06, this is the record of how**:
-
-- Remove the MinIO roles/creds and the `minio-obs`/`minio-bulk` Prometheus scrape jobs. (Loki/Tempo keep the `observability/s3-client` account — only its backing engine moved.)
-- Stop + remove the containers: `docker compose down` in `/opt/foundation/minio-{obs,bulk}`, then remove those compose dirs.
-- Destroy the drained `tank/foundation/minio-obs` dataset (`zfs destroy -r`; s3-hot is its own dataset — no rename needed) and remove the MinIO bulk data dir (`rm -rf /mnt/pool/foundation/minio-bulk` — be precise, the sibling `s3-bulk` dir stays).
-- Drop the `.minio.sys/` SnapRAID exclude (keep `.sgwtmp/`).
-- Retire the OpenBao `stores/minio-obs` / `stores/minio-bulk` paths (`bao kv metadata delete`).
-- **SnapRAID resync (do this manually — the nightly wrapper will abort):** removing the bulk data deletes thousands of files, tripping `snapraid-sync.sh`'s `DELETE_THRESHOLD=40`, and if a whole pool disk's tracked files vanish (here minio-bulk lived entirely on `d2`/`/mnt/data/bay2`) plain `snapraid sync` refuses with *"files … now missing or rewritten … use `--force-empty`"*. **Before forcing, verify the disk is mounted and its emptiness is the intended deletion** (`findmnt /mnt/data/bay2`; it should now hold the new `foundation/s3-bulk` data), *not* a failed mount — then `sudo snapraid --force-empty sync`.
 
 ## Troubleshooting
 

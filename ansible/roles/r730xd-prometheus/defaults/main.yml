@@ -60,8 +60,7 @@ prometheus_observability_targets:
   - job: "grafana"
     target: "{{ r730xd_ip }}:3000"
   # versitygw stores (ADR-055) — scraped via their statsd-exporter sidecars
-  # (versitygw has no native Prometheus endpoint). Replaced the retired MinIO
-  # Obs/Bulk scrape jobs.
+  # (versitygw has no native Prometheus endpoint).
   - job: "s3-hot"
     target: "{{ r730xd_ip }}:9102"
   - job: "s3-bulk"

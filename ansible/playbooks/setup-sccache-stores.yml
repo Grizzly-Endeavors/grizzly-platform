@@ -4,8 +4,7 @@
 #
 # Extracted from setup-k8s-cicd.yml (which now only deploys the ARC/Argo Flux
 # stack): the S3 bucket + account belong with the other per-consumer store
-# playbooks (setup-{stalwart,nextcloud,career-scanner}-stores.yml), and moving
-# off MinIO onto versitygw makes the old `mc admin` block obsolete anyway.
+# playbooks (setup-{stalwart,nextcloud,career-scanner}-stores.yml).
 #
 # One scoped `userplus` account + a `build-cache` bucket it owns, on the
 # s3-bulk versitygw gateway. The runner Deployment reads the same keys via the

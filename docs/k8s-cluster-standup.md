@@ -228,7 +228,7 @@ Migrate services one at a time. Each migration exercises the 7a machinery and sh
 Polish pass across the cluster infrastructure. Everything here is deferrable — the cluster is functional without it — but rounds out the platform for day-to-day use.
 
 **Delivers:**
-- In-cluster OCI registry deployed via Flux, backed by MinIO bulk storage *(done in Phase 7b)*
+- In-cluster OCI registry deployed via Flux, backed by s3-bulk (versitygw) storage *(done in Phase 7b)*
 - Custom GitHub Actions runner image (Rust, Helm, Node, gh CLI, cross-compile toolchain) built automatically via Argo WorkflowTemplate + Kaniko when the Dockerfile changes (`docker/github-runner/Dockerfile`)
 - Runner scale set updated to use custom image from the in-cluster registry
 - GitHub Actions workflow (`.github/workflows/build-runner-image.yaml`) triggers the Argo build on Dockerfile push to master

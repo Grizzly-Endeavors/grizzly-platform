@@ -22,7 +22,7 @@ tempo_compose_dir: "/opt/observability/tempo"
 # Memory limit
 tempo_memory_limit: "512m"
 
-# S3 backend (s3-hot versitygw gateway; was MinIO Obs :9000 pre-ADR-055)
+# S3 backend (s3-hot versitygw gateway)
 tempo_s3_endpoint: "{{ r730xd_ip }}:7070"
 tempo_s3_bucket: "observability-tempo"
 # Access keys from group_vars (vault-backed)

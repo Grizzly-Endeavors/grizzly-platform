@@ -87,7 +87,7 @@ spec:
               - name: DOCKER_HOST
                 value: unix:///run/docker/docker.sock
               # sccache — Rust build cache backed by the s3-bulk versitygw
-              # gateway (ADR-055; was MinIO bulk :9002).
+              # gateway (ADR-055).
               - name: RUSTC_WRAPPER
                 value: "sccache"
               - name: SCCACHE_BUCKET

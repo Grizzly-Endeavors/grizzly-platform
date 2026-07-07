@@ -100,7 +100,6 @@
     # --- Loki/Tempo S3 buckets + account ---
     # Provisioned on the s3-hot versitygw gateway by
     # setup-observability-stores.yml (ADR-055) — run that before this playbook.
-    # The former inline `mc` block against minio-obs is retired.
 
     # --- Grafana PostgreSQL database provisioning ---
 
