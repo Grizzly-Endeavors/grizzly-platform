@@ -14,8 +14,6 @@ Configuration management for active infrastructure. Previous K8s cluster and tow
 | `r730xd-zfs.yml` | r730xd | ZFS raidz1 pool + service datasets for latency-sensitive workloads |
 | `deploy-foundation-stores.yml` | r730xd | PostgreSQL 16, kv-cache (Valkey), s3-hot (ZFS), s3-bulk (MergerFS) versitygw gateways as Docker Compose services |
 | `deploy-observability.yml` | r730xd | Prometheus, Alertmanager, Loki, Tempo, Grafana, Alloy on ZFS pool |
-| `create-staging-vm.yml` | r730xd | Create Debian 13 staging VM via libvirt for critical services during migration |
-| `deploy-staging-services.yml` | staging-vm | Deploy web services (landing-page, caz-portfolio, resume-site) to staging VM |
 | `setup-claude-user.yml` | various | Restricted read-only SSH access for Claude Code troubleshooting |
 
 ## Roles
@@ -28,7 +26,6 @@ Configuration management for active infrastructure. Previous K8s cluster and tow
 | `r730xd-snapraid` | r730xd-storage.yml | Parity protection + automated sync/scrub via systemd timers |
 | `r730xd-nfs-server` | r730xd-storage.yml | NFS exports of MergerFS pool for K8s PVCs |
 | `r730xd-zfs` | r730xd-zfs.yml | ZFS raidz1 pool + per-service datasets with tuned recordsize |
-| `r730xd-vm-host` | create-staging-vm.yml | KVM/libvirt + bridged networking on R730xd |
 | `r730xd-postgres` | deploy-foundation-stores.yml | PostgreSQL 16 on Docker (host network, daily pg_dump backup) |
 | `r730xd-kv-cache` | deploy-foundation-stores.yml | Key-value / cache store (Valkey) on Docker (host network, AOF+RDB persistence) |
 | `r730xd-s3-hot` | deploy-foundation-stores.yml | versitygw S3 — hot gateway on ZFS (Loki/Tempo/Stalwart), ADR-055 |
@@ -82,10 +79,6 @@ env:
         key: url
         # value: postgresql://myapp:password@<r730xd_ip>:5432/myapp
 ```
-
-### Connecting from staging VM services
-
-The staging VM (<staging_vm_ip>) reaches the R730xd host at its bridge IP. Pass connection strings via Docker Compose environment variables, same as existing staging services.
 
 ### Operations
 
@@ -207,7 +200,7 @@ curl http://<r730xd_ip>:3000/api/health
 |------|-------|
 | `proxy-vps.yml` | Hetzner VPS (SSH port 2222) |
 | `r730xd.yml` | Dell R730xd storage server (<r730xd_ip>) |
-| `lab-nodes.yml` | All lab machines (K8s cluster, standalone, staging) |
+| `lab-nodes.yml` | All lab machines (K8s cluster, storage server) |
 
 ## Vault secrets
 

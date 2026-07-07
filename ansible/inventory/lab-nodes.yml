@@ -63,7 +63,7 @@ all:
           model: "Dell PowerEdge R730xd"
           cpu: "Intel Xeon E5-2630 v3 (8C/16T @ 2.4 GHz)"
           ram_gb: 32
-          node_roles: ["storage", "vm-host"]
+          node_roles: ["storage"]
 
   vars:
     ansible_user: bearf
