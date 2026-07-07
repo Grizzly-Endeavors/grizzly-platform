@@ -2,12 +2,10 @@
 # setup-registry-stores.yml — foundation-side provisioning for the in-cluster
 # zot OCI registry's S3 object storage (ADR-027, ADR-055 cutover).
 #
-# Replaces the registry half of seed-app-secrets.yml. Two changes land together
-# here versus the MinIO era:
-#   1. Store moves from MinIO bulk to the s3-bulk versitygw gateway.
-#   2. The registry gets a dedicated scoped `userplus` account that owns only
-#      the lab-registry bucket, instead of being handed the MinIO-bulk *root*
-#      credentials (which the old registry ExternalSecret mapped directly).
+# Sets up the registry's object store on the s3-bulk versitygw gateway
+# (ADR-055): a dedicated scoped `userplus` account that owns only the
+# lab-registry bucket, so the registry ExternalSecret maps a scoped account
+# rather than gateway root credentials.
 #
 # zot reads the account via the ESO-managed `registry-s3-creds` secret
 # (external-secrets-stores/registry.yaml → stores/registry). Provisioning runs

@@ -3,7 +3,7 @@
 #
 # Deploys PostgreSQL, kv-cache (Valkey), and the versitygw S3 stores
 # (s3-hot/s3-bulk, ADR-055) as Docker Compose services on the R730xd storage
-# server. (MinIO was retired after the versitygw cutover completed — ADR-055.)
+# server.
 #
 # Storage tiers:
 #   Hot (ZFS):     PostgreSQL, kv-cache, s3-hot — continuous-write
@@ -96,7 +96,7 @@
       tags: [foundation, postgres]
     - role: r730xd-kv-cache
       tags: [foundation, kv-cache]
-    # versitygw S3 stores (ADR-055) — replaced the retired MinIO Obs/Bulk.
+    # versitygw S3 stores (ADR-055).
     # Prereq: setup-versitygw-iam.yml (OpenBao mount/approle/root creds).
     - role: r730xd-s3-hot
       tags: [foundation, s3-hot]

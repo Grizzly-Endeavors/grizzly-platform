@@ -15,7 +15,7 @@ claude_ssh_public_key: "{{ vault_claude_ssh_public_key }}"
 postgres_password: "{{ vault_postgres_password }}"
 kv_cache_password: "{{ vault_kv_cache_password }}"
 
-# versitygw stores (ADR-055) — replaced MinIO Obs/Bulk. Root creds per gateway
+# versitygw stores (ADR-055). Root creds per gateway
 # + the shared OpenBao AppRole the gateways use for their Vault-IAM account
 # store. Provisioned into OpenBao by setup-versitygw-iam.yml.
 s3_hot_root_access_key: "{{ vault_s3_hot_root_access_key }}"

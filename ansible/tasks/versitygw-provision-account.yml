@@ -2,9 +2,7 @@
 # versitygw-provision-account.yml — idempotently provision one scoped S3
 # account + its owned bucket on a versitygw gateway (ADR-055).
 #
-# The MinIO-era equivalent was a `docker exec minio-* mc admin user add` +
-# `mc admin policy create/attach` block, repeated across every store-setup
-# playbook. versitygw has no per-bucket IAM *policies*: isolation is
+# versitygw has no per-bucket IAM *policies*: isolation is
 # ownership-based — a `userplus` account owns the buckets it creates and can't
 # see other accounts' buckets. So provisioning is just "create the account,
 # create its bucket owned by it". Both go through the gateway's admin API,
@@ -31,7 +29,7 @@
 # Idempotency: the account is created only if its access key is absent from
 # `list-users`, the bucket only if absent from `list-buckets`. Re-running never
 # rotates an existing account's secret (use `versitygw admin update-user` for
-# that) — matches the create-once posture of the MinIO store-setup playbooks.
+# that) — matches the create-once posture of the store-setup playbooks.
 #
 # See docs/runbooks/versitygw-cli.md (admin API) and versitygw-deploy.md.
 

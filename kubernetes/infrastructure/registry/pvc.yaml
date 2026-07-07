@@ -11,7 +11,7 @@ spec:
   # On emptyDir it was wiped each boot, forcing a full S3 rescan +
   # restoreDedupedBlobs storm that locked writes for ~87 min per restart
   # (see docs/decisions/031-registry-cache-persistent-pvc.md). Bulk blobs
-  # stay on MinIO/S3; only this small index lives on the fast ZFS tier.
+  # stay on the s3-bulk object store; only this small index lives on the fast ZFS tier.
   # iscsi-zfs-retain so an accidental delete doesn't force an index rebuild.
   accessModes:
     - ReadWriteOnce

@@ -1,5 +1,5 @@
 # Stalwart mail server (ADR-050). Single replica — all durable state is external
-# (foundation Postgres + MinIO obs), so the pod is stateless and uses a Deployment
+# (foundation Postgres + versitygw s3-hot), so the pod is stateless and uses a Deployment
 # (Recreate) rather than a StatefulSet/PVC. The init container seeds the config
 # into the writable data dir at Stalwart's default config path; the main container
 # reads /opt/stalwart/etc/config.toml, loads secrets via envFrom, and mounts the

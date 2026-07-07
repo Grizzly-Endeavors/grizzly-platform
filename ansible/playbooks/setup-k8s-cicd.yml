@@ -111,8 +111,7 @@
 
 # NOTE: sccache build-cache provisioning moved to setup-sccache-stores.yml
 # (versitygw s3-bulk, ADR-055) and the sccache-s3-credentials secret is now
-# ESO-managed (external-secrets-stores/github-runners.yaml). The former Play 3
-# (MinIO `mc` bucket/user + imperative kubectl secret) is retired.
+# ESO-managed (external-secrets-stores/github-runners.yaml).
 
 # ============================================================
 # Play 3: Deploy Prometheus targets and alerts on R730xd

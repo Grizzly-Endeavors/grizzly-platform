@@ -1,5 +1,5 @@
 # ExternalSecret manifests for arc-runners:
-#   - sccache-s3-credentials (MinIO bulk creds for Rust build cache)
+#   - sccache-s3-credentials (s3-bulk creds for Rust build cache)
 #   - github-runner-pat (org-level PAT for ARC v2)
 # Both previously seeded imperatively by seed-app-secrets.yml /
 # setup-k8s-cicd.yml; now reconciled from OpenBao via ESO.

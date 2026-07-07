@@ -18,15 +18,15 @@ Run both Argo Workflows and Ray on K8s simultaneously. They're both standard K8s
 
 - K8s-native DAG/workflow engine. Controller + ephemeral job pods.
 - Near-zero resource usage when idle; pods spin up on demand across nodes.
-- Immediate value: automate CI/CD, data exports (Prometheus/Loki to Parquet on MinIO), scheduled ETL.
-- Artifacts stored in MinIO (bulk instance on MergerFS).
+- Immediate value: automate CI/CD, data exports (Prometheus/Loki to Parquet on s3-bulk), scheduled ETL.
+- Artifacts stored in s3-bulk (versitygw, on MergerFS).
 
 ### Ray (via KubeRay Operator)
 
 - Distributed Python compute framework. Operator supports RayJob resources that create temporary clusters per job.
 - Scales across heterogeneous nodes (different core counts/RAM) natively.
 - Use cases: anomaly detection, forecasting, clustering, ML training (CPU-only models like XGBoost scale linearly with cores), dataset transformations.
-- Reads/writes datasets from MinIO (same as Argo artifacts).
+- Reads/writes datasets from s3-bulk (same as Argo artifacts).
 
 ### How They Compose
 
@@ -34,15 +34,15 @@ Argo can orchestrate Ray — a workflow step can submit a RayJob. Pipeline patte
 
 ```
 Argo: export data from Prometheus/Loki
-  -> Argo: transform to Parquet, store in MinIO
+  -> Argo: transform to Parquet, store in s3-bulk
     -> Argo: submit RayJob for distributed analysis
-      -> Ray: read from MinIO, compute, write results back
+      -> Ray: read from s3-bulk, compute, write results back
         -> Argo: post-processing, notification, dashboard update
 ```
 
 ## Key Enabler
 
-MinIO bulk instance (MergerFS, ~15 TB) serves as the shared interchange layer between Argo artifacts and Ray datasets. Already deployed and running.
+The s3-bulk versitygw instance (MergerFS, ~15 TB) serves as the shared interchange layer between Argo artifacts and Ray datasets. Already deployed and running.
 
 ## Resource Estimates
 
@@ -56,7 +56,7 @@ MinIO bulk instance (MergerFS, ~15 TB) serves as the shared interchange layer be
 ## Progression
 
 1. Stand up Argo Workflows first — immediate utility for automation and data pipeline work
-2. Use Argo to build structured datasets (export lab telemetry to Parquet on MinIO)
+2. Use Argo to build structured datasets (export lab telemetry to Parquet on s3-bulk)
 3. Add KubeRay when there's data worth crunching at scale
 4. Compose them: Argo DAGs that include RayJob steps
 
@@ -64,7 +64,7 @@ MinIO bulk instance (MergerFS, ~15 TB) serves as the shared interchange layer be
 
 ### Data Source
 
-Tempo is already collecting traces via OpenTelemetry (gRPC 4317, HTTP 4318) with S3 backend on MinIO Obs (ZFS). Expected trace producers:
+Tempo is already collecting traces via OpenTelemetry (gRPC 4317, HTTP 4318) with S3 backend on s3-hot (versitygw, ZFS). Expected trace producers:
 
 - **Argo Workflows** — OTel-instrumented workflow steps, DAG-level spans
 - **Self-hosted AI agents** — end-to-end traces covering prompt construction, LLM calls, tool use, responses
@@ -76,9 +76,9 @@ Tempo exposes a query API (port 3200) that supports bulk span export. Same Argo-
 
 ```
 Tempo API (query by time range / service / tag)
-  -> Argo: export spans to Parquet on MinIO bulk
+  -> Argo: export spans to Parquet on s3-bulk
     -> Ray: distributed analysis across span datasets
-      -> Results to Grafana / MinIO / Postgres
+      -> Results to Grafana / s3-bulk / Postgres
 ```
 
 ### Analysis Opportunities
@@ -116,7 +116,7 @@ Tempo API (query by time range / service / tag)
 ### Storage Considerations
 
 - Raw traces in Tempo (ZFS, hot) — retained for real-time query and debugging
-- Exported Parquet on MinIO bulk (MergerFS, cold) — retained long-term for batch analysis
+- Exported Parquet on s3-bulk (MergerFS, cold) — retained long-term for batch analysis
 - Tempo retention policy vs Parquet retention can differ — keep raw traces for days/weeks, Parquet for months/years
 
 ## Open Questions
@@ -124,7 +124,7 @@ Tempo API (query by time range / service / tag)
 - Cluster resource limits / quotas — how much to reserve for always-on services vs batch compute?
 - Ray autoscaling config — min 0 workers (fully ephemeral) vs keeping a small warm pool?
 - Data format standardization — Parquet seems right, but need to decide on partitioning scheme
-- Whether to add Apache Iceberg or Delta Lake on top of MinIO for table semantics
+- Whether to add Apache Iceberg or Delta Lake on top of s3-bulk for table semantics
 - Tempo retention policy — how long to keep raw traces vs relying on Parquet exports?
 - Trace sampling strategy — head-based vs tail-based sampling as volume grows
 - Schema for exported span Parquet files — flatten nested attributes or preserve hierarchy?

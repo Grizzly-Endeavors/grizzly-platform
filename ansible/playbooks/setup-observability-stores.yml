@@ -3,8 +3,8 @@
 # observability stack (Loki + Tempo) on the s3-hot versitygw gateway (ADR-055).
 #
 # Extracted from deploy-observability.yml's inline `mc` block (which now only
-# deploys the stack). Loki and Tempo share ONE account (as they did on MinIO
-# Obs with the `readwrite` policy) that owns both buckets — versitygw isolation
+# deploys the stack). Loki and Tempo share ONE account that owns both
+# buckets — versitygw isolation
 # is ownership-based, so the shared task is included twice with the same creds:
 # the first call creates the account + observability-loki, the second reuses the
 # account and adds observability-tempo.

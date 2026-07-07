@@ -12,8 +12,7 @@ spec:
     name: registry-s3-creds
     creationPolicy: Owner
   # Scoped s3-bulk versitygw account (ADR-055) that owns only the lab-registry
-  # bucket — replaces the former mapping of the MinIO-bulk *root* creds.
-  # Provisioned by setup-registry-stores.yml.
+  # bucket. Provisioned by setup-registry-stores.yml.
   data:
     - secretKey: accessKey
       remoteRef:

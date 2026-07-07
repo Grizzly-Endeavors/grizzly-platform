@@ -23,8 +23,7 @@ snapraid_excludes:
   # and removed as uploads complete, so it changes mid-sync and would cause
   # "cannot modify during sync" errors. Committed object data and the
   # write-once version files (under the versitygw versioning dir) live outside
-  # .sgwtmp/ and stay parity-covered. (The former MinIO `.minio.sys/` exclude
-  # was dropped when MinIO Bulk was retired — ADR-055.)
+  # .sgwtmp/ and stay parity-covered.
   - ".sgwtmp/"
   - "/lost+found/"
   - ".Thumbs.db"
