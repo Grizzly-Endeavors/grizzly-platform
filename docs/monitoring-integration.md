@@ -141,48 +141,15 @@ curl -sf -H "Title: [${level^^}] ${check}" \
 
 ### Option C: Alertmanager Webhook Receiver
 
-When Prometheus + Alertmanager is running (see next section), you can point `alert.sh` at Alertmanager's webhook receiver for unified alert routing. However, at that point the cron-based alerts become redundant — Alertmanager rules replace them.
+Prometheus + Alertmanager is running (see below); point `alert.sh` at Alertmanager's webhook receiver for unified alert routing if you want cron alerts flowing through the same pipeline. The cron-based alerts stay as a belt-and-suspenders layer regardless — see "Current Architecture" above.
 
 ---
 
-## Migrating to Prometheus + Alertmanager
+## Prometheus + Alertmanager
 
-### Prerequisites
+Prometheus scrapes `node`/`ipmi` targets from `/etc/prometheus/targets.d/*.yml` (file-based service discovery, rendered by the `r730xd-prometheus` role) and evaluates the alert rules below; Alertmanager routes firing alerts.
 
-- A machine or K8s namespace to run Prometheus and Alertmanager
-- Network access from Prometheus to each host's exporter ports (`:9100`, `:9290`)
-
-### Step 1: Prometheus Scrape Configuration
-
-```yaml
-# prometheus.yml
-global:
-  scrape_interval: 15s
-  evaluation_interval: 15s
-
-rule_files:
-  - "rules/*.yml"
-
-scrape_configs:
-  - job_name: "node"
-    static_configs:
-      - targets:
-          - "<r730xd_ip>:9100"   # r730xd
-          # Add more hosts as they come online
-        labels:
-          env: "grizzly-platform"
-
-  - job_name: "ipmi"
-    static_configs:
-      - targets:
-          - "<r730xd_ip>:9290"   # r730xd
-        labels:
-          env: "grizzly-platform"
-```
-
-### Step 2: Alert Rules
-
-These Prometheus alerting rules replicate the cron check logic:
+These are the live Prometheus alerting rules (`ansible/roles/r730xd-prometheus/templates/rules/grizzly-platform.yml.j2`), replicating the cron check logic so the same conditions are covered by both layers:
 
 ```yaml
 # rules/grizzly-platform.yml
@@ -286,33 +253,19 @@ groups:
           severity: warning
 ```
 
-### Step 3: Textfile Collector Metrics
+### Textfile Collector Metrics
 
-The `monitoring_*` metrics in the alert rules above come from the cron check scripts via the textfile collector. **No changes needed** — Prometheus scrapes node\_exporter which automatically picks up the `.prom` files.
-
-This means you get both the standard node\_exporter metrics *and* the custom health check metrics from a single scrape target.
-
-### Step 4: What to Retire
-
-Once Alertmanager rules cover the same signals:
-
-| Component | Keep or retire? |
-|-----------|----------------|
-| node\_exporter | **Keep** — Prometheus needs it |
-| ipmi\_exporter | **Keep** — Prometheus needs it |
-| smartd | **Keep** — drives still need self-tests |
-| Cron check scripts | **Optional** — keep as belt-and-suspenders, or remove. The textfile metrics they write are still useful even if alerts move to Alertmanager |
-| `alert.sh` webhook dispatch | **Retire** — Alertmanager handles routing |
+The `monitoring_*` metrics in the alert rules above come from the cron check scripts via the textfile collector. Prometheus scrapes node\_exporter, which automatically picks up the `.prom` files — so a single scrape target yields both the standard node\_exporter metrics and the custom health check metrics.
 
 ---
 
-## Migrating to Grafana Dashboards
+## Grafana Dashboards
 
-Once Prometheus is running, add Grafana and import these dashboards:
+Grafana (via the `r730xd-grafana` role) has these dashboards provisioned:
 
 | Dashboard | Grafana ID | Covers |
 |-----------|-----------|--------|
-| Node Exporter Full | 1860 | CPU, RAM, disk I/O, network, filesystem |
+| Node Exporter Full | 1860 (vendored at `ansible/roles/r730xd-grafana/files/dashboards/node-exporter-full.json`) | CPU, RAM, disk I/O, network, filesystem |
 | IPMI Exporter | Community | PSU, fans, voltages, temperatures |
 | Custom: Storage Health | — | SnapRAID status, SMART metrics, MergerFS pool usage |
 
@@ -333,122 +286,11 @@ Once Prometheus is running, add Grafana and import these dashboards:
 
 ---
 
-## Migrating to Grafana Alloy
+## Grafana Alloy
 
-[Grafana Alloy](https://grafana.com/oss/alloy/) is Grafana's OpenTelemetry Collector distribution. It scrapes Prometheus endpoints natively, so everything in the current setup works with it unchanged. Alloy can replace a standalone Prometheus server — it scrapes, processes, and pushes metrics to a backend (Mimir, Prometheus remote write, Grafana Cloud, or any OTLP endpoint).
+[Grafana Alloy](https://grafana.com/oss/alloy/) runs on the R730xd (`r730xd-alloy` role) as a **log shipper only** — it does not scrape metrics. It tails Docker container logs (via the Docker socket, relabeled with `container`/`compose_project`/`compose_service`) and the systemd journal, and forwards both to Loki. See `ansible/roles/r730xd-alloy/templates/config.alloy.j2` for the exact pipeline.
 
-### Deployment Models
-
-**Option A: Alloy as central scraper** (recommended to start)
-
-Run Alloy on one machine (or in K8s). It scrapes all hosts' exporters remotely. Hosts keep their current exporters with no changes.
-
-**Option B: Alloy on each host** (agent mode)
-
-Replaces node\_exporter with Alloy's built-in `prometheus.exporter.unix`. Each Alloy instance pushes its own metrics to a central backend. More infrastructure to deploy, but fewer services per host.
-
-IPMI exporter has no Alloy-native equivalent — keep the standalone exporter in either model.
-
-### Alloy Configuration (Option A — Central Scraper)
-
-```alloy
-// --- Scrape all hosts ---
-
-prometheus.scrape "node" {
-  targets = [
-    {"__address__" = "<r730xd_ip>:9100", "instance" = "r730xd"},
-    // Add more hosts as they come online
-  ]
-  forward_to = [prometheus.remote_write.default.receiver]
-  scrape_interval = "15s"
-}
-
-prometheus.scrape "ipmi" {
-  targets = [
-    {"__address__" = "<r730xd_ip>:9290", "instance" = "r730xd"},
-  ]
-  forward_to = [prometheus.remote_write.default.receiver]
-  scrape_interval = "30s"
-}
-
-// --- Push to backend ---
-
-prometheus.remote_write "default" {
-  endpoint {
-    url = "http://mimir:9009/api/v1/push"
-  }
-}
-```
-
-### Alloy Configuration (Option B — Per-Host Agent)
-
-```alloy
-// Built-in system metrics (replaces node_exporter)
-prometheus.exporter.unix "default" {}
-
-prometheus.scrape "self" {
-  targets = prometheus.exporter.unix.default.targets
-  forward_to = [prometheus.remote_write.default.receiver]
-  scrape_interval = "15s"
-}
-
-// Still need to scrape ipmi_exporter (no Alloy-native equivalent)
-prometheus.scrape "ipmi" {
-  targets = [{"__address__" = "localhost:9290"}]
-  forward_to = [prometheus.remote_write.default.receiver]
-  scrape_interval = "30s"
-}
-
-// Textfile collector metrics (reads the .prom files from cron checks)
-local.file_match "textfile" {
-  path_targets = [{"__path__" = "/var/lib/prometheus/node-exporter/*.prom"}]
-}
-
-// Ship logs from journal (includes monitoring syslog entries)
-loki.source.journal "default" {
-  forward_to = [loki.write.default.receiver]
-  labels = {job = "journal"}
-}
-
-loki.write "default" {
-  endpoint {
-    url = "http://loki:3100/loki/api/v1/push"
-  }
-}
-
-prometheus.remote_write "default" {
-  endpoint {
-    url = "http://mimir:9009/api/v1/push"
-  }
-}
-```
-
-Note: In agent mode, the `prometheus.exporter.unix` component does **not** automatically read textfile collector `.prom` files the way node\_exporter does. You would either keep node\_exporter alongside Alloy for textfile collection, or switch the cron check scripts to push metrics via Alloy's OTLP receiver instead.
-
-### Alloy + Alerting
-
-Alloy itself doesn't evaluate alert rules — that's handled by the backend:
-
-- **With Mimir:** Use Mimir's ruler component with the same Prometheus alert rules from the "Migrating to Prometheus + Alertmanager" section above
-- **With Grafana Cloud or self-hosted Grafana:** Use Grafana Alerting (unified alerting) to define alert rules against the metrics in your data source
-- **With standalone Prometheus:** Alloy pushes via remote write, Prometheus evaluates rules and routes to Alertmanager
-
-In all cases, the cron-based `alert.sh` webhook alerts continue working independently as a fallback until you're confident in the centralized alerting pipeline.
-
-### What Changes per Deployment Model
-
-| Component | Option A (central) | Option B (per-host agent) |
-|-----------|-------------------|--------------------------|
-| node\_exporter | **Keep** on each host | **Replace** with `prometheus.exporter.unix` |
-| ipmi\_exporter | **Keep** on each host | **Keep** — no Alloy equivalent |
-| Textfile `.prom` files | **Keep** — node\_exporter reads them | **Keep node\_exporter** for textfile, or rework scripts to push OTLP |
-| smartd | **Keep** | **Keep** |
-| Cron checks | **Keep** — textfile metrics flow through node\_exporter | **Keep** — but alert dispatch can migrate to Grafana Alerting |
-| Alloy install | Central machine or K8s only | Every monitored host |
-
-### Recommended Path for This Environment
-
-Start with **Option A** — a single Alloy instance scraping all hosts. This avoids deploying Alloy to every machine and keeps the per-host stack simple (exporters + cron checks). When K8s is running, deploy Alloy as a K8s workload alongside Mimir and Grafana. The exporters and textfile metrics on each host continue working without changes.
+Metrics are unaffected by Alloy: Prometheus scrapes `node_exporter`/`ipmi_exporter` directly via file-based service discovery (`/etc/prometheus/targets.d/`), unchanged from the "Current Architecture" section above. There's no plan to have Alloy take over metrics scraping — Prometheus already does that job.
 
 ---
 
