@@ -13,16 +13,18 @@ CLI syntax reference: [aerohive-cli-reference.md](../aerohive-cli-reference.md).
 - The home WiFi PSK is set in the vault: `vault_home_wifi_psk` in `ansible/inventory/group_vars/all/vault.yml` (the `.example` shows the slot). It surfaces as `home_wifi_psk` in `vars.yml`.
 - You've picked the SSID and a shared hive secret (see the render step).
 
-## Step 0 — SR2024 static mgmt IP (issue #80 companion)
+## Step 0 — SR2024 static mgmt IP (issue #80 companion) — DONE 2026-07-07
 
-The EX50's DHCP pool is carved to `10.0.0.50–10.0.0.150` and **excludes** the SR2024's `.153` (issue #80, pool carve-out — no DHCP reservations). The switch currently *leases* its mgmt IP, so once that pool is in effect it must not depend on DHCP. Give it a static mgmt IP on the switch itself so `sr2024_ip` (`10.0.0.153`) stays valid:
+The EX50's DHCP pool is carved to `10.0.0.50–10.0.0.150` and **excludes** the SR2024's `.153` (issue #80, pool carve-out — no DHCP reservations). The switch *leased* its mgmt IP, so once that pool is in effect it must not depend on DHCP. It's now static (verify with `show interface mgt0` → `IP addr=10.0.0.153; DHCP client=disabled`). For reference, the actual on-device commands (HiveOS 6.5r8) were:
 
 ```
-interface mgt0 ip 10.0.0.153 255.255.255.0
+interface mgt0 ip 10.0.0.153/24        # CIDR form — NOT `ip ADDR MASK` (that errors)
+ip route default gateway 10.0.0.1
+no interface mgt0 dhcp client          # else DHCP stays primary and the static is only a fallback
 save config
 ```
 
-(Do this on the SR2024, not an AP. Verify with `show interface mgt0`.) This closes #80 for the switch without a reservation.
+Gotcha: setting the static IP drops your SSH session the instant it applies (mgt0 changes subnet) — reconnect at the new address for the remaining lines. This closes #80 for the switch without a reservation.
 
 ## Step 1 — Reach each AP over SSH
 

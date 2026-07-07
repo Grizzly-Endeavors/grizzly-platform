@@ -48,7 +48,7 @@ Last updated: 2026-07-02 · Status: **planned, not yet executed.**
 ## Prerequisites (do ahead — zero downtime)
 
 - [ ] **EX50 firmware ≥ 24.3.28.88** (required for WireGuard, Checkpoint E). Update if lower.
-- [ ] **Bench-configure the EX50** with WAN unplugged, via the IaC playbook: `ansible-playbook ansible/playbooks/configure-ex50.yml -e ex50_host='<ipv6-link-local%iface>'`. This applies the flat-cutover delta (`ansible/files/ex50/config.dal.j2`): LAN `10.0.0.1/24`, DHCP pool `10.0.0.50–10.0.0.150` carved off the platform statics (issue #80), and pre-cutover hardening (drop the "allow all" test rule, disable the empty modem, NTP on). Then do the **manual, interactive** SSH-ACL restriction (LAN-only, done by hand to avoid a lock-out over the apply session) per the playbook's note and Checkpoint C below. Segmentation (home VLAN / default-deny, Checkpoint D) is a later pass — **flat first**. Getting onto the Admin CLI: [ex50-console-access.md](ex50-console-access.md).
+- [x] **EX50 config validated on-device + hardening pre-staged** (2026-07-07). The flat-cutover delta (`ansible/files/ex50/config.dal.j2`: LAN `10.0.0.1/24`, DHCP pool `10.0.0.50–10.0.0.150` off the platform statics per issue #80, drop the "allow all" rule, disable modem + built-in WiFi, NTP on) passes the on-device `validate` verb. It is **not pre-applied** — the LAN/DHCP change would collide with Xfinity's live `10.0.0.1` + serve rogue DHCP, so it lands *at* Checkpoint C once Xfinity is bridged. Already done ahead: SSH-ACL `wan` zone removed, factory DHCP server disabled, and the SR2024 mgmt made static `10.0.0.153`. Getting onto the Admin CLI: [ex50-console-access.md](ex50-console-access.md).
 - [ ] **Verify on the bench** that DAL supports what later steps rely on: a WireGuard peer + DNAT from the wg interface to a LAN host (E), multiple VLAN interfaces + inter-VLAN firewall (D), DHCP reservations, and (optionally) local DNS records. Capture the DAL shell config commands into the IaC now.
 - [ ] **Garage physical prep — operator-handled:** sturdy shelving is already in place (gear sits off the slab); the garage dehumidifier (hosed outside) holds ~43% RH year-round, with a closet-specific unit as contingency; 20 A circuit near the panel with headroom to add another. **These environmental logistics are settled (ADR-045) — do not relitigate.** Remaining prep for the window: PDU sizing, confirm ventilation, small UPS for the network core (Xfinity + EX50 + SR2024 + APs), and place humidity + leak sensors (as verification signals, not gating decisions).
 - [ ] **Extend the coax** to the garage (available slack).
@@ -97,20 +97,40 @@ Goal: house WiFi served by the Aerohive APs, independent of the Xfinity gateway,
 
 Goal: EX50 is the router; network still flat on `10.0.0.0/24`.
 
-1. Put the Xfinity gateway into **bridge mode** (confirmed supported on this model).
-2. Insert the EX50: WAN → Xfinity gateway LAN; EX50 LAN (trunk) → SR2024 uplink. EX50 = `10.0.0.1`.
-3. EX50 serves DHCP/DNS for non-static clients; platform statics unchanged. The DHCP pool (`10.0.0.50–10.0.0.150`) is carved to exclude every OS-static, so a lease-table reset can't hand out a held address (issue #80).
-4. **Give the SR2024 a static mgmt IP** (`interface mgt0 ip 10.0.0.153 255.255.255.0` → `save config`) — it's the one platform device that leased its address, and `.153` is now outside the DHCP pool (issue #80, no reservation). See [aerohive-ap-setup.md](aerohive-ap-setup.md) Step 0.
-5. **Harden EX50 SSH** (interactive, on the box): restrict `service ssh` to the LAN/internal zone so it isn't reachable on the now-public WAN. Gate: from an external host, `ssh admin@<public-ip>` must **fail**.
+> **This is a fully local, offline-runnable step.** During the swap the internet is down, so run everything from the **control node** over the LAN — nothing here needs external connectivity (no Anthropic, no GitHub). Have this file open locally before you start.
 
-**Verify:**
+**Pre-staged already (done 2026-07-07, verified — do NOT redo):**
+- SR2024 mgmt is static `10.0.0.153` (DHCP client disabled, gateway `10.0.0.1`, saved). Reach it: `ssh -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedAlgorithms=+ssh-rsa -o KexAlgorithms=+diffie-hellman-group14-sha1 -o Ciphers=+aes128-cbc admin@10.0.0.153` (creds `admin`/`aerohive`). CIDR syntax is `interface mgt0 ip 10.0.0.153/24` — **not** the old `ip ADDR MASK` form.
+- EX50 SSH-ACL `wan` zone removed (WAN SSH denied). EX50 factory DHCP server disabled.
+- EX50 config is **validated on-device** but deliberately **not pre-applied**: the LAN→`10.0.0.1` + DHCP change must land only once Xfinity has vacated `10.0.0.1`, else you get a duplicate gateway + rogue DHCP on the live LAN.
+
+**Steps:**
+
+1. Put the Xfinity gateway into **bridge mode** (confirmed supported on this model). It vacates `10.0.0.1` and stops serving DHCP.
+2. Cable the EX50: WAN → Xfinity gateway LAN; EX50 LAN → SR2024. (LAN may already be patched from the bench.)
+3. **Apply the EX50 router config** from the control node — it reaches the box over IPv6 link-local (unaffected by the IPv4 change). Discover the link-local first (Digi OUI `00:40:9d`), then run the playbook:
+   ```
+   cd ~/Projects/grizzly-platform
+   ip -6 neigh | grep -i '00:40:9d'      # → fe80::…%enp6s0   (the EX50)
+   ansible-playbook ansible/playbooks/configure-ex50.yml -e ex50_host='fe80::…%enp6s0'
+   ```
+   This sets LAN `10.0.0.1/24`, DHCP pool `10.0.0.50–10.0.0.150` (issue #80 carve-out), drops the "allow all" test rule, disables the modem + the stray built-in WiFi, NTP on — then `save`. **Fallback if ansible misbehaves offline** (same validated DAL, piped straight in):
+   ```
+   printf 'config\nnetwork interface lan ipv4 address 10.0.0.1/24\nnetwork interface lan ipv4 dhcp_server enable true\nnetwork interface lan ipv4 dhcp_server lease_start 50\nnetwork interface lan ipv4 dhcp_server lease_end 150\ndel firewall filter 2\nnetwork interface modem enable false\nnetwork modem modem enable false\nnetwork wifi ap digi_ap1 enable false\nservice ntp enable true\nsave\nexit\n' | ssh admin@'fe80::…%enp6s0'
+   ```
+4. **Renew the control node's DHCP** — it was on `.151` (outside the new pool), so pull a fresh lease from the EX50 (NetworkManager): `sudo nmcli device disconnect enp6s0 && sudo nmcli device connect enp6s0`.
+
+**Verify (all local):**
 ```
-curl -s https://ifconfig.co             # internet via EX50 (public IP may change — informational)
-kubectl get nodes -o wide               # cluster healthy
-# a DHCP client (phone/laptop) pulls a lease from the EX50 and resolves DNS
-curl -I https://<some>.bearflinn.com    # ingress still green (tunnel still on R730xd, transparent to the swap)
+ssh admin@10.0.0.1 'show config' | grep -E 'lan ipv4|dhcp_server|filter'   # LAN 10.0.0.1/24, DHCP 50–150, no filter 2
+ip -4 addr show enp6s0                    # control node now has a 10.0.0.50–150 lease
+ping -c2 1.1.1.1                          # internet via the EX50
+kubectl get nodes -o wide                # cluster healthy
+curl -I https://<some>.grizzly-endeavors.com   # ingress still green (tunnel still on R730xd, transparent to the swap)
 ```
-**Rollback:** pull the EX50, take the Xfinity gateway out of bridge mode, reconnect SR2024 → Xfinity LAN → back to Checkpoint A state. Update `home_public_ip` in `network.yml` if it changed (informational only; ingress is home-initiated so it doesn't break).
+**Then, once WAN is up — the one remaining hardening gate:** from an **external** host (phone on cellular, etc.), `ssh admin@<public-ip>` must **fail** (the `wan` ACL entry was pre-removed; this just confirms it). If it succeeds, re-check `show service ssh acl` — no `wan` interface entry should be present.
+
+**Rollback:** pull the EX50, take the Xfinity gateway out of bridge mode, reconnect SR2024 → Xfinity LAN → back to Checkpoint A state. The SR2024's static `.153` and the APs keep working on the flat net regardless. Update `home_public_ip` in `network.yml` if it changed (informational only; ingress is home-initiated so it doesn't break).
 
 > A–C get you fully relocated and routed by the EX50. D and E are additive — do them now if the window has time, otherwise a follow-up window.
 
