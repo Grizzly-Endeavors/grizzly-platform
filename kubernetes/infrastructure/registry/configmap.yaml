@@ -8,11 +8,11 @@ metadata:
 data:
   # zot registry config. Anonymous + plain-HTTP + in-cluster only, so the
   # containerd mirror (ansible/roles/k8s-registry-trust), the DinD sidecar's
-  # --insecure-registry, and kaniko's anonymous push all keep working
+  # --insecure-registry, and BuildKit's anonymous push all keep working
   # unchanged. Anonymous access is required for the OCI 1.1 referrers API,
   # which the CI gate uses to attach cosign signatures to image digests.
   # Adding auth is a separate, later change (it ripples into
-  # containerd/DinD/kaniko creds).
+  # containerd/DinD/BuildKit creds).
   #
   # dedupe MUST be false: with S3 remote storage zot requires a remote cache DB
   # for dedupe, which we don't run. fastRestart skips the startup storage->metaDB

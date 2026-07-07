@@ -6,6 +6,7 @@ resources:
   - helmrelease.yaml
   - metrics-services.yaml
   - network-policy.yaml
+  - buildkit-config.yaml
   - build-runner-image.yaml
   - build-gate-image.yaml
   - limitrange.yaml

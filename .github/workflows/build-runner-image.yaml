@@ -1,7 +1,7 @@
 name: Build Custom Runner Image
 
 # Triggers an Argo Workflows build when the runner Dockerfile changes.
-# The actual build runs in-cluster via Kaniko (see
+# The actual build runs in-cluster via rootless BuildKit (see
 # kubernetes/infrastructure/argo-workflows/build-runner-image.yaml).
 #
 # Bootstrap: the first build must be run manually because this workflow
