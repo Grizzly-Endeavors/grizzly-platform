@@ -82,9 +82,9 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --pr
 
 # sccache — prebuilt static binary (much faster than cargo install)
 USER root
-RUN curl -fsSL https://github.com/mozilla/sccache/releases/download/v0.14.0/sccache-v0.14.0-x86_64-unknown-linux-musl.tar.gz \
+RUN curl -fsSL https://github.com/mozilla/sccache/releases/download/v0.16.0/sccache-v0.16.0-x86_64-unknown-linux-musl.tar.gz \
       | tar xz -C /tmp && \
-    mv /tmp/sccache-v0.14.0-x86_64-unknown-linux-musl/sccache /usr/local/bin/sccache && \
+    mv /tmp/sccache-v0.16.0-x86_64-unknown-linux-musl/sccache /usr/local/bin/sccache && \
     chmod 755 /usr/local/bin/sccache && \
     rm -rf /tmp/sccache-*
 
