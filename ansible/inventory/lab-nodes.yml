@@ -65,11 +65,6 @@ all:
           ram_gb: 32
           node_roles: ["storage", "vm-host"]
 
-    # (staging VM removed 2026-04-09 after Phase 7b migrated landing-page,
-    # caz-portfolio, and resume-site onto the new K8s cluster. See
-    # archive/staging-vm/ for the historical create/deploy/destroy
-    # playbooks. ADR-002 is Superseded.)
-
   vars:
     ansible_user: bearf
     ansible_connection: ssh

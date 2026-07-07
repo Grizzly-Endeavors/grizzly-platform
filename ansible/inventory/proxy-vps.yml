@@ -64,10 +64,10 @@ all:
           comment: "PostHog analytics reverse proxy (avoids ad blockers)"
 
       # Wildcard roots served to the K8s ingress. Each gets its own
-      # `*.<domain>` vhost + DNS-01 wildcard cert. bearflinn.com is the
-      # legacy domain; grizzly-endeavors.com is the platform-service domain
-      # (migration in progress). The Cloudflare ACME token must have
-      # DNS-edit scope on every zone listed here.
+      # `*.<domain>` vhost + DNS-01 wildcard cert. bearflinn.com hosts
+      # personal apps; grizzly-endeavors.com hosts platform services
+      # (ADR-053). The Cloudflare ACME token must have DNS-edit scope on
+      # every zone listed here.
       caddy_wildcard_domains:
         - "bearflinn.com"
         - "grizzly-endeavors.com"
