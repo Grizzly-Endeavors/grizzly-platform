@@ -9,7 +9,7 @@ Segmentation ([ADR-046](../decisions/046-platform-network-segmentation-via-home-
 
 > **Design principle: one variable at a time.** The work is one window because of hard dependencies (APs need switch PoE; the switch moves to the garage; bridge cutover wants APs live). But it is *staged* into checkpoints A–E, each independently verifiable and reversible. A failure at any checkpoint rolls back to the previous known-good state without touching the others.
 
-Last updated: 2026-07-02 · Status: **planned, not yet executed.**
+Last updated: 2026-07-07 · Status: **Checkpoints A–B complete; C pre-staged, physical swap remaining (see [in-progress tracker](../in-progress/garage-ex50-cutover.md)); D–E not started.**
 
 ---
 
@@ -60,6 +60,8 @@ Last updated: 2026-07-02 · Status: **planned, not yet executed.**
 
 ## Checkpoint A — Relocate on Xfinity (no logical change)
 
+**Done — 2026-07-05,** ahead of this staged plan: an extended power outage forced the physical move (SR2024 + all machines) from the closet to the garage in one go, coming back up on the same flat `10.0.0.x` network. See [docs/network.md](../network.md) and [ADR-045](../decisions/045-platform-relocation-to-garage.md). The steps below are the plan as originally staged; kept for reference and rollback context.
+
 Goal: platform physically in the garage, still routed by the Xfinity gateway in **router** mode. Nothing about IPs or routing changes.
 
 1. Drain/cordon K8s workers; graceful-shutdown the cluster and R730xd services (or clean OS shutdown of all machines).
@@ -82,6 +84,8 @@ curl -I https://<some>.bearflinn.com   # external ingress still green (tunnel re
 ---
 
 ## Checkpoint B — APs up on the garage switch
+
+**Done — 2026-07-07.** APs are live and roaming on the standalone `grizzly-hive` SSID, powered via PoE injectors (SR2024's own PoE is not delivering — [#84](https://github.com/Grizzly-Endeavors/grizzly-platform/issues/84)). See [aerohive-ap-setup.md](aerohive-ap-setup.md).
 
 Goal: house WiFi served by the Aerohive APs, independent of the Xfinity gateway, so bridging Xfinity in C doesn't black out WiFi.
 
