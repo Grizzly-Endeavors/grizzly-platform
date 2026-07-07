@@ -8,7 +8,7 @@ For the pending VLAN redesign, see [exploration/network-vlans.md](exploration/ne
 
 > **Platform physically relocated to the garage (2026-07-05).** During an extended power outage the whole lab (SR2024 + all machines) was moved from the closet to the garage and came back up on the same flat 10.0.0.x network. This was a physical move only — the **Digi EX50 router cutover and L3 segmentation were not performed** and remain pending: see [runbooks/garage-relocation-cutover.md](runbooks/garage-relocation-cutover.md) and ADRs [044](decisions/044-digi-ex50-as-off-the-shelf-router.md) (EX50 as router), [046](decisions/046-platform-network-segmentation-via-home-eviction.md) (segmentation), [047](decisions/047-ingress-tunnel-relocation-to-ex50.md) (ingress move). ADR [045](decisions/045-platform-relocation-to-garage.md) (garage relocation) is now realized. The topology below is the *live* flat network — still Xfinity gateway upstream, still no VLANs.
 
-Last updated: 2026-07-05 (platform relocated to garage; EX50 cutover still pending)
+Last updated: 2026-07-07 (AP630 + AP130 live in the standalone roaming hive; EX50 cutover still pending)
 
 ## Physical Topology
 
@@ -87,9 +87,10 @@ Out-of-band management (iDRAC, BMC/IPMI) lives on the lab subnet and is reachabl
 | Equipment | Location | Notes |
 |-----------|----------|-------|
 | SR2024 (24-port managed GbE + 2 SFP) | Garage (live) | VLAN-capable; flat today, VLANs deferred per [ADR-021](decisions/021-off-the-shelf-router-tower-pc-as-worker.md). |
-| 2× Aerohive AP130 | Spare (mount pending) | PoE, standalone-mode confirmed. |
+| 1× Aerohive AP130 (#1) | Live, PoE injector | Secondary AP in the standalone roaming hive — see above. |
+| 1× Aerohive AP130 (#2) | Spare (mount pending) | PoE, standalone-mode confirmed. Older firmware, 1 bad NAND block. |
 | 1× Aerohive AP230 | Spare (mount pending) | PoE, standalone-mode confirmed. Higher performance than AP130s. |
-| 1× Aerohive AP630 | Spare (mount pending) | Stock HiveOS restored 2026-04-03 ([ADR-011](decisions/011-ap630-restored-to-stock-wifi-ap.md)). Highest-performance AP. |
+| 1× Aerohive AP630 | Live, PoE injector | Primary AP in the standalone roaming hive — see above. Stock HiveOS restored 2026-04-03 ([ADR-011](decisions/011-ap630-restored-to-stock-wifi-ap.md)). |
 | R730 4-port NIC | In R730xd | Could dedicate ports to a storage VLAN once VLANs are enabled. |
 | Xfinity gateway | Living room (→ garage at cutover) | WAN uplink; still the router today. Goes into bridge mode when the Digi EX50 is cut in ([ADR-044](decisions/044-digi-ex50-as-off-the-shelf-router.md)); relocates to the garage with the platform ([ADR-045](decisions/045-platform-relocation-to-garage.md)). |
 | Digi EX50 | Acquired (bench) | Chosen off-the-shelf router — 2× 2.5 GbE, WiFi 6, scriptable DAL (stays in IaC). Cutover pending. See [ADR-044](decisions/044-digi-ex50-as-off-the-shelf-router.md). |

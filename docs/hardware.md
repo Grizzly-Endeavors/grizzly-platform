@@ -6,7 +6,7 @@ Machines, specs, and live roles. This is the day-to-day "what's where" reference
 
 **Update when:** a machine is added, removed, or takes on a different role; a disk is replaced; firmware/OS changes materially affect operations.
 
-Last updated: 2026-07-05 (platform relocated from closet to garage; EX50 router cutover still pending)
+Last updated: 2026-07-07 (AP630 + AP130 #1 live in the standalone roaming hive; EX50 router cutover still pending)
 
 ---
 
@@ -134,10 +134,10 @@ Decisions: [ADR-003](decisions/003-foundation-stores-on-r730xd.md) (foundation s
 
 | AP | Model | WiFi | Firmware | Status |
 |----|-------|------|----------|--------|
-| AP630 | AP630 | 4×4:4 MU-MIMO, 802.11ac Wave 2 | Stock HiveOS IQ Engine 10.6r7 (restored 2026-04-03, [ADR-011](decisions/011-ap630-restored-to-stock-wifi-ap.md)) | Restored; physical mounting pending |
+| AP630 | AP630 | 4×4:4 MU-MIMO, 802.11ac Wave 2 | Stock HiveOS IQ Engine 10.6r7 (restored 2026-04-03, [ADR-011](decisions/011-ap630-restored-to-stock-wifi-ap.md)) | Live (2026-07-07) — primary in the standalone roaming hive, see [network.md](network.md) and [aerohive-ap-setup.md](runbooks/aerohive-ap-setup.md) |
 | AP230 | AP230 | 3×3:3 MIMO, 802.11ac Wave 1 | HiveOS 8.1r1 | Factory reset, CAPWAP disabled; mounting pending ([ADR-009](decisions/009-start-with-ap230-only.md)) |
-| AP130 #1 | AP130 | 802.11ac Wave 1 | HiveOS 6.5r8b | Factory reset, CAPWAP disabled; mounting pending |
-| AP130 #2 | AP130 | 802.11ac Wave 1 | HiveOS 6.5r1b | Same; older firmware + 1 bad NAND block (consider updating) |
+| AP130 #1 | AP130 | 802.11ac Wave 1 | HiveOS 6.5r8b | Live (2026-07-07) — secondary in the standalone roaming hive |
+| AP130 #2 | AP130 | 802.11ac Wave 1 | HiveOS 6.5r1b | Spare; older firmware + 1 bad NAND block (consider updating) |
 
 ---
 
