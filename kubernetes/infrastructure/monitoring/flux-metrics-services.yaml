@@ -1,0 +1,76 @@
+# Flux controller metrics — exposed via NodePort for R730xd Prometheus
+# (same pattern as argo-workflows/metrics-services.yaml).
+apiVersion: v1
+kind: Service
+metadata:
+  name: source-controller-metrics
+  namespace: flux-system
+  labels:
+    app: source-controller
+spec:
+  type: NodePort
+  selector:
+    app: source-controller
+  ports:
+    - port: 8080
+      targetPort: http-prom
+      nodePort: 30881
+      protocol: TCP
+      name: metrics
+---
+# Flux controller metrics — exposed via NodePort for R730xd Prometheus
+apiVersion: v1
+kind: Service
+metadata:
+  name: kustomize-controller-metrics
+  namespace: flux-system
+  labels:
+    app: kustomize-controller
+spec:
+  type: NodePort
+  selector:
+    app: kustomize-controller
+  ports:
+    - port: 8080
+      targetPort: http-prom
+      nodePort: 30882
+      protocol: TCP
+      name: metrics
+---
+# Flux controller metrics — exposed via NodePort for R730xd Prometheus
+apiVersion: v1
+kind: Service
+metadata:
+  name: helm-controller-metrics
+  namespace: flux-system
+  labels:
+    app: helm-controller
+spec:
+  type: NodePort
+  selector:
+    app: helm-controller
+  ports:
+    - port: 8080
+      targetPort: http-prom
+      nodePort: 30883
+      protocol: TCP
+      name: metrics
+---
+# Flux controller metrics — exposed via NodePort for R730xd Prometheus
+apiVersion: v1
+kind: Service
+metadata:
+  name: notification-controller-metrics
+  namespace: flux-system
+  labels:
+    app: notification-controller
+spec:
+  type: NodePort
+  selector:
+    app: notification-controller
+  ports:
+    - port: 8080
+      targetPort: http-prom
+      nodePort: 30884
+      protocol: TCP
+      name: metrics
