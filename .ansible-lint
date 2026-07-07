@@ -4,12 +4,23 @@
 # Profile determines severity levels (min, basic, moderate, safety, shared, production)
 profile: moderate
 
-# Paths to exclude from linting
+# Paths to exclude from linting. ansible-lint's project-root directory walk
+# (needed for role/kind discovery) scans the whole repo regardless of which
+# files a caller (e.g. the pre-commit hook, scoped to `files: ^ansible/`)
+# explicitly passes it, so every non-Ansible top-level dir has to be excluded
+# here too — otherwise it also lints Kubernetes manifests, Flux-generated
+# bundles, etc. as if they were Ansible content (issue #52).
 exclude_paths:
   - archive/
   - .git/
   - .cache/
   - .venv/
+  - assets/
+  - configs/
+  - docker/
+  - docs/
+  - kubernetes/
+  - scripts/
 
 # Rules to skip entirely
 skip_list:

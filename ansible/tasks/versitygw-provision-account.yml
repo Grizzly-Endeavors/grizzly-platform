@@ -33,7 +33,7 @@
 #
 # See docs/runbooks/versitygw-cli.md (admin API) and versitygw-deploy.md.
 
-- name: "versitygw[{{ vgw_instance }}]: validate provisioning inputs"
+- name: "Validate versitygw provisioning inputs: {{ vgw_instance }}"
   ansible.builtin.assert:
     that:
       - vgw_instance in ['s3-hot', 's3-bulk']
@@ -47,14 +47,14 @@
       non-empty vgw_root_access/secret, vgw_access/secret and vgw_bucket.
     quiet: true
 
-- name: "versitygw[{{ vgw_instance }}]: resolve container + admin endpoint"
+- name: "Resolve versitygw container + admin endpoint: {{ vgw_instance }}"
   ansible.builtin.set_fact:
     _vgw_container: "foundation-{{ vgw_instance }}"
     # Admin API is container-internal only (not LAN-published): s3-hot 7071,
     # s3-bulk 7073 — see the r730xd-s3-* role defaults.
     _vgw_admin_endpoint: "http://127.0.0.1:{{ {'s3-hot': 7071, 's3-bulk': 7073}[vgw_instance] }}"
 
-- name: "versitygw[{{ vgw_instance }}]: list existing IAM accounts"
+- name: "List existing versitygw IAM accounts: {{ vgw_instance }}"
   ansible.builtin.command:
     argv:
       - docker
@@ -73,7 +73,7 @@
   changed_when: false
   no_log: true
 
-- name: "versitygw[{{ vgw_instance }}]: create the {{ vgw_bucket }} account ({{ vgw_role | default('userplus') }})"
+- name: "Create the versitygw account: {{ vgw_instance }}"
   ansible.builtin.command:
     argv:
       - docker
@@ -97,7 +97,7 @@
   when: vgw_access not in _vgw_users.stdout
   no_log: true
 
-- name: "versitygw[{{ vgw_instance }}]: list existing buckets"
+- name: "List existing versitygw buckets: {{ vgw_instance }}"
   ansible.builtin.command:
     argv:
       - docker
@@ -116,7 +116,7 @@
   changed_when: false
   no_log: true
 
-- name: "versitygw[{{ vgw_instance }}]: create the {{ vgw_bucket }} bucket owned by its account"
+- name: "Create the versitygw bucket owned by its account: {{ vgw_instance }}"
   ansible.builtin.command:
     argv:
       - docker

@@ -16,10 +16,10 @@ haproxy_mail_backend_host: "{{ wg_r730xd_ip }}"
 # single source of truth for it). listen = public port on the VPS;
 # nodeport = the Stalwart NodePort reached over the tunnel.
 haproxy_mail_ports:
-  - { name: smtp,        listen: 25,  nodeport: 30025 }
+  - { name: smtp, listen: 25, nodeport: 30025 }
   - { name: submissions, listen: 465, nodeport: 30465 }
-  - { name: submission,  listen: 587, nodeport: 30587 }
-  - { name: imaps,       listen: 993, nodeport: 30993 }
+  - { name: submission, listen: 587, nodeport: 30587 }
+  - { name: imaps, listen: 993, nodeport: 30993 }
 
 # Long client/server timeouts so IMAP IDLE (up to ~29 min) is not torn down.
 haproxy_mail_timeout_connect: "10s"

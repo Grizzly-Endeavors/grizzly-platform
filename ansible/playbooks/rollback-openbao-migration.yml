@@ -109,12 +109,10 @@
 - name: Re-seed K8s Secrets imperatively from vault.yml
   ansible.builtin.import_playbook: seed-app-secrets.yml
 
+# Skip Play 1 (flux CLI install) + Play 2/3 (bootstrap + pre-flight) — just run
+# Play 4, which is tagged github-app-secret. Note this relies on the tag being
+# preserved during Phase E cleanup; if that tag was removed, replace this
+# import with the relevant kubectl apply equivalents.
 - name: Re-seed Flux github-app + discord-webhook secrets
   ansible.builtin.import_playbook: setup-k8s-gitops.yml
-  vars:
-    # Skip Play 1 (flux CLI install) + Play 2/3 (bootstrap + pre-flight)
-    # — just run Play 4, which is tagged github-app-secret.
-    # Note this relies on the tag being preserved during Phase E cleanup;
-    # if that tag was removed, replace this import with the relevant
-    # kubectl apply equivalents.
   tags: [github-app-secret]

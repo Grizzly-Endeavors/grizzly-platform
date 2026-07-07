@@ -309,7 +309,7 @@
       become: no
       environment: "{{ kubectl_env }}"
 
-    - name: Wait for node {{ inventory_hostname }} Ready
+    - name: "Wait for node Ready: {{ inventory_hostname }}"
       ansible.builtin.command: >
         kubectl wait --for=condition=Ready
         node/{{ inventory_hostname }} --timeout=120s
