@@ -43,12 +43,14 @@ tower_pc_ip: "10.0.0.249"
 optiplex_ip: "10.0.0.187"
 
 # Aerohive SR2024 lab-backbone switch management interface.
-# NOTE: today this is a DHCP lease from the Xfinity gateway. At the EX50
-# cutover the dynamic pool (ex50_dhcp_pool_*) excludes .153, so the switch is
-# given a STATIC mgmt IP on the switch itself (HiveOS: interface mgt0 ip
-# 10.0.0.153 255.255.255.0) rather than a DHCP reservation — see issue #80 and
-# docs/runbooks/aerohive-ap-setup.md. CLI access needs legacy SSH algorithms;
-# default creds admin/aerohive. See docs/aerohive-cli-reference.md.
+# Pre-staged static ahead of the EX50 cutover (done 2026-07-07, Checkpoint C
+# prestaging): the switch is given a STATIC mgmt IP on the switch itself
+# (HiveOS: interface mgt0 ip 10.0.0.153/24 — CIDR leaf, no separate netmask
+# form) rather than a DHCP reservation, so the EX50's dynamic pool
+# (ex50_dhcp_pool_*, which excludes .153) never needs to hand it a lease —
+# see issue #80 and docs/runbooks/aerohive-ap-setup.md. CLI access needs
+# legacy SSH algorithms; default creds admin/aerohive. See
+# docs/aerohive-cli-reference.md.
 sr2024_ip: "10.0.0.153"
 
 # External / VPN
@@ -81,6 +83,7 @@ k8s_ingress_ip: "{{ wg_r730xd_ip }}"
 # individual ports within it. Opened once; per-server allocation happens
 # inside the cluster, so the edge never changes per spin-up.
 # VPS DNATs the range → wg_r730xd_ip; R730xd re-DNATs it → dell_inspiron_ip.
-# Game-server pods must be pinned to that node (node-pin decision pending).
-# See grizzly-gameservers docs/design/00-overview.md.
+# Game-server pods land on any worker via NodePort Services, no node-pinning
+# (grizzly-gameservers ADR-002) — kube-proxy routes regardless of which node
+# the pod is scheduled to. See grizzly-gameservers docs/design/00-overview.md.
 game_ingress_port_range: "7000:7010"
