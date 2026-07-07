@@ -13,8 +13,10 @@ spec:
   entrypoint: build
   arguments:
     parameters:
+      # grizzly-gate's default branch is main (this repo's is master). CI passes
+      # the pushed SHA explicitly; this default only applies to a bare manual submit.
       - name: git-ref
-        value: master
+        value: main
       - name: version
         value: dev
   volumeClaimTemplates:
