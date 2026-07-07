@@ -1,0 +1,66 @@
+{#
+  Digi EX50 DAL config delta — flat-cutover (Checkpoint C) posture.
+
+  Rendered by ansible/playbooks/configure-ex50.yml and piped into the DAL
+  Admin CLI over SSH (mode 2: multi-line stdin). The session enters config
+  mode, stages `set`/`del`/`add` edits, then `save` commits them atomically
+  and `exit` leaves. See docs/ex50-dal-interface.md for the interaction model
+  and docs/runbooks/garage-relocation-cutover.md (Checkpoint C) for context.
+
+  IMPORTANT — only real DAL commands are emitted below; every human note lives
+  in a Jinja comment (never rendered), so nothing here reaches the CLI as a
+  stray line (a literal hash line would come back as an error). Values come
+  from group_vars/all/network.yml.
+
+  Idempotency: `set` to an already-current value is a no-op; `del` of an
+  already-absent node returns a benign `# ERROR` for that one line without
+  aborting the session (each line executes independently), and `save` still
+  commits the rest. Safe to re-apply.
+
+  This delta contains NO secrets — SSH is key-auth (already enrolled) and the
+  EX50's own WiFi radios stay off (the Aerohive APs serve WiFi). So this file
+  is safe to commit as-is; nothing is redacted.
+#}
+config
+{# --- LAN: platform gateway on the flat 10.0.0.0/24 (replaces Xfinity's .1) --- #}
+set network interface lan ipv4 address {{ ex50_lan_ip }}
+set network interface lan ipv4 netmask {{ ex50_lan_netmask }}
+{# --- DHCP server for non-static clients. Digi expresses the range as host
+   octets within the LAN subnet; carved to exclude every OS-static (#80).
+   Clients are handed 10.0.0.1 as gateway + resolver automatically. Verify the
+   read-back shows {{ ex50_dhcp_pool_start }}–{{ ex50_dhcp_pool_end }}. --- #}
+set network interface lan ipv4 dhcp_server enable true
+set network interface lan ipv4 dhcp_server lease_start {{ ex50_dhcp_pool_start.split('.')[-1] }}
+set network interface lan ipv4 dhcp_server lease_end {{ ex50_dhcp_pool_end.split('.')[-1] }}
+{# --- Hardening: drop the permissive "Allow all for testing" rule
+   (firewall filter 2 on the bench unit) before the box fronts anything. --- #}
+del firewall filter 2
+{# --- Hardening: disable the (empty, ex-carrier) cellular modem at both layers
+   so it stops the futile SIM-slot probing. Verbatim from the interface doc. --- #}
+set network interface modem enable false
+set network modem modem enable false
+{# --- Enable NTP (syncs once the WAN reaches the internet at cutover). --- #}
+set service ntp enable true
+{#
+  ─────────────────────────────────────────────────────────────────────────
+  MANUAL, DO ON THE BENCH — SSH ACL hardening (NOT emitted here on purpose)
+  ─────────────────────────────────────────────────────────────────────────
+  The bench `service ssh` ACL includes the `wan` zone → SSH would be exposed
+  on the public IP once Xfinity is bridged. Restrict it to the LAN/internal
+  zone. The exact DAL list syntax is firmware-specific and getting it wrong
+  over the very SSH session you're applying from risks a lock-out, so do this
+  interactively (`ssh -tt`, Tab-completion) on the bench and confirm the leaf
+  path first:
+      config ; show service ssh acl        # inspect current zones
+      set/del service ssh acl zone …        # keep internal, drop wan/any
+      save
+  Gate: from OUTSIDE, `ssh admin@<public-ip>` MUST fail after cutover.
+  Tracked in the cutover runbook's Checkpoint C hardening step.
+
+  Also optional (not required for the flat cutover): pin DNS forwarder
+  upstreams to {{ ex50_dns_upstreams | join(', ') }} instead of the
+  WAN-provided resolvers — confirm the `network dns` / `service dns` leaf on
+  the bench before adding.
+#}
+save
+exit
