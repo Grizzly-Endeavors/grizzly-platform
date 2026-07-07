@@ -1,7 +1,7 @@
 # ADR-057: Container Image Builds — Kaniko → BuildKit
 
 **Date:** 2026-07-06
-**Status:** Accepted (implementation pending — part of the OSS-sunset migration batch)
+**Status:** Accepted (implemented 2026-07-07)
 **Relates to:** [ADR-018](018-argo-workflows.md) (Argo builds the gate image), [ADR-027](027-registry-zot.md) (zot registry — cache target), [ADR-028](028-centralized-ci-gate.md) (the gate cosign-signs the built digest). Closes [#36](https://github.com/Grizzly-Endeavors/grizzly-platform/issues/36), [#27](https://github.com/Grizzly-Endeavors/grizzly-platform/issues/27).
 
 ## Context
@@ -10,7 +10,14 @@ Kaniko has been archived by Google and is no longer maintained. It builds the `g
 
 ## Decision
 
-Replace Kaniko with **BuildKit** (rootless `buildkitd`) for in-cluster image builds, using BuildKit's native **registry cache** import/export against the zot registry ([ADR-027](027-registry-zot.md)) to persist layers across builds. The existing hermetic-build + cosign digest-signing flow ([ADR-028](028-centralized-ci-gate.md)) is preserved — BuildKit produces the image, the gate signs the resulting digest exactly as today.
+Replace Kaniko with **BuildKit** (rootless `buildkitd`) for **both** in-cluster image builds — `build-gate-image` and `build-runner-image` — using BuildKit's native **registry cache** import/export against the zot registry ([ADR-027](027-registry-zot.md)) to persist layers across builds. The existing hermetic-build + cosign digest-signing flow ([ADR-028](028-centralized-ci-gate.md)) is preserved — BuildKit produces the image, the gate signs the resulting digest exactly as today.
+
+Implementation shape:
+
+- **Daemonless, not a persistent daemon.** Each Argo workflow runs `moby/buildkit:<ver>-rootless` via `buildctl-daemonless.sh`, which starts a throwaway rootless `buildkitd`, builds, and exits — keeping the one-shot pattern the Kaniko step had, with no always-on service to operate. The registry cache lives in zot (LAN-local), so warm-from-registry is already fast; a persistent local-cache PVC is the escalation lever if builds are still too slow.
+- **zot-compatible cache manifest.** The registry cache is exported with `oci-mediatypes=true,image-manifest=true` so zot stores it as an OCI image manifest — this is what sidesteps the `MANIFEST_INVALID` rejection that forced Kaniko's `--cache=false` ([#36](https://github.com/Grizzly-Endeavors/grizzly-platform/issues/36)).
+- **Rootless without privilege.** `--oci-worker-no-process-sandbox` plus an `Unconfined` seccomp/AppArmor `securityContext` (running as uid 1000) lets rootless `buildkitd` run without a privileged pod or `/dev/fuse` — the pod is the isolation boundary.
+- **Base-image pulls through zot's mirror.** A shared `buildkitd-config` ConfigMap marks the in-cluster registry `http` and mirrors `docker.io` to zot's pull-through cache ([ADR-032](032-registry-pullthrough-cache.md)), so `FROM` layers come LAN-local — the BuildKit equivalent of the DinD runner's `--registry-mirror`.
 
 ## Alternatives Considered
 

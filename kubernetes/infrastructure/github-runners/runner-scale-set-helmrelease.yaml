@@ -154,9 +154,9 @@ spec:
               # Route Docker Hub pulls (docker build FROM, docker pull) through
               # the in-cluster zot pull-through cache so base images are fetched
               # once and served LAN-local. dockerd --registry-mirror only
-              # mirrors Docker Hub; that's fine — the only non-Docker-Hub image
-              # in CI builds is the gcr.io kaniko executor, which runs as an
-              # Argo pod (cached at the containerd layer instead). See ADR 032.
+              # mirrors Docker Hub; that's fine — the in-cluster image builds
+              # (BuildKit, Argo pods) are Docker Hub images and route their own
+              # FROM pulls through zot via buildkitd.toml. See ADR 032.
               - --registry-mirror=http://registry.registry.svc.cluster.local:5000
             env:
               - name: DOCKER_GROUP_GID

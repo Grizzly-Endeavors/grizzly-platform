@@ -4,6 +4,10 @@ metadata:
   name: build-runner-image
   namespace: argo
 spec:
+  # Builds the self-hosted GitHub Actions runner image in-cluster via rootless
+  # BuildKit and pushes it to the in-cluster zot registry. Source lives in this
+  # repo (docker/github-runner); build-runner-image.yaml in .github/workflows
+  # submits this template on push. See docs/decisions/057-container-builds-buildkit.md.
   entrypoint: build
   arguments:
     parameters:
@@ -18,13 +22,17 @@ spec:
         resources:
           requests:
             storage: 10Gi
+  volumes:
+    - name: buildkitd-config
+      configMap:
+        name: buildkitd-config
   templates:
     - name: build
       steps:
         - - name: clone
             template: git-clone
         - - name: build-push
-            template: kaniko
+            template: buildkit
 
     - name: git-clone
       inputs:
@@ -47,20 +55,43 @@ spec:
           - name: workspace
             mountPath: /workspace
 
-    - name: kaniko
+    - name: buildkit
       container:
-        image: gcr.io/kaniko-project/executor:latest
+        image: moby/buildkit:v0.31.1-rootless
+        command: [sh, -c]
         args:
-          - --context=/workspace/src/docker/github-runner
-          - --dockerfile=/workspace/src/docker/github-runner/Dockerfile
-          - --destination=registry.registry.svc.cluster.local:5000/github-runner:latest
-          - --destination=registry.registry.svc.cluster.local:5000/github-runner:{{workflow.uid}}
-          - --insecure
-          - --cache=true
-          - --cache-repo=registry.registry.svc.cluster.local:5000/github-runner/cache
+          # buildctl-daemonless.sh starts a throwaway rootless buildkitd, runs
+          # the build, and exits — one-shot, no always-on daemon. Registry cache
+          # import/export against zot persists layers across builds (image-manifest
+          # so zot accepts the cache); FROM pulls route through zot's mirror via
+          # the mounted buildkitd.toml.
+          - |
+            IMG=registry.registry.svc.cluster.local:5000/github-runner
+            buildctl-daemonless.sh build \
+              --frontend dockerfile.v0 \
+              --local context=/workspace/src/docker/github-runner \
+              --local dockerfile=/workspace/src/docker/github-runner \
+              --output "type=image,\"name=$IMG:latest,$IMG:{{workflow.uid}}\",push=true" \
+              --export-cache "type=registry,ref=$IMG/cache,mode=max,oci-mediatypes=true,image-manifest=true" \
+              --import-cache "type=registry,ref=$IMG/cache"
+        env:
+          # Relax the process sandbox so rootless buildkitd runs without a
+          # privileged securityContext or /dev/fuse (the pod is the boundary).
+          - name: BUILDKITD_FLAGS
+            value: --oci-worker-no-process-sandbox
+        securityContext:
+          runAsUser: 1000
+          runAsGroup: 1000
+          seccompProfile:
+            type: Unconfined
+          appArmorProfile:
+            type: Unconfined
         volumeMounts:
           - name: workspace
             mountPath: /workspace
+          - name: buildkitd-config
+            mountPath: /home/user/.config/buildkit/buildkitd.toml
+            subPath: buildkitd.toml
         resources:
           requests:
             cpu: "2"

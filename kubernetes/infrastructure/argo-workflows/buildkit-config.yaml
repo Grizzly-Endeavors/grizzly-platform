@@ -1,0 +1,20 @@
+# buildkitd config shared by the in-cluster image builds (build-gate-image,
+# build-runner-image). Mounted read-only at the rootless daemon's XDG config
+# path so buildctl-daemonless.sh picks it up.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: buildkitd-config
+  namespace: argo
+data:
+  buildkitd.toml: |
+    # The in-cluster zot registry speaks plain HTTP; mark it insecure so push,
+    # pull, and registry cache import/export all work without TLS.
+    [registry."registry.registry.svc.cluster.local:5000"]
+      http = true
+
+    # Route Docker Hub base-image (FROM) pulls through zot's pull-through cache
+    # so they're fetched once and served LAN-local (ADR-032), same as the DinD
+    # runner path. Non-docker.io bases go direct (egress is open).
+    [registry."docker.io"]
+      mirrors = ["registry.registry.svc.cluster.local:5000"]

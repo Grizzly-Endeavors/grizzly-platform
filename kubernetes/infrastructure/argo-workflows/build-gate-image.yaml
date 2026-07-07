@@ -4,11 +4,12 @@ metadata:
   name: build-gate-image
   namespace: argo
 spec:
-  # Builds the grizzly-gate CI gate image in-cluster via Kaniko and pushes it to
-  # the in-cluster zot registry. Mirrors build-runner-image; the gate image is
-  # the one artifact Ops owns and versions — every app's CI pulls it by tag.
-  # Source lives in its own repo (github.com/grizzly-endeavors/grizzly-gate),
-  # cloned below; that repo's CI submits this template on push.
+  # Builds the grizzly-gate CI gate image in-cluster via rootless BuildKit and
+  # pushes it to the in-cluster zot registry. Mirrors build-runner-image; the
+  # gate image is the one artifact Ops owns and versions — every app's CI pulls
+  # it by tag. Source lives in its own repo
+  # (github.com/grizzly-endeavors/grizzly-gate), cloned below; that repo's CI
+  # submits this template on push. See docs/decisions/057-container-builds-buildkit.md.
   entrypoint: build
   arguments:
     parameters:
@@ -25,13 +26,17 @@ spec:
         resources:
           requests:
             storage: 15Gi
+  volumes:
+    - name: buildkitd-config
+      configMap:
+        name: buildkitd-config
   templates:
     - name: build
       steps:
         - - name: clone
             template: git-clone
         - - name: build-push
-            template: kaniko
+            template: buildkit
 
     - name: git-clone
       inputs:
@@ -54,22 +59,43 @@ spec:
           - name: workspace
             mountPath: /workspace
 
-    - name: kaniko
+    - name: buildkit
       container:
-        image: gcr.io/kaniko-project/executor:latest
+        image: moby/buildkit:v0.31.1-rootless
+        command: [sh, -c]
         args:
-          - --context=/workspace/src
-          - --dockerfile=/workspace/src/Dockerfile
-          - --destination=registry.registry.svc.cluster.local:5000/grizzly-gate:latest
-          - --destination=registry.registry.svc.cluster.local:5000/grizzly-gate:{{workflow.parameters.version}}
-          - --destination=registry.registry.svc.cluster.local:5000/grizzly-gate:{{workflow.uid}}
-          - --insecure
-          # Cache disabled: zot rejects kaniko's docker-v2 cache manifest
-          # (MANIFEST_INVALID). Re-enable if/when the cache repo is compatible.
-          - --cache=false
+          # buildctl-daemonless.sh starts a throwaway rootless buildkitd, runs
+          # the build, and exits — one-shot, no always-on daemon. Registry cache
+          # import/export against zot persists layers across builds (image-manifest
+          # so zot accepts the cache); FROM pulls route through zot's mirror via
+          # the mounted buildkitd.toml.
+          - |
+            IMG=registry.registry.svc.cluster.local:5000/grizzly-gate
+            buildctl-daemonless.sh build \
+              --frontend dockerfile.v0 \
+              --local context=/workspace/src \
+              --local dockerfile=/workspace/src \
+              --output "type=image,\"name=$IMG:latest,$IMG:{{workflow.parameters.version}},$IMG:{{workflow.uid}}\",push=true" \
+              --export-cache "type=registry,ref=$IMG/cache,mode=max,oci-mediatypes=true,image-manifest=true" \
+              --import-cache "type=registry,ref=$IMG/cache"
+        env:
+          # Relax the process sandbox so rootless buildkitd runs without a
+          # privileged securityContext or /dev/fuse (the pod is the boundary).
+          - name: BUILDKITD_FLAGS
+            value: --oci-worker-no-process-sandbox
+        securityContext:
+          runAsUser: 1000
+          runAsGroup: 1000
+          seccompProfile:
+            type: Unconfined
+          appArmorProfile:
+            type: Unconfined
         volumeMounts:
           - name: workspace
             mountPath: /workspace
+          - name: buildkitd-config
+            mountPath: /home/user/.config/buildkit/buildkitd.toml
+            subPath: buildkitd.toml
         resources:
           requests:
             cpu: "2"
