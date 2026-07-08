@@ -13,20 +13,27 @@
 #   Play 1  The `grizzly_gameservers` database + login role on the foundation
 #           PostgreSQL. The role owns its DB and nothing else, so the app is
 #           isolated by ownership from every other app's data.
+#   Play 2  The `grizzly-gameservers` bucket + a scoped userplus account on the
+#           s3-bulk versitygw gateway, where the bot streams per-instance world
+#           backups and archives (see the grizzly-gameservers backup feature).
 #
 # Credentials come from OpenBao secret/grizzly-platform/stores/grizzly-gameservers
-# (db_password) — provisioned here, and read cross-domain by the bot's K8s
-# ExternalSecret. Kept under grizzly-platform/ because the ansible-platform-read
-# AppRole policy only grants grizzly-platform/* (mirrors career-scanner).
+# (db_password, s3_access_key, s3_secret_key) — provisioned here, and read
+# cross-domain by the bot's K8s ExternalSecret. Kept under grizzly-platform/
+# because the ansible-platform-read AppRole policy only grants grizzly-platform/*
+# (mirrors career-scanner).
 #
 # Prerequisites:
-#   - Foundation Postgres running (deploy-foundation-stores.yml).
+#   - Foundation Postgres + s3-bulk versitygw running (deploy-foundation-stores.yml).
 #   - OpenBao seeded: secret/grizzly-platform/stores/grizzly-gameservers with
-#     key db_password. Generate it WITHOUT single quotes (`openssl rand -base64 36`).
+#     keys db_password, s3_access_key, s3_secret_key (+ stores/s3-bulk root creds).
+#     Generate them WITHOUT single quotes (`openssl rand -base64 36`).
 #
 # Usage (runs on the r730xd host):
 #   ansible-playbook -i ansible/inventory ansible/playbooks/setup-grizzly-gameservers-stores.yml \
 #     --vault-password-file .vault_pass -v
+#   ... --tags db     # Postgres role/DB only
+#   ... --tags s3     # S3 bucket/account only
 
 - name: Provision grizzly-gameservers database on foundation Postgres
   hosts: r730xd
@@ -104,3 +111,48 @@
         psql -U postgres -v ON_ERROR_STOP=1
         -c "CREATE DATABASE grizzly_gameservers OWNER grizzly_gameservers"
       when: gg_db.stdout != "1"
+
+# Play 2  The `grizzly-gameservers` bucket + a scoped userplus account on the
+#         s3-bulk versitygw gateway, where the bot streams per-instance world
+#         backups and archives. Mirrors career-scanner's s3 play; runs via the
+#         shared versitygw-provision-account task (ownership-based isolation).
+- name: Provision grizzly-gameservers S3 bucket and scoped account on s3-bulk
+  hosts: r730xd
+  become: yes
+  gather_facts: no
+  tags: [s3]
+
+  vars:
+    openbao_read_enabled: true
+
+  vars_files:
+    - "{{ playbook_dir }}/../vars/openbao_auth.yml"
+
+  pre_tasks:
+    - name: Load OpenBao-sourced platform secrets
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/../vars/openbao_secrets.yml"
+
+    - name: Verify grizzly-gameservers + s3-bulk credentials are present in OpenBao
+      ansible.builtin.assert:
+        that:
+          - vault_grizzly_gameservers_s3_access_key | default('') | length > 0
+          - vault_grizzly_gameservers_s3_secret_key | default('') | length > 0
+          - vault_s3_bulk_root_access_key | default('') | length > 0
+          - vault_s3_bulk_root_secret_key | default('') | length > 0
+        fail_msg: >
+          secret/grizzly-platform/stores/grizzly-gameservers (s3_access_key,
+          s3_secret_key) and stores/s3-bulk (root_access_key, root_secret_key)
+          must be seeded in OpenBao.
+        success_msg: "grizzly-gameservers + s3-bulk credentials are set"
+
+  tasks:
+    - name: Provision the grizzly-gameservers account + bucket on s3-bulk
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/versitygw-provision-account.yml"
+      vars:
+        vgw_instance: s3-bulk
+        vgw_root_access: "{{ vault_s3_bulk_root_access_key }}"
+        vgw_root_secret: "{{ vault_s3_bulk_root_secret_key }}"
+        vgw_access: "{{ vault_grizzly_gameservers_s3_access_key }}"
+        vgw_secret: "{{ vault_grizzly_gameservers_s3_secret_key }}"
+        vgw_bucket: grizzly-gameservers
