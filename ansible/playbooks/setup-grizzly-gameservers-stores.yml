@@ -1,0 +1,106 @@
+---
+# setup-grizzly-gameservers-stores.yml — foundation-side provisioning for the
+# grizzly-gameservers first-party app (the Discord bot / ops agent "Gary";
+# source + deploy chart live in the grizzly-gameservers repo, registered under
+# kubernetes/apps/, applied by Flux).
+#
+# grizzly-gameservers rides the shared foundation Postgres exactly like
+# career-scanner and Nextcloud (ADR-038): a dedicated non-superuser role that
+# OWNS its own database. The bot keeps its small durable state there — which
+# Discord channels are registered as no-mention "home" channels for Gary — and
+# runs its own schema migration at startup against a DB it fully controls.
+#
+#   Play 1  The `grizzly_gameservers` database + login role on the foundation
+#           PostgreSQL. The role owns its DB and nothing else, so the app is
+#           isolated by ownership from every other app's data.
+#
+# Credentials come from OpenBao secret/grizzly-platform/stores/grizzly-gameservers
+# (db_password) — provisioned here, and read cross-domain by the bot's K8s
+# ExternalSecret. Kept under grizzly-platform/ because the ansible-platform-read
+# AppRole policy only grants grizzly-platform/* (mirrors career-scanner).
+#
+# Prerequisites:
+#   - Foundation Postgres running (deploy-foundation-stores.yml).
+#   - OpenBao seeded: secret/grizzly-platform/stores/grizzly-gameservers with
+#     key db_password. Generate it WITHOUT single quotes (`openssl rand -base64 36`).
+#
+# Usage (runs on the r730xd host):
+#   ansible-playbook -i ansible/inventory ansible/playbooks/setup-grizzly-gameservers-stores.yml \
+#     --vault-password-file .vault_pass -v
+
+- name: Provision grizzly-gameservers database on foundation Postgres
+  hosts: r730xd
+  become: yes
+  gather_facts: no
+  tags: [db]
+
+  # The grizzly_gameservers role password lives only in OpenBao (no static
+  # vault.yml fallback), so this play always reads from OpenBao.
+  vars:
+    openbao_read_enabled: true
+
+  vars_files:
+    - "{{ playbook_dir }}/../vars/openbao_auth.yml"
+
+  pre_tasks:
+    - name: Load OpenBao-sourced platform secrets
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/../vars/openbao_secrets.yml"
+
+    - name: Verify foundation Postgres container is running
+      ansible.builtin.command: docker exec foundation-postgres pg_isready -U postgres
+      changed_when: false
+
+  tasks:
+    # psql -U postgres connects over the container's local socket (trust auth) —
+    # no superuser password needed. The role password is passed via psql's
+    # :'pw' literal (safe quoting); the SQL is fed on stdin (docker exec -i),
+    # because psql only interpolates variables for stdin/-f input, NOT for -c.
+    - name: Check whether the grizzly_gameservers role exists
+      ansible.builtin.command: >-
+        docker exec foundation-postgres
+        psql -U postgres -tAc
+        "SELECT 1 FROM pg_roles WHERE rolname='grizzly_gameservers'"
+      register: gg_role
+      changed_when: false
+
+    - name: Create the grizzly_gameservers login role
+      ansible.builtin.shell:
+        cmd: >-
+          set -o pipefail;
+          printf "CREATE ROLE grizzly_gameservers LOGIN PASSWORD :'pw';\n"
+          | docker exec -i foundation-postgres
+          psql -U postgres -v ON_ERROR_STOP=1 -v pw="$PGPW"
+        executable: /bin/bash
+      environment:
+        PGPW: "{{ vault_grizzly_gameservers_db_password }}"
+      when: gg_role.stdout != "1"
+      no_log: true
+
+    - name: Keep the grizzly_gameservers role password in sync with OpenBao
+      ansible.builtin.shell:
+        cmd: >-
+          set -o pipefail;
+          printf "ALTER ROLE grizzly_gameservers LOGIN PASSWORD :'pw';\n"
+          | docker exec -i foundation-postgres
+          psql -U postgres -v ON_ERROR_STOP=1 -v pw="$PGPW"
+        executable: /bin/bash
+      environment:
+        PGPW: "{{ vault_grizzly_gameservers_db_password }}"
+      no_log: true
+      changed_when: false
+
+    - name: Check whether the grizzly_gameservers database exists
+      ansible.builtin.command: >-
+        docker exec foundation-postgres
+        psql -U postgres -tAc
+        "SELECT 1 FROM pg_database WHERE datname='grizzly_gameservers'"
+      register: gg_db
+      changed_when: false
+
+    - name: Create the grizzly_gameservers database owned by the grizzly_gameservers role
+      ansible.builtin.command: >-
+        docker exec foundation-postgres
+        psql -U postgres -v ON_ERROR_STOP=1
+        -c "CREATE DATABASE grizzly_gameservers OWNER grizzly_gameservers"
+      when: gg_db.stdout != "1"
