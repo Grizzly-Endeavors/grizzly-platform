@@ -6,7 +6,7 @@ Machines, specs, and live roles. This is the day-to-day "what's where" reference
 
 **Update when:** a machine is added, removed, or takes on a different role; a disk is replaced; firmware/OS changes materially affect operations.
 
-Last updated: 2026-07-07 (AP630 + AP130 #1 live in the standalone roaming hive; EX50 router cutover still pending)
+Last updated: 2026-07-08 (EX50 live as the router/gateway at 10.0.0.1; AP630 + AP130 #1 live in the standalone roaming hive)
 
 ---
 
@@ -125,8 +125,8 @@ Decisions: [ADR-003](decisions/003-foundation-stores-on-r730xd.md) (foundation s
 | Ports | 24× 1GbE + 2× SFP (+ 2× combo GbE/SFP) |
 | PoE | 802.3at (PoE+), powering APs |
 | Firmware | HiveOS 6.5r8 (2017) |
-| Mgmt access | `{{ sr2024_ip }}` (currently a DHCP lease); SSH/web, default creds `admin`/`aerohive`. Modern SSH clients need legacy algorithms — see [aerohive-cli-reference.md](aerohive-cli-reference.md). |
-| Role | Lab backbone — all lab machines connect here. Xfinity gateway upstream. Flat L2 today (VLANs deferred until off-the-shelf router arrives, per [ADR-021](decisions/021-off-the-shelf-router-tower-pc-as-worker.md)). |
+| Mgmt access | `{{ sr2024_ip }}` (static mgt0, DHCP client disabled); SSH/web, default creds `admin`/`aerohive`. Modern SSH clients need legacy algorithms — see [aerohive-cli-reference.md](aerohive-cli-reference.md). |
+| Role | Lab backbone — all lab machines connect here. Upstream gateway is the EX50 (`10.0.0.1`). Flat L2 today (VLANs deferred to Checkpoint D, per [ADR-021](decisions/021-off-the-shelf-router-tower-pc-as-worker.md)). |
 | Capabilities | 802.1Q VLANs, LACP, trunk/access ports — all verified |
 | Known quirk | PSE (PoE) subsystem can **wedge** — all ports `unknown`/0 W despite healthy config; only a physical power-pull recovers it. Monitoring deferred to post-migration. See [PSE wedge](aerohive-cli-reference.md#poe-troubleshooting--the-pse-wedge) + [monitoring plan](exploration/sr2024-poe-monitoring.md). |
 
@@ -184,16 +184,16 @@ Tracked here rather than in the active sections so the active tables stay truthf
 | Planned role | Standalone inference host (Ollama / vLLM / text-generation-inference TBD). Consumed over the LAN by cluster workloads and developer tools. |
 | Status | Hardware in progress; specs / IP / ADR reserved until the machine lands. Kept out of the cluster intentionally so inference workloads don't share a drain/reboot cadence with cluster workers. |
 
-### Digi EX50 — Acquired, Deployment Pending
+### Digi EX50 — Live (router / gateway)
 
 | Spec | Value |
 |------|-------|
 | Model | Digi EX50 (5G enterprise cellular router; runs scriptable Digi Accelerated Linux / DAL) |
 | Ports | 2× 2.5 GbE (one WAN, one LAN — no built-in switch fabric), WiFi 6, dual-SIM 5G/LTE |
-| Power | PoE+ (from SR2024) or DC barrel |
-| Planned role | Replace Xfinity gateway's routing role; NAT, DHCP, DNS, VLANs, firewall. Xfinity gateway → bridge mode. 5G not enabled (no cellular plan). Config stays in IaC via the DAL shell. |
-| Status | Acquired; cutover planned, not executed. See [ADR-044](decisions/044-digi-ex50-as-off-the-shelf-router.md) and [runbooks/garage-relocation-cutover.md](runbooks/garage-relocation-cutover.md). |
-| Unblocks | L3 segmentation ([ADR-046](decisions/046-platform-network-segmentation-via-home-eviction.md)), ingress-tunnel relocation ([ADR-047](decisions/047-ingress-tunnel-relocation-to-ex50.md)), internal DNS resolver move off R730xd ([ADR-036](decisions/036-internal-dns-zone.md)). |
+| Power | DC barrel adapter (the SR2024's PoE is dead — [#84](https://github.com/Grizzly-Endeavors/grizzly-platform/issues/84)) |
+| Role | The router/gateway at `10.0.0.1` — NAT, DHCP, DNS forwarding, firewall (flat today; VLANs come at Checkpoint D). Xfinity gateway in bridge mode. Own WiFi off (Aerohive serves WiFi). 5G not enabled (no cellular plan). Config in IaC via the DAL shell (`configure-ex50.yml`). |
+| Status | **Live** — flat cutover (Checkpoint C) done 2026-07-08. See [ADR-044](decisions/044-digi-ex50-as-off-the-shelf-router.md) and [runbooks/garage-relocation-cutover.md](runbooks/garage-relocation-cutover.md). |
+| Still to come | L3 segmentation ([ADR-046](decisions/046-platform-network-segmentation-via-home-eviction.md), Ckpt D), ingress-tunnel relocation off R730xd ([ADR-047](decisions/047-ingress-tunnel-relocation-to-ex50.md), Ckpt E), internal DNS resolver move ([ADR-036](decisions/036-internal-dns-zone.md)). |
 | Firmware gate | WireGuard needs DAL ≥ 24.3.28.88 (required before ingress relocation). |
 
 ### APC Back-UPS RS 1500 — Batteries Dead
