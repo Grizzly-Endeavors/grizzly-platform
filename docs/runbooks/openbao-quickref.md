@@ -100,6 +100,7 @@ All platform secrets live under `secret/grizzly-platform/<domain>/<name>` (KV v2
 | `secret/grizzly-platform/stores/registry` | `access_key`, `secret_key` (scoped s3-bulk account owning `lab-registry`; provisioned by `setup-registry-stores.yml`) |
 | `secret/grizzly-platform/stores/nextcloud` | `db_password`, `s3_access_key`, `s3_secret_key` (foundation grants for the Nextcloud lab app; provisioned by `setup-nextcloud-stores.yml`, read cross-domain by Nextcloud's ExternalSecret) |
 | `secret/grizzly-platform/stores/career-scanner` | `db_password`, `s3_access_key`, `s3_secret_key` (foundation grants for the career-scanner first-party app; provisioned by `setup-career-scanner-stores.yml`, read cross-domain by career-scanner's ExternalSecret) |
+| `secret/grizzly-platform/stores/grizzly-gameservers` | `db_password` (foundation Postgres grant for the grizzly-gameservers bot/agent; provisioned by `setup-grizzly-gameservers-stores.yml`, read cross-domain by the bot's ExternalSecret) |
 | `secret/grizzly-platform/stores/roundcube` | `db_password` |
 | `secret/grizzly-platform/stores/smtp2go` | `username`, `password` (SMTP2GO outbound smarthost creds; ADR-050) |
 | `secret/grizzly-platform/stores/stalwart` | `db_password`, `s3_access_key`, `s3_secret_key` |
