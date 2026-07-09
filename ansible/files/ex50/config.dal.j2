@@ -1,5 +1,5 @@
 {#
-  Digi EX50 DAL config delta — flat-cutover (Checkpoint C) posture.
+  Digi EX50 DAL config delta — LAN gateway + downstream WiFi segmentation.
 
   Rendered by ansible/playbooks/configure-ex50.yml and piped into the DAL
   Admin CLI over SSH (mode 2: multi-line stdin). The session enters config
@@ -45,9 +45,6 @@ network interface lan ipv4 address {{ ex50_lan_ip }}/{{ ex50_lan_prefix }}
 network interface lan ipv4 dhcp_server enable true
 network interface lan ipv4 dhcp_server lease_start {{ ex50_dhcp_pool_start.split('.')[-1] }}
 network interface lan ipv4 dhcp_server lease_end {{ ex50_dhcp_pool_end.split('.')[-1] }}
-{# --- Hardening: drop the permissive "Allow all for testing" rule
-   (firewall filter 2 on the bench unit) before the box fronts anything. --- #}
-del firewall filter 2
 {# --- Hardening: disable the (empty, ex-carrier) cellular modem at both layers
    so it stops the futile SIM-slot probing. --- #}
 network interface modem enable false
@@ -57,6 +54,54 @@ network modem modem enable false
 network wifi ap digi_ap1 enable false
 {# --- Enable NTP (syncs once the WAN reaches the internet at cutover). --- #}
 service ntp enable true
+{#
+  ─────────────────────────────────────────────────────────────────────────
+  Downstream WiFi segmentation (ADR-059) — two tagged VLANs on the LAN trunk.
+  `trusted` (VLAN {{ ex50_trusted_vlan_id }}) carries personal + guest devices
+  and reaches the internet; `restricted` (VLAN {{ ex50_restricted_vlan_id }}) is
+  isolated and has NO external-egress rule here BY DESIGN — DAL default-denies
+  inter-zone forwarding, so it stays dark until an out-of-band layer grants it.
+  The platform stays native/untagged on VLAN 1 (nothing above is renumbered).
+  Custom zones are created just by naming them on the interface; NAT is applied
+  at the `external` zone (src_nat). Segment isolation (each ↛ platform, each ↛
+  the other) is automatic under default-deny — no explicit deny rules needed.
+
+  Re-apply safety: `add` of a name-keyed node (zone/vlan/interface) that already
+  exists returns a benign per-line `# ERROR` and is skipped (like `del` of an
+  absent node). The trailing `add firewall filter end` is INDEX-based, not
+  name-keyed: this block is a from-factory delta (factory rules occupy 0 and 1,
+  so the trusted rule lands at {{ ex50_trusted_wan_filter_index }}). Re-applying
+  onto an already-configured unit would append a duplicate accept rule — same
+  effect, harmless, but cosmetically redundant; a clean re-apply is a
+  factory-reset-and-replay, not a live diff.
+  ───────────────────────────────────────────────────────────────────────── #}
+add firewall zone restricted
+add firewall zone trusted
+add network vlan vlan{{ ex50_restricted_vlan_id }}
+network vlan vlan{{ ex50_restricted_vlan_id }} id {{ ex50_restricted_vlan_id }}
+network vlan vlan{{ ex50_restricted_vlan_id }} device /network/device/lan
+add network vlan vlan{{ ex50_trusted_vlan_id }}
+network vlan vlan{{ ex50_trusted_vlan_id }} id {{ ex50_trusted_vlan_id }}
+network vlan vlan{{ ex50_trusted_vlan_id }} device /network/device/lan
+add network interface restricted
+network interface restricted device /network/vlan/vlan{{ ex50_restricted_vlan_id }}
+network interface restricted zone restricted
+network interface restricted ipv4 address {{ ex50_restricted_ip }}/{{ ex50_restricted_prefix }}
+network interface restricted ipv4 dhcp_server enable true
+network interface restricted ipv4 dhcp_server lease_start {{ ex50_restricted_dhcp_pool_start.split('.')[-1] }}
+network interface restricted ipv4 dhcp_server lease_end {{ ex50_restricted_dhcp_pool_end.split('.')[-1] }}
+add network interface trusted
+network interface trusted device /network/vlan/vlan{{ ex50_trusted_vlan_id }}
+network interface trusted zone trusted
+network interface trusted ipv4 address {{ ex50_trusted_ip }}/{{ ex50_trusted_prefix }}
+network interface trusted ipv4 dhcp_server enable true
+network interface trusted ipv4 dhcp_server lease_start {{ ex50_trusted_dhcp_pool_start.split('.')[-1] }}
+network interface trusted ipv4 dhcp_server lease_end {{ ex50_trusted_dhcp_pool_end.split('.')[-1] }}
+{# --- Trusted → WAN (internet). `restricted` gets NO external rule by design. --- #}
+add firewall filter end
+firewall filter {{ ex50_trusted_wan_filter_index }} src_zone trusted
+firewall filter {{ ex50_trusted_wan_filter_index }} dst_zone external
+firewall filter {{ ex50_trusted_wan_filter_index }} label "Trusted to External"
 {#
   ─────────────────────────────────────────────────────────────────────────
   MANUAL, DO ON THE BENCH — SSH ACL hardening (NOT emitted here on purpose)
