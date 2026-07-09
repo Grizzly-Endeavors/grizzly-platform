@@ -126,7 +126,7 @@ Decisions: [ADR-003](decisions/003-foundation-stores-on-r730xd.md) (foundation s
 | PoE | 802.3at (PoE+), powering APs |
 | Firmware | HiveOS 6.5r8 (2017) |
 | Mgmt access | `{{ sr2024_ip }}` (static mgt0, DHCP client disabled); SSH/web, default creds `admin`/`aerohive`. Modern SSH clients need legacy algorithms — see [aerohive-cli-reference.md](aerohive-cli-reference.md). |
-| Role | Lab backbone — all lab machines connect here. Upstream gateway is the EX50 (`10.0.0.1`). Flat L2 today (VLANs deferred to Checkpoint D, per [ADR-021](decisions/021-off-the-shelf-router-tower-pc-as-worker.md)). |
+| Role | Lab backbone — all lab machines connect here (untagged VLAN 1). Upstream gateway is the EX50 (`10.0.0.1`). Uplink ports to the EX50 (`eth1/1`) + APs (`eth1/3`, `eth1/4`) become VLAN 20/30 trunks at the downstream-WiFi-segmentation go-live ([ADR-060](decisions/060-downstream-wifi-segmentation.md), [runbooks/sr2024-vlan-trunks.md](runbooks/sr2024-vlan-trunks.md)); still flat today. |
 | Capabilities | 802.1Q VLANs, LACP, trunk/access ports — all verified |
 | Known quirk | PSE (PoE) subsystem can **wedge** — all ports `unknown`/0 W despite healthy config; only a physical power-pull recovers it. Monitoring deferred to post-migration. See [PSE wedge](aerohive-cli-reference.md#poe-troubleshooting--the-pse-wedge) + [monitoring plan](exploration/sr2024-poe-monitoring.md). |
 
@@ -191,7 +191,7 @@ Tracked here rather than in the active sections so the active tables stay truthf
 | Model | Digi EX50 (5G enterprise cellular router; runs scriptable Digi Accelerated Linux / DAL) |
 | Ports | 2× 2.5 GbE (one WAN, one LAN — no built-in switch fabric), WiFi 6, dual-SIM 5G/LTE |
 | Power | DC barrel adapter (the SR2024's PoE is dead — [#84](https://github.com/Grizzly-Endeavors/grizzly-platform/issues/84)) |
-| Role | The router/gateway at `10.0.0.1` — NAT, DHCP, DNS forwarding, firewall (flat today; VLANs come at Checkpoint D). Xfinity gateway in bridge mode. Own WiFi off (Aerohive serves WiFi). 5G not enabled (no cellular plan). Config in IaC via the DAL shell (`configure-ex50.yml`). |
+| Role | The router/gateway at `10.0.0.1` — NAT, DHCP, DNS forwarding, firewall. Routes the platform (native VLAN 1) plus the downstream `restricted` (VLAN 20) and `trusted` (VLAN 30) WiFi segments ([ADR-060](decisions/060-downstream-wifi-segmentation.md); interfaces/zones live, WiFi trunks pending go-live). Xfinity gateway in bridge mode. Own WiFi off (Aerohive serves WiFi). 5G not enabled (no cellular plan). Config in IaC via the DAL Admin CLI (`configure-ex50.yml`). |
 | Status | **Live** — flat cutover (Checkpoint C) done 2026-07-08. See [ADR-044](decisions/044-digi-ex50-as-off-the-shelf-router.md) and [runbooks/garage-relocation-cutover.md](runbooks/garage-relocation-cutover.md). |
 | Still to come | L3 segmentation ([ADR-046](decisions/046-platform-network-segmentation-via-home-eviction.md), Ckpt D), ingress-tunnel relocation off R730xd ([ADR-047](decisions/047-ingress-tunnel-relocation-to-ex50.md), Ckpt E), internal DNS resolver move ([ADR-036](decisions/036-internal-dns-zone.md)). |
 | Firmware gate | WireGuard needs DAL ≥ 24.3.28.88 (required before ingress relocation). |

@@ -1,6 +1,6 @@
 # Runbook — ntfy (platform push notifications)
 
-Self-hosted [ntfy](https://ntfy.sh) as a shared platform service: any app publishes to a topic over HTTP and any subscriber (phone app, browser, another service) receives it. Manifests: `kubernetes/infrastructure/ntfy/`; Flux Kustomization: `kubernetes/clusters/grizzly-platform/ntfy.yaml`. Public URL: `https://ntfy.grizzly-endeavors.com` (Caddy wildcard → nginx ingress; TLS at the VPS). Decision: [ADR-060](../decisions/060-ntfy-notification-service.md).
+Self-hosted [ntfy](https://ntfy.sh) as a shared platform service: any app publishes to a topic over HTTP and any subscriber (phone app, browser, another service) receives it. Manifests: `kubernetes/infrastructure/ntfy/`; Flux Kustomization: `kubernetes/clusters/grizzly-platform/ntfy.yaml`. Public URL: `https://ntfy.grizzly-endeavors.com` (Caddy wildcard → nginx ingress; TLS at the VPS). Decision: [ADR-061](../decisions/061-ntfy-notification-service.md).
 
 This runbook is for **operating** ntfy. If you're building an app that sends or receives notifications, see the [integration guide](../integration/ntfy.md) (publish, subscribe, action buttons).
 

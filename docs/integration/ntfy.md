@@ -1,6 +1,6 @@
 # ntfy — push notifications from your app
 
-Send a notification from any app to any subscriber (your phone, a browser, another service), and receive interactive taps back via action buttons. This is the consumer front door; operating ntfy (deploy, mint tokens, grant topics) is [runbooks/ntfy.md](../runbooks/ntfy.md); *why* it exists is [ADR-060](../decisions/060-ntfy-notification-service.md).
+Send a notification from any app to any subscriber (your phone, a browser, another service), and receive interactive taps back via action buttons. This is the consumer front door; operating ntfy (deploy, mint tokens, grant topics) is [runbooks/ntfy.md](../runbooks/ntfy.md); *why* it exists is [ADR-061](../decisions/061-ntfy-notification-service.md).
 
 ## 1. What you get
 
@@ -121,5 +121,5 @@ The subscriber should see "it works" within a second.
 
 - [runbooks/ntfy.md](../runbooks/ntfy.md) — operating ntfy: minting users/tokens, granting topics, health, backup.
 - [secrets.md](secrets.md) — the OpenBao → External Secrets pattern every example here uses.
-- [ADR-060](../decisions/060-ntfy-notification-service.md) — why ntfy is a shared platform service.
+- [ADR-061](../decisions/061-ntfy-notification-service.md) — why ntfy is a shared platform service.
 - Upstream: [ntfy publish docs](https://docs.ntfy.sh/publish/) — the full header/JSON reference.

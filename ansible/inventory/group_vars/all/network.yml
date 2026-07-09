@@ -32,7 +32,7 @@ ex50_dhcp_pool_end: "10.0.0.150"
 # Upstream resolvers the EX50 DNS forwarder points at (reuses lab_dns).
 ex50_dns_upstreams: "{{ lab_dns }}"
 
-# Downstream WiFi segments (ADR-059) — two tagged VLANs the EX50 routes and
+# Downstream WiFi segments (ADR-060) — two tagged VLANs the EX50 routes and
 # firewalls over the LAN trunk (LAN port → SR2024 → APs). The platform stays
 # native/untagged on VLAN 1 (10.0.0.0/24), so nothing above is renumbered.
 #   trusted    — personal + guest WiFi devices: internet, isolated from the

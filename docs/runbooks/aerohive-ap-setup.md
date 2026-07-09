@@ -94,7 +94,7 @@ Rotating the Aerohive admin password off the `admin`/`aerohive` default is worth
 - **Channel plan** — AP630 uses 2.4:ch1 / 5:ch36, AP130 uses 2.4:ch6 / 5:ch149, so the two never share a channel. Adjust if you add more APs.
 - **5 GHz width is 40 MHz** (conservative) — 80/160 MHz tempt higher throughput but cause drops on these units; widen only after stability is proven.
 
-## VLAN tagging + go-live ([ADR-059](../decisions/059-downstream-wifi-segmentation.md))
+## VLAN tagging + go-live ([ADR-060](../decisions/060-downstream-wifi-segmentation.md))
 
 The APs carry two SSIDs on `mgt0` trunked to the SR2024 (native VLAN 1 untagged + tagged 20/30 — pair this with [`sr2024-vlan-trunks.md`](sr2024-vlan-trunks.md) and the EX50's `configure-ex50.yml`):
 

@@ -56,7 +56,7 @@ network wifi ap digi_ap1 enable false
 service ntp enable true
 {#
   ─────────────────────────────────────────────────────────────────────────
-  Downstream WiFi segmentation (ADR-059) — two tagged VLANs on the LAN trunk.
+  Downstream WiFi segmentation (ADR-060) — two tagged VLANs on the LAN trunk.
   `trusted` (VLAN {{ ex50_trusted_vlan_id }}) carries personal + guest devices
   and reaches the internet; `restricted` (VLAN {{ ex50_restricted_vlan_id }}) is
   isolated and has NO external-egress rule here BY DESIGN — DAL default-denies

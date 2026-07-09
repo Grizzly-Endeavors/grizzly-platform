@@ -1,4 +1,4 @@
-# Aerohive SR2024 — VLAN trunk config for downstream WiFi segmentation (ADR-059)
+# Aerohive SR2024 — VLAN trunk config for downstream WiFi segmentation (ADR-060)
 #
 # Applied by pasting over legacy-SSH into the SR2024 HiveOS CLI, the same way as
 # the AP .hiveos files (docs/runbooks/sr2024-vlan-trunks.md + the render step in

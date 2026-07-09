@@ -15,7 +15,7 @@
 #   __WIFI_PSK2__     the trusted SSID's WPA2 PSK (vault_trusted_wifi_psk)
 #   __HIVE_PW__       shared inter-AP hive secret (same value on AP630 + AP130)
 #
-# VLAN tagging (ADR-059): mgt0 trunks two tagged VLANs up to the SR2024 —
+# VLAN tagging (ADR-060): mgt0 trunks two tagged VLANs up to the SR2024 —
 # restricted (VLAN 20) and trusted (VLAN 30) — alongside untagged native VLAN 1
 # (management + platform). The trusted SSID is tagged to VLAN 30 here and now.
 # Moving the existing SSID onto VLAN 20 is the GO-LIVE step (the commented block
