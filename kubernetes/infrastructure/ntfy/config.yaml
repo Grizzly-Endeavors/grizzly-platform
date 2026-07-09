@@ -1,0 +1,35 @@
+# ntfy server config (mounted read-only at /etc/ntfy/server.yml). Shared
+# platform push-notification service — any app can publish to a topic and any
+# subscriber (phone, browser, another service) can receive it. See
+# https://docs.ntfy.sh/config/ and docs/runbooks/ntfy.md.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ntfy-config
+  namespace: ntfy
+  labels:
+    app.kubernetes.io/name: ntfy
+data:
+  server.yml: |
+    base-url: "https://ntfy.grizzly-endeavors.com"
+    listen-http: ":80"
+
+    # SQLite-backed message cache, attachments, and the user/token auth DB — all
+    # on the iscsi-zfs PVC (block storage; SQLite must not live on NFS).
+    cache-file: "/var/lib/ntfy/cache.db"
+    attachment-cache-dir: "/var/lib/ntfy/attachments"
+    auth-file: "/var/lib/ntfy/auth.db"
+
+    # Private by default: this host is on the public internet, so nobody reads or
+    # writes any topic without an explicit grant. Mint users/tokens and grant
+    # per-topic access with the `ntfy` CLI post-deploy (see the runbook).
+    auth-default-access: "deny-all"
+
+    # TLS terminates upstream at the VPS Caddy; ntfy sits behind Caddy + the
+    # nginx ingress, so trust the forwarded headers (real client IP for rate
+    # limiting, correct scheme for links).
+    behind-proxy: true
+
+    # Modest homelab attachment caps (keep in sync with the ingress body-size).
+    attachment-total-size-limit: "1G"
+    attachment-file-size-limit: "15M"

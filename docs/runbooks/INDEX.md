@@ -28,6 +28,10 @@ One line per runbook. See [`README.md`](README.md) for what runbooks are and whe
 
 - [invite-authentik-reader.md](invite-authentik-reader.md) — the Authentik read-only group reader backing the invite console.
 
+## Notifications
+
+- [ntfy.md](ntfy.md) — self-hosted ntfy push-notification service (users, tokens, topic access, ops).
+
 ## Cluster
 
 - [k8s-cluster-ops.md](k8s-cluster-ops.md) — full standup, single-node rebuild/rejoin, and version upgrade sequences.

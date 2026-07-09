@@ -1,0 +1,18 @@
+# Durable state for ntfy: the SQLite message cache, attachment blobs, and the
+# auth DB (users + access tokens). iscsi-zfs (block device, ext4) — SQLite
+# locking is unsafe over NFS. `-retain` so a Flux prune / accidental PVC delete
+# does not destroy the auth DB with it (tokens would have to be re-minted).
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ntfy-data
+  namespace: ntfy
+  labels:
+    app.kubernetes.io/name: ntfy
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: iscsi-zfs-retain
+  resources:
+    requests:
+      storage: 5Gi

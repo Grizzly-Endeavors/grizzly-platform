@@ -14,6 +14,7 @@ One line per guide. See [`README.md`](README.md) for what an integration guide i
 - [sso.md](sso.md) — put your app behind Authentik (OIDC for apps that speak it, forward-auth proxy for those that don't) and onboard people via the invite broker.
 - [mail.md](mail.md) — send transactional email through Stalwart: get a submission credential and keep your from-address DMARC-aligned.
 - [observability.md](observability.md) — emit logs (free), metrics, and traces; where each signal goes and how to see it in Grafana.
+- [ntfy.md](ntfy.md) — send push notifications (and interactive approval buttons) from your app to phones/browsers/services via the shared ntfy service.
 
 ## Delivery
 

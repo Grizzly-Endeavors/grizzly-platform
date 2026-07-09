@@ -1,0 +1,33 @@
+# Public route: ntfy.grizzly-endeavors.com. TLS terminates upstream at the VPS
+# Caddy (wildcard *.grizzly-endeavors.com), which reverse-proxies to this nginx
+# ingress over the WireGuard tunnel — no per-service cert-manager issuer, and no
+# DNS change (the wildcard already resolves). ntfy handles its own auth
+# (deny-all default + tokens), so this is NOT behind the Authentik gate — mobile
+# ntfy clients authenticate to ntfy directly with a token.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ntfy
+  namespace: ntfy
+  labels:
+    app.kubernetes.io/name: ntfy
+  annotations:
+    # Subscriptions are long-lived HTTP streams / WebSockets — don't let nginx
+    # cut them at the default 60s.
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    # Allow attachment uploads up to the configured 15M cap (+ overhead).
+    nginx.ingress.kubernetes.io/proxy-body-size: "16m"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: ntfy.grizzly-endeavors.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: ntfy
+                port:
+                  number: 80
