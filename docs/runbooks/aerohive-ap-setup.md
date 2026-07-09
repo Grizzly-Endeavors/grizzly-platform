@@ -10,8 +10,8 @@ CLI syntax reference: [aerohive-cli-reference.md](../aerohive-cli-reference.md).
 
 - Both APs are factory-reset with CAPWAP disabled (per `docs/hardware.md` / the inventory table in the serial-interface doc). **A factory reset re-enables CAPWAP** — if either AP was reset again, its very first commands must be `no capwap client enable` then `save config` (the committed scripts start with `no capwap client enable`, so a fresh paste covers it).
 - Both APs are powered via **PoE injectors** and reachable on the LAN. The SR2024's own PoE is **not delivering** (bench-confirmed 2026-07-07: ~1.2 W total across all ports, port faults) — the PSE failure tracked in [#84](https://github.com/Grizzly-Endeavors/grizzly-platform/issues/84). Injectors are the standing arrangement until the switch PoE is fixed/replaced; the original "power from the SR2024" plan does not currently hold. See the PSE gotcha below.
-- The home WiFi PSK is set in the vault: `vault_home_wifi_psk` in `ansible/inventory/group_vars/all/vault.yml` (the `.example` shows the slot). It surfaces as `home_wifi_psk` in `vars.yml`.
-- You've picked the SSID and a shared hive secret (see the render step).
+- Both WiFi PSKs are set in the vault: `vault_home_wifi_psk` (existing/restricted SSID) and `vault_trusted_wifi_psk` (the trusted SSID) in `ansible/inventory/group_vars/all/vault.yml` (the `.example` shows the slots). They surface as `home_wifi_psk` / `trusted_wifi_psk` in `vars.yml`.
+- You've picked both SSID names (the existing house SSID + a new trusted SSID) and a shared hive secret (see the render step).
 
 ## Step 0 — SR2024 static mgmt IP (issue #80 companion) — DONE 2026-07-07
 
@@ -40,15 +40,21 @@ If a device rejects the connection with a cipher/kex error, add `-c aes128-cbc` 
 
 ## Step 2 — Render placeholders and paste the config
 
-The scripts have no `show` commands (so no `--More--` paging to fight); piping the rendered lines straight into the SSH session runs them in order. The render step (a) substitutes the three placeholders, (b) strips `#` comment lines and blanks (HiveOS doesn't treat `#` as a comment), and (c) pipes to the AP. The PSK is read from the vault and never written to disk:
+The scripts have no `show` commands (so no `--More--` paging to fight); piping the rendered lines straight into the SSH session runs them in order. The render step (a) substitutes the placeholders, (b) strips `#` comment lines and blanks (HiveOS doesn't treat `#` as a comment), and (c) pipes to the AP. Both PSKs are read from the vault and never written to disk:
 
 ```bash
 cd ~/Projects/grizzly-platform
 PSK=$(ansible-vault view ansible/inventory/group_vars/all/vault.yml | awk -F'"' '/^vault_home_wifi_psk:/{print $2}')
-SSID='YourHouseSSID'          # recommend: the EXISTING house SSID, so clients roam over seamlessly at cutover
+PSK2=$(ansible-vault view ansible/inventory/group_vars/all/vault.yml | awk -F'"' '/^vault_trusted_wifi_psk:/{print $2}')
+SSID='YourHouseSSID'          # the EXISTING house SSID (restricted segment), so clients roam over seamlessly
+TSSID='YourTrustedSSID'       # the NEW trusted SSID (personal + guest devices)
 HIVEPW='pick-a-shared-secret' # same value on both APs; any string, not committed
 
-render() { sed -e "s/__WIFI_SSID__/$SSID/g" -e "s/__WIFI_PSK__/$PSK/g" -e "s/__HIVE_PW__/$HIVEPW/g" "$1" | grep -vE '^[[:space:]]*(#|$)'; }
+render() {
+  sed -e "s|__WIFI_SSID__|$SSID|g" -e "s|__TRUSTED_SSID__|$TSSID|g" \
+      -e "s|__WIFI_PSK__|$PSK|g"   -e "s|__WIFI_PSK2__|$PSK2|g" \
+      -e "s|__HIVE_PW__|$HIVEPW|g" "$1" | grep -vE '^[[:space:]]*(#|$)'
+}
 
 # AP630 (primary)
 render ansible/files/aerohive/ap630.hiveos | ssh admin@<ap630-ip>
@@ -58,15 +64,15 @@ render ansible/files/aerohive/ap130.hiveos | ssh $LEGACY admin@<ap130-ip>
 ```
 
 Notes:
-- If the PSK or hive secret contains a `/`, `&`, or `\`, change the `sed` delimiter (e.g. `s|__WIFI_PSK__|$PSK|g`) so substitution doesn't break.
-- Reuse the **same** `SSID`, `PSK`, and `HIVEPW` for both APs — that's what makes them one roaming network.
-- Each script ends with `save config`, so the change persists. If you re-run interactively and want to confirm, `show run` / `show ssid`.
+- The `sed` delimiter is `|` (not `/`) so PSKs/secrets containing a `/` don't break substitution; if a value contains a literal `|`, pick another delimiter.
+- Reuse the **same** SSIDs, PSKs, and `HIVEPW` for both APs — that's what makes them one roaming network.
+- This paste tags the **trusted** SSID onto VLAN 30 and leaves the existing SSID on native VLAN 1 (the `restricted-up` / `home-sec` binding lines are commented — that's the go-live step below). Each script ends with `save config`. Confirm with `show run` / `show ssid`.
 
 ## Step 3 — Verify (per AP)
 
 ```
 show capwap client     # must show DISABLED (standalone)
-show ssid              # the home SSID present, bound to home-sec on wifi0 + wifi1
+show ssid              # both SSIDs present — existing bound to home-sec, trusted to trusted-sec, on wifi0 + wifi1
 show interface wifi0   # 2.4 GHz radio up on its assigned channel
 show interface wifi1   # 5 GHz radio up on its assigned channel
 show station           # clients appear here once associated
@@ -88,6 +94,16 @@ Rotating the Aerohive admin password off the `admin`/`aerohive` default is worth
 - **Channel plan** — AP630 uses 2.4:ch1 / 5:ch36, AP130 uses 2.4:ch6 / 5:ch149, so the two never share a channel. Adjust if you add more APs.
 - **5 GHz width is 40 MHz** (conservative) — 80/160 MHz tempt higher throughput but cause drops on these units; widen only after stability is proven.
 
-## Later: VLAN tagging (Checkpoint D)
+## VLAN tagging + go-live ([ADR-059](../decisions/059-downstream-wifi-segmentation.md))
 
-These configs are **flat/untagged** — the SSID rides `10.0.0.0/24` today. At [Checkpoint D](garage-relocation-cutover.md) (segmentation, [ADR-046](../decisions/046-platform-network-segmentation-via-home-eviction.md)) the home SSID is tagged onto `10.20.0.0/24` via a user-profile + `mgt0` trunk, and the SR2024 trunks that VLAN to the AP ports. That's a later PR; nothing here needs to change for the flat cutover.
+The APs carry two SSIDs on `mgt0` trunked to the SR2024 (native VLAN 1 untagged + tagged 20/30 — pair this with [`sr2024-vlan-trunks.md`](sr2024-vlan-trunks.md) and the EX50's `configure-ex50.yml`):
+
+- **Trusted SSID → VLAN 30** (`10.30.0.0/24`) — active as soon as the config is pasted. Personal + guest devices: internet, isolated from the platform.
+- **Existing SSID → VLAN 20** (`10.20.0.0/24`, restricted) — **deferred to go-live.** The two binding lines (`user-profile restricted-up …` + `security-object home-sec default-user-profile-attr 20`) are commented in both `.hiveos` files, so a normal paste leaves the existing SSID on native VLAN 1 exactly as before. Nobody is cut over early.
+
+**Go-live** (do only once the out-of-band egress layer that governs VLAN 20 is in place, so the restricted segment isn't dark with no way back): apply those two lines to **both** APs and `save config`. From that point the existing SSID's clients re-associate into `10.20.0.0/24`.
+
+```bash
+printf 'user-profile restricted-up vlan-id 20 attribute 20\nsecurity-object home-sec default-user-profile-attr 20\nsave config\n' | ssh admin@<ap630-ip>
+printf 'user-profile restricted-up vlan-id 20 attribute 20\nsecurity-object home-sec default-user-profile-attr 20\nsave config\n' | ssh $LEGACY admin@<ap130-ip>
+```

@@ -47,12 +47,14 @@ argo_s3_secret_key: "{{ vault_argo_s3_secret_key }}"
 sccache_s3_access_key: "{{ vault_sccache_s3_access_key }}"
 sccache_s3_secret_key: "{{ vault_sccache_s3_secret_key }}"
 
-# Home WiFi PSK for the Aerohive APs (AP630 + AP130).
-# The APs are configured from committed HiveOS scripts (ansible/files/aerohive/)
-# that carry a __WIFI_PSK__ placeholder; this value is rendered in at paste time
-# per docs/runbooks/aerohive-ap-setup.md and never committed. Public repo — the
-# real PSK lives only in the encrypted vault.yml.
+# WiFi PSKs for the Aerohive APs (AP630 + AP130). The APs are configured from
+# committed HiveOS scripts (ansible/files/aerohive/) carrying __WIFI_PSK__ /
+# __WIFI_PSK2__ placeholders, rendered in at paste time per
+# docs/runbooks/aerohive-ap-setup.md and never committed. Public repo — the real
+# PSKs live only in the encrypted vault.yml. `home` = the existing SSID (the
+# restricted segment, VLAN 20); `trusted` = the trusted SSID (VLAN 30).
 home_wifi_psk: "{{ vault_home_wifi_psk }}"
+trusted_wifi_psk: "{{ vault_trusted_wifi_psk }}"
 
 # WireGuard ingress tunnel keys (VPS ↔ R730xd)
 # Public keys are safe to expose; private keys stay in vault.yml and are

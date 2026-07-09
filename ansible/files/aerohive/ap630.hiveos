@@ -8,13 +8,18 @@
 # hive), and note `save config` only persists at the very end.
 #
 # Placeholders (rendered at paste time, NEVER committed):
-#   __WIFI_SSID__  home SSID name (recommend: match the existing house SSID so
-#                  clients roam over seamlessly at cutover)
-#   __WIFI_PSK__   WPA2 PSK — from ansible-vault (vault_home_wifi_psk)
-#   __HIVE_PW__    shared inter-AP hive secret (same value on AP630 + AP130)
+#   __WIFI_SSID__     the existing house SSID (the siblings' devices are already
+#                     joined to it) — mapped to the restricted segment (VLAN 20)
+#   __WIFI_PSK__      its WPA2 PSK — from ansible-vault (vault_home_wifi_psk)
+#   __TRUSTED_SSID__  the new trusted SSID (personal + guest devices) — VLAN 30
+#   __WIFI_PSK2__     the trusted SSID's WPA2 PSK (vault_trusted_wifi_psk)
+#   __HIVE_PW__       shared inter-AP hive secret (same value on AP630 + AP130)
 #
-# Flat / untagged: no VLAN tagging here — the SSID rides the flat 10.0.0.0/24
-# today. VLAN-to-10.20.0.0/24 tagging is added at Checkpoint D (later PR).
+# VLAN tagging (ADR-059): mgt0 trunks two tagged VLANs up to the SR2024 —
+# restricted (VLAN 20) and trusted (VLAN 30) — alongside untagged native VLAN 1
+# (management + platform). The trusted SSID is tagged to VLAN 30 here and now.
+# Moving the existing SSID onto VLAN 20 is the GO-LIVE step (the commented block
+# by the user-profiles) — until then it rides native VLAN 1, unchanged.
 
 # Standalone mode — never look for a controller/cloud (would override local cfg)
 no capwap client enable
@@ -29,22 +34,40 @@ radio profile rp-5g phymode 11ax-5g
 radio profile rp-5g channel-width 40
 radio profile rp-5g short-guard-interval
 
-# 2. Security object — WPA2-AES-PSK (chosen for hive compatibility with the
-#    older AP130; WPA3 is not reliable across both firmware generations).
+# 2. Security objects — WPA2-AES-PSK (chosen for hive compatibility with the
+#    older AP130; WPA3 is not reliable across both firmware generations). One
+#    per SSID, each with its own PSK.
 security-object home-sec
 security-object home-sec security protocol-suite wpa2-aes-psk ascii-key __WIFI_PSK__
+security-object trusted-sec
+security-object trusted-sec security protocol-suite wpa2-aes-psk ascii-key __WIFI_PSK2__
 
-# 3. SSID + bind the security object
+# 3. SSIDs + bind their security objects
 ssid __WIFI_SSID__
 ssid __WIFI_SSID__ security-object home-sec
+ssid __TRUSTED_SSID__
+ssid __TRUSTED_SSID__ security-object trusted-sec
+
+# 3b. VLAN mapping via user-profiles (attribute number == VLAN id here).
+#     Trusted SSID -> VLAN 30 — active now.
+user-profile trusted-up vlan-id 30 attribute 30
+security-object trusted-sec default-user-profile-attr 30
+#     GO-LIVE (apply to BOTH APs together with the out-of-band egress layer):
+#     move the existing SSID onto the restricted segment (VLAN 20). Until these
+#     two lines run, __WIFI_SSID__ rides untagged native VLAN 1 (platform)
+#     exactly as before — nobody is cut over early:
+#         user-profile restricted-up vlan-id 20 attribute 20
+#         security-object home-sec default-user-profile-attr 20
 
 # 4. Assign radio profiles to the interfaces (wifi0 = 2.4 GHz, wifi1 = 5 GHz)
 interface wifi0 radio profile rp-2g
 interface wifi1 radio profile rp-5g
 
-# 5. Broadcast the SSID on both bands
+# 5. Broadcast both SSIDs on both bands
 interface wifi0 ssid __WIFI_SSID__
 interface wifi1 ssid __WIFI_SSID__
+interface wifi0 ssid __TRUSTED_SSID__
+interface wifi1 ssid __TRUSTED_SSID__
 
 # 6. Static channels — AP630 owns 2.4:ch1 / 5:ch36; AP130 uses 6 / 149 so the
 #    two APs in the hive never share a channel.
@@ -55,6 +78,10 @@ interface wifi1 radio channel 36
 hive grizzly-hive
 hive grizzly-hive password __HIVE_PW__
 interface mgt0 hive grizzly-hive
+
+# 7b. Trunk mgt0 up to the SR2024: untagged native VLAN 1 (management + platform)
+#     plus tagged 20 (restricted) and 30 (trusted).
+interface mgt0 vlan 1 native-vlan-id 1 trunk allowed vlan 20,30
 
 # 8. Management — DNS/NTP at the platform gateway (EX50 post-cutover, 10.0.0.1)
 dns server-ip 10.0.0.1
