@@ -6,9 +6,9 @@ The live lab network. Flat L2 today on the SR2024, with a dedicated point-to-poi
 
 For the pending VLAN redesign, see [exploration/network-vlans.md](exploration/network-vlans.md).
 
-> **Platform relocated to the garage (2026-07-05) and cut over to the Digi EX50 router (2026-07-08).** The EX50 is now the gateway at `10.0.0.1` (Xfinity in bridge mode); ADRs [044](decisions/044-digi-ex50-as-off-the-shelf-router.md) (EX50 as router) and [045](decisions/045-platform-relocation-to-garage.md) (garage relocation) are realized. The network is still **flat L2** — the remaining garage-plan phases are later work: L3 segmentation / home eviction onto its own VLAN ([ADR-046](decisions/046-platform-network-segmentation-via-home-eviction.md), Checkpoint D) and moving the ingress tunnel onto the EX50 ([ADR-047](decisions/047-ingress-tunnel-relocation-to-ex50.md), Checkpoint E; ingress stays on the R730xd until then). See [runbooks/garage-relocation-cutover.md](runbooks/garage-relocation-cutover.md).
+> **Platform relocated to the garage (2026-07-05) and cut over to the Digi EX50 router (2026-07-08).** The EX50 is the gateway at `10.0.0.1` (Xfinity in bridge mode); ADRs [044](decisions/044-digi-ex50-as-off-the-shelf-router.md) (EX50 as router) and [045](decisions/045-platform-relocation-to-garage.md) (garage relocation) are realized. **Downstream WiFi segmentation ([ADR-060](decisions/060-downstream-wifi-segmentation.md), refining ADR-046) is being rolled out:** the EX50 now routes/firewalls two tagged VLANs — `trusted` (VLAN 30, `10.30.0.0/24`) and `restricted` (VLAN 20, `10.20.0.0/24`) — with the platform staying native/untagged on VLAN 1. The EX50 interfaces + zones are live; the SR2024 uplink trunks and the AP SSID→VLAN tagging are pending go-live (until then WiFi is still flat on VLAN 1). Moving the ingress tunnel onto the EX50 ([ADR-047](decisions/047-ingress-tunnel-relocation-to-ex50.md), Checkpoint E) remains later work; ingress stays on the R730xd until then. See [runbooks/sr2024-vlan-trunks.md](runbooks/sr2024-vlan-trunks.md), [runbooks/aerohive-ap-setup.md](runbooks/aerohive-ap-setup.md), [runbooks/garage-relocation-cutover.md](runbooks/garage-relocation-cutover.md).
 
-Last updated: 2026-07-08 (EX50 cutover complete — EX50 is the router at 10.0.0.1, Xfinity bridged; segmentation + ingress-move still pending)
+Last updated: 2026-07-09 (EX50 router live; downstream WiFi VLANs 20/30 provisioned on the EX50, SR2024 trunk + AP SSID tagging pending go-live; ingress-move still pending)
 
 ## Physical Topology
 
@@ -55,12 +55,13 @@ All lab machines are in the garage on the SR2024 (relocated from the closet 2026
 ### Switching
 
 - **SR2024** is the lab backbone in the garage. All lab machines (live cluster + R730xd + pending Tower PC) connect directly to it.
-- **Flat L2** — no VLANs configured yet. VLAN design lives in [exploration/network-vlans.md](exploration/network-vlans.md), deferred to Checkpoint D (segmentation); inter-VLAN routing will run on the EX50.
-- Legacy consumer switches still serve the bedroom / garage / workshop drops (ADR-008).
+- **Flat L2 today; downstream WiFi VLANs pending go-live.** VLANs 20 (restricted) / 30 (trusted) are defined in IaC and provisioned on the EX50 ([ADR-060](decisions/060-downstream-wifi-segmentation.md)); the next step converts the SR2024 uplink ports to the EX50 gateway (`eth1/1`) and the two APs (`eth1/3`, `eth1/4`) into trunks carrying native VLAN 1 + tagged 20/30 — see [runbooks/sr2024-vlan-trunks.md](runbooks/sr2024-vlan-trunks.md). All other ports stay untagged VLAN 1. Inter-VLAN routing + firewall run on the EX50.
+- Legacy consumer switches still serve the bedroom / garage / workshop drops (ADR-008), untagged on VLAN 1.
 
 ### WiFi
 
-- **AP630 (primary) + one AP130 (secondary) are configured and live** (2026-07-07) as a single standalone roaming hive (`grizzly-hive`, 802.11r/k/v), one flat untagged WPA2-AES-PSK SSID. AP630: 11ax, ch 1/36. AP130: 11ng/11ac, ch 6/149. Configs: `ansible/files/aerohive/ap630.hiveos` / `ap130.hiveos`; procedure: [runbooks/aerohive-ap-setup.md](runbooks/aerohive-ap-setup.md). The spare AP230 is unconfigured.
+- **AP630 (primary) + one AP130 (secondary) are configured and live** (2026-07-07) as a single standalone roaming hive (`grizzly-hive`, 802.11r/k/v), WPA2-AES-PSK. AP630: 11ax, ch 1/36. AP130: 11ng/11ac, ch 6/149. Configs: `ansible/files/aerohive/ap630.hiveos` / `ap130.hiveos`; procedure: [runbooks/aerohive-ap-setup.md](runbooks/aerohive-ap-setup.md). The spare AP230 is unconfigured.
+- **WiFi VLAN tagging is staged, not yet live** ([ADR-060](decisions/060-downstream-wifi-segmentation.md)): the `.hiveos` configs define a second (trusted, VLAN 30) SSID and an `mgt0` trunk, and map the existing SSID to the restricted VLAN 20 as a deferred go-live step. Today both APs still broadcast the single untagged SSID on native VLAN 1 until the AP paste + SR2024 trunks are applied.
 - **APs are powered by PoE injectors** — the SR2024's own PoE is not delivering (PSE failure, [#84](https://github.com/Grizzly-Endeavors/grizzly-platform/issues/84)); the earlier "PoE from the SR2024, no injectors" plan does not currently hold.
 - House WiFi is the Aerohive roaming hive (`Hearthstone` SSID); the Xfinity gateway is now in bridge mode.
 

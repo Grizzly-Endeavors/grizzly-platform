@@ -1,0 +1,48 @@
+# Aerohive SR2024 — VLAN trunk config for downstream WiFi segmentation (ADR-060)
+#
+# Applied by pasting over legacy-SSH into the SR2024 HiveOS CLI, the same way as
+# the AP .hiveos files (docs/runbooks/sr2024-vlan-trunks.md + the render step in
+# docs/runbooks/aerohive-ap-setup.md strips these `#` comment lines and blanks
+# before sending — HiveOS does NOT treat `#` as a comment). No placeholders and
+# no secrets here. Persists only on the trailing `save config`. Legacy SSH algos
+# + creds admin/aerohive; see docs/aerohive-cli-reference.md.
+#
+# What this does: defines VLANs 20 (restricted) + 30 (trusted) and converts the
+# three UPLINK ports — to the EX50 gateway and the two APs — into 802.1Q trunks
+# carrying native VLAN 1 (untagged: platform + switch/AP management) plus tagged
+# 20 and 30. Every other port stays an untagged VLAN-1 access port and is left
+# untouched — including port 2 (the home consumer switch chain) and every lab
+# machine access port. The platform is never renumbered; it rides native VLAN 1.
+#
+# Port map (verified 2026-07-09 via `show interface` — ports 1-4 up):
+#   eth1/1  → EX50 gateway (its LAN port tags 20/30; untagged = platform)
+#   eth1/2  → home consumer switch chain  ── stays access VLAN 1, NOT trunked
+#   eth1/3  → AP130 uplink
+#   eth1/4  → AP630 uplink
+# eth1/3 and eth1/4 get identical trunk config, so which AP is on which is moot.
+#
+# ⚠ APPLY-TIME: re-confirm link/occupancy before converting (runbook step 1).
+#   The EX50 uplink (eth1/1) is the linchpin — native VLAN 1 must remain the
+#   untagged native or the whole platform loses its gateway. Drive the paste
+#   from a WIRED platform host with serial-console fallback ready.
+
+# VLAN definitions
+vlan 20 name Restricted
+vlan 30 name Trusted
+
+# EX50 gateway uplink → trunk (native VLAN 1 untagged + tagged 20,30)
+interface eth1/1 switchport mode trunk
+interface eth1/1 switchport trunk allow vlan 20
+interface eth1/1 switchport trunk allow vlan 30
+
+# AP130 uplink → trunk
+interface eth1/3 switchport mode trunk
+interface eth1/3 switchport trunk allow vlan 20
+interface eth1/3 switchport trunk allow vlan 30
+
+# AP630 uplink → trunk
+interface eth1/4 switchport mode trunk
+interface eth1/4 switchport trunk allow vlan 20
+interface eth1/4 switchport trunk allow vlan 30
+
+save config

@@ -46,9 +46,16 @@ Authentik is the central IdP; invitation-gated enrollment via a cookie-bridged i
 Prometheus / Loki / Tempo / Grafana on the R730xd.
 - **Why:** [ADR-004](docs/decisions/004-observability-stack-on-r730xd.md). **How (operate):** [monitoring.md](docs/monitoring.md). **Integrate:** [integration/observability.md](docs/integration/observability.md) (emit logs/metrics/traces from an app). **Code:** `ansible/roles/r730xd-{prometheus,loki,tempo,grafana}/`, `ansible/playbooks/deploy-observability.yml`.
 
+### Notifications (ntfy)
+Self-hosted ntfy — a shared platform push-notification service. Any app publishes to a topic over HTTP; phones/browsers/services subscribe; supports interactive action buttons (approve/deny callbacks). Private (deny-all + tokens), on `ntfy.grizzly-endeavors.com`.
+- **Why:** [ADR-061](docs/decisions/061-ntfy-notification-service.md).
+- **How:** [runbooks/ntfy.md](docs/runbooks/ntfy.md) (mint users/tokens, grant topics, ops).
+- **Integrate:** [integration/ntfy.md](docs/integration/ntfy.md) (publish, subscribe, action buttons).
+- **Code:** `kubernetes/infrastructure/ntfy/` + `kubernetes/clusters/grizzly-platform/ntfy.yaml`.
+
 ### Cluster, ingress & networking
-Four-node kubeadm cluster (Cilium, Flux, ingress-nginx). Public ingress: VPS Caddy → WireGuard tunnel → R730xd DNAT → NodePort → ingress-nginx.
-- **Why:** [ADR-014](docs/decisions/014-k8s-cluster-stack.md) (stack), [016](docs/decisions/016-single-control-plane.md), [019](docs/decisions/019-ingress-and-tls-termination.md) (ingress/TLS), [034](docs/decisions/034-in-cluster-wireguard-encryption.md)–[036](docs/decisions/036-internal-dns-zone.md) (in-cluster net). **How:** [runbooks/k8s-cluster-ops.md](docs/runbooks/k8s-cluster-ops.md) (standup/rejoin/upgrade), [network.md](docs/network.md), [nodeport-allocation.md](docs/nodeport-allocation.md).
+Four-node kubeadm cluster (Cilium, Flux, ingress-nginx). Public ingress: VPS Caddy → WireGuard tunnel → R730xd DNAT → NodePort → ingress-nginx. Border router is the Digi EX50 (`10.0.0.1`); downstream WiFi is segmented into tagged VLANs (platform native VLAN 1, restricted VLAN 20, trusted VLAN 30) trunked over the SR2024 to the APs.
+- **Why:** [ADR-014](docs/decisions/014-k8s-cluster-stack.md) (stack), [016](docs/decisions/016-single-control-plane.md), [019](docs/decisions/019-ingress-and-tls-termination.md) (ingress/TLS), [034](docs/decisions/034-in-cluster-wireguard-encryption.md)–[036](docs/decisions/036-internal-dns-zone.md) (in-cluster net); [044](docs/decisions/044-digi-ex50-as-off-the-shelf-router.md) (EX50 router), [046](docs/decisions/046-platform-network-segmentation-via-home-eviction.md) + [060](docs/decisions/060-downstream-wifi-segmentation.md) (segmentation). **How:** [runbooks/k8s-cluster-ops.md](docs/runbooks/k8s-cluster-ops.md) (standup/rejoin/upgrade), [network.md](docs/network.md), [nodeport-allocation.md](docs/nodeport-allocation.md); WiFi VLANs: [sr2024-vlan-trunks.md](docs/runbooks/sr2024-vlan-trunks.md) + [aerohive-ap-setup.md](docs/runbooks/aerohive-ap-setup.md); EX50 config `ansible/playbooks/configure-ex50.yml`.
 
 ## Active work
 

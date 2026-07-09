@@ -6,12 +6,18 @@
 # + blank lines before sending (HiveOS does not treat `#` as a comment). HiveOS
 # is ORDER-SENSITIVE; keep this sequence. `save config` persists at the end.
 #
-# Same SSID / PSK / hive as ap630.hiveos so the two APs form one roaming network:
-#   __WIFI_SSID__  home SSID name (identical to the AP630's)
-#   __WIFI_PSK__   WPA2 PSK — from ansible-vault (vault_home_wifi_psk)
-#   __HIVE_PW__    shared inter-AP hive secret (identical to the AP630's)
+# Same SSIDs / PSKs / hive / VLAN mapping as ap630.hiveos so the two APs form one
+# roaming network (all placeholders identical to the AP630's):
+#   __WIFI_SSID__     existing house SSID — mapped to restricted (VLAN 20)
+#   __WIFI_PSK__      its WPA2 PSK — from ansible-vault (vault_home_wifi_psk)
+#   __TRUSTED_SSID__  the new trusted SSID (personal + guest devices) — VLAN 30
+#   __WIFI_PSK2__     the trusted SSID's WPA2 PSK (vault_trusted_wifi_psk)
+#   __HIVE_PW__       shared inter-AP hive secret (identical to the AP630's)
 #
-# Flat / untagged today; VLAN tagging to 10.20.0.0/24 arrives at Checkpoint D.
+# VLAN tagging (ADR-060): mgt0 trunks tagged VLAN 20 (restricted) + 30 (trusted)
+# to the SR2024 alongside untagged native VLAN 1. The trusted SSID is on VLAN 30
+# now; moving the existing SSID onto VLAN 20 is the GO-LIVE step (commented by
+# the user-profiles) — until then it stays on native VLAN 1, unchanged.
 
 # Standalone mode — never look for a controller/cloud
 no capwap client enable
@@ -25,21 +31,38 @@ radio profile rp-5g
 radio profile rp-5g phymode 11ac
 radio profile rp-5g channel-width 40
 
-# 2. Security object — WPA2-AES-PSK (must match the AP630's for one SSID)
+# 2. Security objects — WPA2-AES-PSK (must match the AP630's, one per SSID)
 security-object home-sec
 security-object home-sec security protocol-suite wpa2-aes-psk ascii-key __WIFI_PSK__
+security-object trusted-sec
+security-object trusted-sec security protocol-suite wpa2-aes-psk ascii-key __WIFI_PSK2__
 
-# 3. SSID + bind the security object
+# 3. SSIDs + bind their security objects
 ssid __WIFI_SSID__
 ssid __WIFI_SSID__ security-object home-sec
+ssid __TRUSTED_SSID__
+ssid __TRUSTED_SSID__ security-object trusted-sec
+
+# 3b. VLAN mapping via user-profiles (attribute number == VLAN id here).
+#     Trusted SSID -> VLAN 30 — active now.
+user-profile trusted-up vlan-id 30 attribute 30
+security-object trusted-sec default-user-profile-attr 30
+#     GO-LIVE (apply to BOTH APs together with the out-of-band egress layer):
+#     move the existing SSID onto the restricted segment (VLAN 20). Until these
+#     two lines run, __WIFI_SSID__ rides untagged native VLAN 1 (platform)
+#     exactly as before — nobody is cut over early:
+#         user-profile restricted-up vlan-id 20 attribute 20
+#         security-object home-sec default-user-profile-attr 20
 
 # 4. Assign radio profiles to the interfaces (wifi0 = 2.4 GHz, wifi1 = 5 GHz)
 interface wifi0 radio profile rp-2g
 interface wifi1 radio profile rp-5g
 
-# 5. Broadcast the SSID on both bands
+# 5. Broadcast both SSIDs on both bands
 interface wifi0 ssid __WIFI_SSID__
 interface wifi1 ssid __WIFI_SSID__
+interface wifi0 ssid __TRUSTED_SSID__
+interface wifi1 ssid __TRUSTED_SSID__
 
 # 6. Static channels — AP130 owns 2.4:ch6 / 5:ch149 (off the AP630's 1 / 36)
 interface wifi0 radio channel 6
@@ -49,6 +72,10 @@ interface wifi1 radio channel 149
 hive grizzly-hive
 hive grizzly-hive password __HIVE_PW__
 interface mgt0 hive grizzly-hive
+
+# 7b. Trunk mgt0 up to the SR2024: untagged native VLAN 1 (management + platform)
+#     plus tagged 20 (restricted) and 30 (trusted).
+interface mgt0 vlan 1 native-vlan-id 1 trunk allowed vlan 20,30
 
 # 8. Management — DNS/NTP at the platform gateway (EX50 post-cutover, 10.0.0.1)
 dns server-ip 10.0.0.1

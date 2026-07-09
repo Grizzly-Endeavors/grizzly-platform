@@ -32,6 +32,34 @@ ex50_dhcp_pool_end: "10.0.0.150"
 # Upstream resolvers the EX50 DNS forwarder points at (reuses lab_dns).
 ex50_dns_upstreams: "{{ lab_dns }}"
 
+# Downstream WiFi segments (ADR-060) — two tagged VLANs the EX50 routes and
+# firewalls over the LAN trunk (LAN port → SR2024 → APs). The platform stays
+# native/untagged on VLAN 1 (10.0.0.0/24), so nothing above is renumbered.
+#   trusted    — personal + guest WiFi devices: internet, isolated from the
+#                platform (its own custom firewall zone `trusted`).
+#   restricted — an isolated segment whose WAN egress is managed out-of-band;
+#                DAL default-denies inter-zone forwarding, so with no
+#                trusted-style external rule it has no internet by default.
+# Custom zones are created simply by naming them on the interface. Segment
+# isolation (each ↛ platform, each ↛ the other) is automatic under default-deny.
+ex50_restricted_vlan_id: "20"
+ex50_restricted_ip: "10.20.0.1"
+ex50_restricted_prefix: "24"
+ex50_restricted_dhcp_pool_start: "10.20.0.50"
+ex50_restricted_dhcp_pool_end: "10.20.0.150"
+
+ex50_trusted_vlan_id: "30"
+ex50_trusted_ip: "10.30.0.1"
+ex50_trusted_prefix: "24"
+ex50_trusted_dhcp_pool_start: "10.30.0.50"
+ex50_trusted_dhcp_pool_end: "10.30.0.150"
+
+# Firewall filter index for the trusted→external (internet) rule. The two
+# factory rules occupy indices 0 (internal→any) and 1 (hotspot→external), so
+# the trusted rule lands at 2. Reserved range: any out-of-band layer that adds
+# EX50 filter rules must use indices >= 8, to never collide with 0–2 here.
+ex50_trusted_wan_filter_index: "2"
+
 # Machine IPs
 r730xd_ip: "10.0.0.200"
 r730xd_idrac_ip: "10.0.0.203"

@@ -1,0 +1,23 @@
+# ntfy — shared platform push-notification service (ADR-061). Its own Flux
+# Kustomization (like roundcube/stalwart) so a transiently-unhealthy pod never
+# blocks core infrastructure from reaching Ready. No external-secrets-stores
+# dependency: ntfy owns its auth DB on its PVC, and consumer publish tokens are
+# minted post-deploy (see docs/runbooks/ntfy.md) and stored in OpenBao for the
+# apps that publish. dependsOn infrastructure so the iscsi-zfs StorageClass and
+# ingress-nginx exist before this applies.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: ntfy
+  namespace: flux-system
+spec:
+  dependsOn:
+    - name: infrastructure
+  interval: 5m
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  path: ./kubernetes/infrastructure/ntfy
+  prune: true
+  wait: true
+  timeout: 5m
