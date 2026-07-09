@@ -37,3 +37,4 @@ One line per runbook. See [`README.md`](README.md) for what runbooks are and whe
 - [garage-relocation-cutover.md](garage-relocation-cutover.md) — staged garage relocation + EX50 router cutover plan and checkpoints.
 - [ex50-console-access.md](ex50-console-access.md) — reaching the Digi EX50 CLI during bench bring-up.
 - [aerohive-ap-setup.md](aerohive-ap-setup.md) — standalone WiFi setup for the AP630 + AP130.
+- [sr2024-vlan-trunks.md](sr2024-vlan-trunks.md) — converting the SR2024 uplink ports to VLAN trunks for downstream WiFi segmentation.
