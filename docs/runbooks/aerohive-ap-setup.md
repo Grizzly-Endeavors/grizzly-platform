@@ -93,6 +93,9 @@ Rotating the Aerohive admin password off the `admin`/`aerohive` default is worth
 - **`save config` is required** — HiveOS changes are not persistent until saved (the scripts include it at the end).
 - **Channel plan** — AP630 uses 2.4:ch1 / 5:ch36, AP130 uses 2.4:ch6 / 5:ch149, so the two never share a channel. Adjust if you add more APs.
 - **5 GHz width is 40 MHz** (conservative) — 80/160 MHz tempt higher throughput but cause drops on these units; widen only after stability is proven.
+- **No mgt0 VLAN-trunk line** — both firmwares (AP630 IQ Engine 10.6, AP130 HiveOS 6.5) **reject** `interface mgt0 vlan 1 native-vlan-id 1 trunk allowed vlan …` ("unknown keyword"). mgt0 defaults to native (untagged) VLAN 1 and the AP **auto-802.1Q-tags** each SSID's egress with its user-profile VLAN. So VLAN segmentation needs only the `user-profile … vlan-id N` binding — no uplink trunk line. The `.hiveos` files carry this as a comment.
+- **AP130 config apply needs `expect`** — the AP130's old HiveOS SSH takes an interactive `-tt` **`show`** session fine, but drops a **piped `-tt` config stream right after login** (and a no-PTY pipe hits `tcgetattr: Invalid argument`). Drive multi-line config changes on the AP130 with an `expect` script: send the password, wait for `#`, send each line waiting for `#`, then `save config`. The AP630 (modern SSH) accepts a piped `-tt` stream directly.
+- **"Connected, no internet" on a segmented SSID = EX50 DNS ACL** — a client that associates and gets a lease + gateway but resolves nothing is almost always missing from the EX50 DNS resolver's zone ACL (`service dns acl zone`). Factory default allows only internal/ipsec/hotspot; the `trusted`/`restricted` zones must be added (now in `config.dal.j2`). Routing/NAT being fine while DNS is blocked produces exactly this symptom.
 
 ## VLAN tagging + go-live ([ADR-060](../decisions/060-downstream-wifi-segmentation.md))
 
