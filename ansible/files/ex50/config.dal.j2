@@ -102,6 +102,14 @@ add firewall filter end
 firewall filter {{ ex50_trusted_wan_filter_index }} src_zone trusted
 firewall filter {{ ex50_trusted_wan_filter_index }} dst_zone external
 firewall filter {{ ex50_trusted_wan_filter_index }} label "Trusted to External"
+{# --- DNS resolver ACL. The EX50's DNS forwarder only answers zones on its
+   service ACL (factory default: internal/ipsec/hotspot). The custom `trusted`
+   and `restricted` zones must be added, or their clients associate, get a
+   lease + gateway, but can't resolve anything — the classic "connected, no
+   internet". Append-based like the filter above; a duplicate on re-apply is
+   harmless (same zone allowed twice). --- #}
+add service dns acl zone end trusted
+add service dns acl zone end restricted
 {#
   ─────────────────────────────────────────────────────────────────────────
   MANUAL, DO ON THE BENCH — SSH ACL hardening (NOT emitted here on purpose)

@@ -73,9 +73,14 @@ hive grizzly-hive
 hive grizzly-hive password __HIVE_PW__
 interface mgt0 hive grizzly-hive
 
-# 7b. Trunk mgt0 up to the SR2024: untagged native VLAN 1 (management + platform)
-#     plus tagged 20 (restricted) and 30 (trusted).
-interface mgt0 vlan 1 native-vlan-id 1 trunk allowed vlan 20,30
+# 7b. Uplink VLAN tagging to the SR2024 — NO explicit mgt0 line needed.
+#     Both firmwares here (AP630 IQ Engine 10.6, AP130 HiveOS 6.5) REJECT the
+#     documented `interface mgt0 vlan 1 native-vlan-id 1 trunk allowed vlan 20,30`
+#     form ("unknown keyword or invalid input"). mgt0 defaults to native
+#     (untagged) VLAN 1, and the AP AUTO-802.1Q-tags each SSID's egress with its
+#     user-profile VLAN (20/30); management + platform ride untagged native VLAN 1.
+#     Verified 2026-07-10: a VLAN-30 SSID client pulls a 10.30.0.x lease with no
+#     mgt0 config. If native VLAN ever drifts off 1: interface mgt0 vlan native-vlan 1
 
 # 8. Management — DNS/NTP at the platform gateway (EX50 post-cutover, 10.0.0.1)
 dns server-ip 10.0.0.1
