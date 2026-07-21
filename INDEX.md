@@ -53,6 +53,12 @@ Self-hosted ntfy — a shared platform push-notification service. Any app publis
 - **Integrate:** [integration/ntfy.md](docs/integration/ntfy.md) (publish, subscribe, action buttons).
 - **Code:** `kubernetes/infrastructure/ntfy/` + `kubernetes/clusters/grizzly-platform/ntfy.yaml`.
 
+### Assistant (Residuum)
+Residuum personal agent on the R730xd — a first-party AI assistant that helps operate the platform. Runs the **stock** upstream image (no custom build) as a systemd-managed compose service; external CLIs come from a read-only tools volume on its PATH, so adding a tool needs no rebuild. Browser access is via residuum's outbound Cloud relay only — no published port, no ingress rule. It changes the platform through PRs and can merge its own, with Flux applying on merge — so every change is recorded and revertable, but it can reach production unattended.
+- **Why:** [ADR-062](docs/decisions/062-residuum-platform-assistant.md).
+- **How:** [runbooks/residuum.md](docs/runbooks/residuum.md) (deploy/upgrade, health, adding tools, recovery).
+- **Code:** `ansible/playbooks/deploy-residuum.yml` + `ansible/roles/r730xd-residuum/`.
+
 ### Cluster, ingress & networking
 Four-node kubeadm cluster (Cilium, Flux, ingress-nginx). Public ingress: VPS Caddy → WireGuard tunnel → R730xd DNAT → NodePort → ingress-nginx. Border router is the Digi EX50 (`10.0.0.1`); downstream WiFi is segmented into tagged VLANs (platform native VLAN 1, restricted VLAN 20, trusted VLAN 30) trunked over the SR2024 to the APs.
 - **Why:** [ADR-014](docs/decisions/014-k8s-cluster-stack.md) (stack), [016](docs/decisions/016-single-control-plane.md), [019](docs/decisions/019-ingress-and-tls-termination.md) (ingress/TLS), [034](docs/decisions/034-in-cluster-wireguard-encryption.md)–[036](docs/decisions/036-internal-dns-zone.md) (in-cluster net); [044](docs/decisions/044-digi-ex50-as-off-the-shelf-router.md) (EX50 router), [046](docs/decisions/046-platform-network-segmentation-via-home-eviction.md) + [060](docs/decisions/060-downstream-wifi-segmentation.md) (segmentation). **How:** [runbooks/k8s-cluster-ops.md](docs/runbooks/k8s-cluster-ops.md) (standup/rejoin/upgrade), [network.md](docs/network.md), [nodeport-allocation.md](docs/nodeport-allocation.md); WiFi VLANs: [sr2024-vlan-trunks.md](docs/runbooks/sr2024-vlan-trunks.md) + [aerohive-ap-setup.md](docs/runbooks/aerohive-ap-setup.md); EX50 config `ansible/playbooks/configure-ex50.yml`.

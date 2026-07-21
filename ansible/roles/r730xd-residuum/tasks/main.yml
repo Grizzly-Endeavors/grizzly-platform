@@ -1,0 +1,132 @@
+---
+# r730xd-residuum: Residuum personal agent on the ZFS hot tier.
+# Modeled on r730xd-s3-hot: pinned image + systemd unit + mount guard.
+
+# The container runs as uid/gid 1000 (the image's unprivileged `residuum`
+# user), so the state dir must be owned by 1000 or the agent cannot write its
+# workspace, memory, or secret store.
+- name: Create residuum directories
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner }}"
+    group: "{{ item.group }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: "{{ residuum_data_dir }}", owner: "1000", group: "1000", mode: "0750" }
+    - { path: "{{ residuum_compose_dir }}", owner: "root", group: "root", mode: "0750" }
+
+- name: Provision the read-only tools volume
+  ansible.builtin.include_tasks: tools.yml
+
+# config.toml / providers.toml are seeded onto the state volume. Residuum's
+# bootstrap only writes them when ABSENT, so templating them here wins and the
+# interactive setup wizard never runs on first boot.
+#
+# These files are Ansible-owned: this role is the source of truth. Settings
+# changed in residuum's web UI (which writes config.toml) WILL be reverted on
+# the next playbook run — change them here instead.
+- name: Deploy residuum config.toml
+  ansible.builtin.template:
+    src: config.toml.j2
+    dest: "{{ residuum_data_dir }}/config.toml"
+    owner: "1000"
+    group: "1000"
+    mode: "0644"
+  notify: Restart foundation-residuum
+
+- name: Deploy residuum providers.toml
+  ansible.builtin.template:
+    src: providers.toml.j2
+    dest: "{{ residuum_data_dir }}/providers.toml"
+    owner: "1000"
+    group: "1000"
+    mode: "0644"
+  notify: Restart foundation-residuum
+
+- name: Deploy residuum secrets env file
+  ansible.builtin.template:
+    src: residuum.env.j2
+    dest: "{{ residuum_compose_dir }}/residuum.env"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+  notify: Restart foundation-residuum
+
+- name: Deploy residuum docker-compose.yml
+  ansible.builtin.template:
+    src: docker-compose.yml.j2
+    dest: "{{ residuum_compose_dir }}/docker-compose.yml"
+    owner: root
+    group: root
+    mode: "0600"
+  notify: Restart foundation-residuum
+
+- name: Deploy foundation-residuum.service
+  ansible.builtin.template:
+    src: foundation-residuum.service.j2
+    dest: "/etc/systemd/system/{{ residuum_server_unit_name }}"
+    owner: root
+    group: root
+    mode: "0644"
+  register: residuum_unit
+
+- name: Reload systemd if unit changed
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+  when: residuum_unit.changed
+
+- name: Enable and start foundation-residuum.service
+  ansible.builtin.systemd_service:
+    name: "{{ residuum_server_unit_name }}"
+    enabled: true
+    state: started
+
+# Apply any config changes (handlers) before verifying, so the probe reflects
+# the just-rendered config rather than a stale running container.
+- name: Apply pending residuum restarts before verification
+  ansible.builtin.meta: flush_handlers
+
+- name: Verify residuum container is running
+  ansible.builtin.command: >-
+    docker inspect -f '{{ "{{" }}.State.Running{{ "}}" }}' foundation-residuum
+  changed_when: false
+  register: residuum_running
+  retries: 10
+  delay: 3
+  until: residuum_running.stdout | trim == "true"
+
+# No port to probe: the gateway binds loopback INSIDE the container and nothing
+# is published, so health is read from the logs instead. "gateway listening"
+# proves config load succeeded (i.e. it did not fall into the setup wizard).
+- name: Verify gateway started (config loaded, no setup wizard)
+  ansible.builtin.command: docker logs --tail 200 foundation-residuum
+  changed_when: false
+  register: residuum_logs
+  retries: 10
+  delay: 6
+  until: "'gateway listening' in residuum_logs.stdout or 'gateway listening' in residuum_logs.stderr"
+
+# The relay is the ONLY inbound path, so a connected tunnel is what makes the
+# agent reachable from a browser at all.
+- name: Verify cloud relay tunnel connected
+  ansible.builtin.command: docker logs --tail 200 foundation-residuum
+  changed_when: false
+  register: residuum_tunnel
+  retries: 10
+  delay: 6
+  until: "'tunnel connected' in residuum_tunnel.stdout or 'tunnel connected' in residuum_tunnel.stderr"
+
+- name: Display residuum summary
+  ansible.builtin.debug:
+    msg:
+      - "=== Residuum personal agent ==="
+      - ""
+      - "Image:    {{ residuum_image }} (stock upstream — no custom build)"
+      - "State:    {{ residuum_data_dir }} (ZFS; holds workspace, memory, vectors)"
+      - "Tools:    {{ residuum_tools_dir }} (read-only mount, on the agent's PATH)"
+      - "Main:     {{ residuum_model_main }}"
+      - "Cheap:    {{ residuum_model_flash }}  |  Embedding: {{ residuum_model_embedding }}"
+      - "Access:   via Cloud relay only — no published port, no ingress rule"
+      - "Unit:     {{ residuum_server_unit_name }}"
