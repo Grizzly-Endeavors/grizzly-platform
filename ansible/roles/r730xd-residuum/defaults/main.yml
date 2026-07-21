@@ -11,8 +11,9 @@
 # and publishes NO ports — there is no LAN listener and no ingress DNAT rule.
 #
 # Capability boundary: the agent mutates the platform through IaC only —
-# edit repo files -> commit -> push branch -> open PR. A human merges; Flux/CI
-# applies. Its GitHub token is PR-scoped (no merge/admin).
+# edit repo files -> commit -> push branch -> open PR. Every change lands as a
+# PR (a durable record), but the agent's token CAN merge its own, and Flux
+# reconciles on merge — so a merge is an apply to the live cluster.
 
 # Image (pinned — bump on each residuum release; see docs/runbooks/residuum.md)
 residuum_image: "ghcr.io/grizzly-endeavors/residuum:2026.07.20-2"

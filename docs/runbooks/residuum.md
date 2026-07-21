@@ -63,7 +63,9 @@ Check for `tunnel connected`. If absent, the relay token is bad or the relay is 
 `docker exec foundation-residuum sh -c 'echo $PATH; which gh kubectl flux bao uv'`. If the mount is missing, check `/opt/residuum-tools` exists on the host and the compose volume line is present.
 
 **Agent can't open a PR.**
-The token is PR-scoped by design (Contents + Pull requests, no merge/admin). Failure to *merge* is expected behaviour, not a bug. Failure to *push a branch* means the token or `GH_TOKEN`/`GITHUB_TOKEN` env is wrong.
+Failure to push a branch means the token or the `GH_TOKEN`/`GITHUB_TOKEN` env is wrong. The token is org-wide and can also merge, so a merge failure is a real fault (or branch protection), not expected behaviour.
+
+**Backing out a change the agent made.** Every mutation is a merged PR, so recovery is `git revert` on the merge commit, push, and let Flux reconcile — check `flux get kustomizations` afterwards. Find recent agent activity with `gh pr list --author <agent-account> --state merged`.
 
 **Settings changed in the web UI reverted.**
 Expected. `config.toml` and `providers.toml` are Ansible-owned; the next playbook run re-templates them. Change them in `ansible/roles/r730xd-residuum/` instead.
@@ -82,5 +84,5 @@ The unit guards on the ZFS mount (`RequiresMountsFor`), so it refuses to start o
 
 - The web UI has **no local authentication**. The only protections are (a) loopback bind + no published port, and (b) the relay's own auth. **Never add a `ports:` mapping** to the compose file — that would expose an unauthenticated console onto an agent holding platform credentials.
 - The tools volume is mounted read-only so the agent cannot rewrite its own toolbox. It *can* still write to `~/.residuum/bin` on the state volume.
-- Mutation is PR-only. Keep branch protection requiring review on default branches — that is what makes the boundary real rather than advisory.
+- Mutation goes through PRs, but the agent can merge its own and Flux applies on merge — it can change production unattended. The safety property is *traceability*, not prevention: every change is a PR you can find and revert. See "Backing out a change the agent made" above.
 - Rotating a credential: update OpenBao, then re-run the playbook (re-renders `residuum.env`) and restart.

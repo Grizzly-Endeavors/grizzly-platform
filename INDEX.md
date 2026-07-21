@@ -54,7 +54,7 @@ Self-hosted ntfy — a shared platform push-notification service. Any app publis
 - **Code:** `kubernetes/infrastructure/ntfy/` + `kubernetes/clusters/grizzly-platform/ntfy.yaml`.
 
 ### Assistant (Residuum)
-Residuum personal agent on the R730xd — a first-party AI assistant that helps operate the platform. Runs the **stock** upstream image (no custom build) as a systemd-managed compose service; external CLIs come from a read-only tools volume on its PATH, so adding a tool needs no rebuild. Browser access is via residuum's outbound Cloud relay only — no published port, no ingress rule. It changes the platform by opening PRs (PR-scoped token; a human merges).
+Residuum personal agent on the R730xd — a first-party AI assistant that helps operate the platform. Runs the **stock** upstream image (no custom build) as a systemd-managed compose service; external CLIs come from a read-only tools volume on its PATH, so adding a tool needs no rebuild. Browser access is via residuum's outbound Cloud relay only — no published port, no ingress rule. It changes the platform through PRs and can merge its own, with Flux applying on merge — so every change is recorded and revertable, but it can reach production unattended.
 - **Why:** [ADR-062](docs/decisions/062-residuum-platform-assistant.md).
 - **How:** [runbooks/residuum.md](docs/runbooks/residuum.md) (deploy/upgrade, health, adding tools, recovery).
 - **Code:** `ansible/playbooks/deploy-residuum.yml` + `ansible/roles/r730xd-residuum/`.
