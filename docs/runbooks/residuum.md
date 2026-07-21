@@ -62,8 +62,19 @@ Check for `tunnel connected`. If absent, the relay token is bad or the relay is 
 **Agent can't run a tool.**
 `docker exec foundation-residuum sh -c 'echo $PATH; which gh kubectl flux bao uv'`. If the mount is missing, check `/opt/residuum-tools` exists on the host and the compose volume line is present.
 
-**Agent can't open a PR.**
-Failure to push a branch means the token or the `GH_TOKEN`/`GITHUB_TOKEN` env is wrong. The token is org-wide and can also merge, so a merge failure is a real fault (or branch protection), not expected behaviour.
+**Agent says it "can't access GitHub" / can't push.**
+Check git's credential helper *before* suspecting the token — `gh` and `git` authenticate differently, and `GH_TOKEN` only covers `gh`. Git never reads it, so a broken helper degrades to "public repos read fine, everything else fails":
+
+```bash
+docker exec foundation-residuum sh -c 'gh auth status'                  # gh path
+docker exec foundation-residuum sh -c 'git config --get credential.https://github.com.helper'
+docker exec foundation-residuum sh -c 'printf "protocol=https\nhost=github.com\n\n" | git credential fill | grep "^username="'
+```
+
+The last command must print `username=x-access-token`. If the helper is empty, `GIT_CONFIG_GLOBAL` isn't set or `/mnt/zfs/foundation/residuum/gitconfig` is missing — re-run the playbook. Note the gitconfig **must** live on the state volume: only `/home/residuum/.residuum` is persistent; a `~/.gitconfig` sits on the container's ephemeral overlay and disappears on recreation.
+
+**Agent can't merge a PR.**
+The token is org-wide and can merge, so a merge failure is a real fault (or branch protection), not expected behaviour.
 
 **Backing out a change the agent made.** Every mutation is a merged PR, so recovery is `git revert` on the merge commit, push, and let Flux reconcile — check `flux get kustomizations` afterwards. Find recent agent activity with `gh pr list --author <agent-account> --state merged`.
 

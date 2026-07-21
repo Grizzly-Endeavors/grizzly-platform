@@ -44,6 +44,17 @@
     mode: "0644"
   notify: Restart foundation-residuum
 
+# Must live on the state volume: the container home is an ephemeral overlay,
+# so a ~/.gitconfig would be lost on recreation. Reached via GIT_CONFIG_GLOBAL.
+- name: Deploy residuum gitconfig (git credential helper for the IaC workflow)
+  ansible.builtin.template:
+    src: gitconfig.j2
+    dest: "{{ residuum_data_dir }}/gitconfig"
+    owner: "1000"
+    group: "1000"
+    mode: "0644"
+  notify: Restart foundation-residuum
+
 - name: Deploy residuum secrets env file
   ansible.builtin.template:
     src: residuum.env.j2
@@ -117,6 +128,19 @@
   retries: 10
   delay: 6
   until: "'tunnel connected' in residuum_tunnel.stdout or 'tunnel connected' in residuum_tunnel.stderr"
+
+# Proves the agent can actually PUSH, not merely read public repos. Setting
+# GH_TOKEN authenticates `gh` but does nothing for `git`, so without the
+# credential helper this silently degrades to "public reads only" and the whole
+# IaC workflow fails at push time. Greps for the username line so the token
+# never reaches Ansible's output.
+- name: Verify git can authenticate to GitHub (credential helper wired)
+  ansible.builtin.command: >-
+    docker exec foundation-residuum sh -c
+    'printf "protocol=https\nhost=github.com\n\n" | git credential fill | grep -c "^username="'
+  changed_when: false
+  register: residuum_git_cred
+  failed_when: residuum_git_cred.stdout | trim != "1"
 
 - name: Display residuum summary
   ansible.builtin.debug:
