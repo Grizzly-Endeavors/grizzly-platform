@@ -1,0 +1,80 @@
+---
+# deploy-residuum.yml — Deploy the Residuum personal agent to the R730xd
+#
+# Residuum is a personal AI agent that helps operate this platform. It runs the
+# STOCK upstream image (ghcr.io/grizzly-endeavors/residuum) so the deployment
+# tracks releases directly — there is no custom image to maintain. External
+# CLIs reach the agent through residuum's [tools] PATH mechanism from a
+# read-only tools volume, so adding a tool never requires an image rebuild.
+#
+# Why the R730xd and not K8s: it is always-on, it owns the durable-state tier
+# (ZFS), and a tool whose job is to help operate the cluster should not live
+# inside the cluster it operates.
+#
+# Access model: browser access is via residuum's OUTBOUND Cloud relay
+# (agent-residuum.com). The gateway binds loopback in-container and publishes
+# NO ports, so there is no LAN listener and no ingress DNAT rule to add.
+# This matters: the gateway has no local authentication of its own.
+#
+# Capability boundary: the agent mutates the platform through IaC only — it
+# edits repo files, commits, pushes a branch and opens a PR. A human merges and
+# Flux/CI applies. Its GitHub token is PR-scoped (Contents + Pull requests),
+# with no merge/admin rights.
+#
+# See docs/decisions/ for the ADR covering these choices.
+#
+# Prerequisites:
+#   - R730xd baseline applied (setup-r730xd.yml — installs Docker)
+#   - ZFS pool mounted (r730xd-zfs.yml)
+#   - Secrets present in OpenBao at secret/grizzly-platform/platform/residuum:
+#       ollama_api_key, gemini_api_key, cloud_token, github_token
+#
+# Usage:
+#   ansible-playbook -i ansible/inventory \
+#     ansible/playbooks/deploy-residuum.yml \
+#     -e openbao_read_enabled=true
+#
+#   Refresh just the tools volume:  ... --tags tools
+
+- name: Deploy Residuum personal agent
+  hosts: r730xd
+  become: yes
+  gather_facts: yes
+
+  # OpenBao auth defaults for community.hashi_vault lookups. Inert unless
+  # `openbao_read_enabled: true` (then openbao_secrets.yml loads in pre_tasks
+  # and defines the vault_* vars). See
+  # docs/decisions/024-platform-secrets-on-openbao.md.
+  vars_files:
+    - "{{ playbook_dir }}/../vars/openbao_auth.yml"
+
+  vars:
+    residuum_ollama_api_key: "{{ vault_residuum_ollama_api_key }}"
+    residuum_gemini_api_key: "{{ vault_residuum_gemini_api_key }}"
+    residuum_cloud_token: "{{ vault_residuum_cloud_token }}"
+    residuum_github_token: "{{ vault_residuum_github_token }}"
+
+  pre_tasks:
+    - name: Load OpenBao-sourced platform secrets
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/../vars/openbao_secrets.yml"
+      when: openbao_read_enabled | default(false) | bool
+      tags: [always]
+
+    - name: Verify ZFS pool is mounted
+      ansible.builtin.command: findmnt /mnt/zfs
+      changed_when: false
+      failed_when: zfs_check.rc != 0
+      register: zfs_check
+      tags: [always]
+
+    - name: Verify Docker is running
+      ansible.builtin.command: docker info
+      changed_when: false
+      failed_when: docker_check.rc != 0
+      register: docker_check
+      tags: [always]
+
+  roles:
+    - role: r730xd-residuum
+      tags: [residuum]

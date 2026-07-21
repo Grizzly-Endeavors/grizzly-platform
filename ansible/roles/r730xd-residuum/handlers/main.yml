@@ -1,0 +1,7 @@
+---
+- name: Restart foundation-residuum
+  ansible.builtin.systemd_service:
+    name: "{{ residuum_server_unit_name }}"
+    state: restarted
+    daemon_reload: true
+  listen: Restart foundation-residuum

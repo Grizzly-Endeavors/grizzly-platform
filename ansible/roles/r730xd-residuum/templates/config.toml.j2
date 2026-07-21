@@ -1,0 +1,33 @@
+# Managed by Ansible — r730xd-residuum role.
+#
+# Seeded onto the state volume BEFORE first start. Residuum's bootstrap only
+# writes these files when absent, so this template wins and the interactive
+# setup wizard never runs.
+#
+# Secrets are referenced as ${ENV_VAR} and resolved at load time from
+# residuum.env — no secret material lives in this file.
+
+# REQUIRED — residuum refuses to boot without a timezone.
+timezone = "{{ residuum_timezone }}"
+
+[gateway]
+bind = "{{ residuum_gateway_bind }}"
+port = {{ residuum_gateway_port }}
+
+# Cloud relay — the only inbound path to this agent. The [cloud] table must be
+# PRESENT for the tunnel to start, even though the token comes from the env.
+[cloud]
+enabled = true
+token = "${RESIDUUM_CLOUD_TOKEN}"
+relay_url = "{{ residuum_relay_url }}"
+local_port = {{ residuum_gateway_port }}
+
+# Runtime-extensible tool PATH (residuum #111). Entries are prepended to the
+# PATH of every child residuum spawns (exec tool + MCP stdio servers), ahead of
+# the always-present ~/.residuum/bin. Adding a CLI is a file drop into
+# {{ residuum_tools_dir }} on the host — no image rebuild.
+[tools]
+path = ["{{ residuum_tools_dir }}"]
+
+[pulse]
+enabled = true

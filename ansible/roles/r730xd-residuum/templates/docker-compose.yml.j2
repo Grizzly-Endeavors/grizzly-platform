@@ -1,0 +1,35 @@
+# Managed by Ansible — r730xd-residuum role
+# Residuum personal agent (stock upstream image).
+#
+# Lifecycle is owned by {{ residuum_server_unit_name }} (systemd), which invokes
+# `docker compose up -d` after the ZFS mount is present. Do not
+# `docker compose down` directly; use `systemctl restart {{ residuum_server_unit_name }}`.
+#
+# NO ports are published. The gateway binds loopback inside the container and
+# the only inbound path is residuum's own outbound relay tunnel. Publishing a
+# port here would expose an UNAUTHENTICATED web UI on the LAN — the gateway has
+# no local auth of its own.
+
+services:
+  residuum:
+    image: {{ residuum_image }}
+    container_name: foundation-residuum
+    restart: unless-stopped
+    env_file:
+      - residuum.env
+    environment:
+      # Override the image default of 0.0.0.0 — loopback only (see above).
+      RESIDUUM_GATEWAY_BIND: "{{ residuum_gateway_bind }}"
+      RESIDUUM_GATEWAY_PORT: "{{ residuum_gateway_port }}"
+    volumes:
+      # Entire agent state: config, secrets store, workspace (memory, skills,
+      # projects, inbox), vector db, and the writable ~/.residuum/bin tool dir.
+      - {{ residuum_data_dir }}:/home/residuum/.residuum
+      # Read-only toolbox — surfaced to spawned children via [tools].path.
+      - {{ residuum_tools_dir }}:{{ residuum_tools_dir }}:ro
+    # Stock image CMD includes --debug; drop it for a normal log level.
+    command: ["./residuum", "serve", "--foreground"]
+    logging:
+      driver: journald
+      options:
+        tag: foundation-residuum

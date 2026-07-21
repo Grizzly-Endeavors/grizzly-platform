@@ -1,0 +1,23 @@
+# Managed by Ansible — r730xd-residuum role.
+#
+# Seeded onto the state volume before first start (bootstrap writes only when
+# absent). API keys are ${ENV_VAR} references resolved from residuum.env, so no
+# secret material lives in this file.
+#
+# Split rationale: GLM-5.2 on Ollama Cloud drives the main agent loop (strong
+# tool use, 1M context). The cheap, high-frequency roles and embeddings run on
+# Google AI Studio's free tier, which keeps paid usage to the main loop only.
+# (Anthropic is not used — OAuth tokens are no longer permitted for
+# third-party software.)
+
+[providers]
+ollama-cloud = { type = "ollama", url = "{{ residuum_ollama_url }}", api_key = "${OLLAMA_API_KEY}" }
+google-ai = { type = "gemini", api_key = "${GEMINI_API_KEY}" }
+
+[models]
+main = "{{ residuum_model_main }}"
+observer = "{{ residuum_model_flash }}"
+reflector = "{{ residuum_model_flash }}"
+pulse = "{{ residuum_model_flash }}"
+subconscious = "{{ residuum_model_flash }}"
+embedding = "{{ residuum_model_embedding }}"

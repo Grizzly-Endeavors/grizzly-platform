@@ -32,6 +32,10 @@ One line per runbook. See [`README.md`](README.md) for what runbooks are and whe
 
 - [ntfy.md](ntfy.md) — self-hosted ntfy push-notification service (users, tokens, topic access, ops).
 
+## Assistant
+
+- [residuum.md](residuum.md) — Residuum platform assistant on the R730xd: deploy/upgrade, health, adding CLI tools, recovery.
+
 ## Cluster
 
 - [k8s-cluster-ops.md](k8s-cluster-ops.md) — full standup, single-node rebuild/rejoin, and version upgrade sequences.

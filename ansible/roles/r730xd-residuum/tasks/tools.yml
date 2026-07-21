@@ -1,0 +1,84 @@
+---
+# Populate the read-only tools volume consumed via residuum's [tools].path.
+#
+# Only single-file static binaries belong here — that is the whole scope of the
+# [tools] PATH mechanism. Interpreter runtimes (git, node, python) cannot be
+# supplied this way; git and ca-certificates ship in the image itself.
+#
+# Adding a future tool = add an entry here (or literally drop a binary into
+# {{ residuum_tools_dir }} on the host). No image rebuild, no redeploy: the
+# exec tool re-reads the effective PATH on every call. Only already-running MCP
+# stdio servers keep their old PATH, until they next reconnect.
+
+- name: Create residuum tools directory
+  ansible.builtin.file:
+    path: "{{ residuum_tools_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+# kubectl ships as a bare binary, not an archive.
+- name: Install kubectl into the tools dir
+  ansible.builtin.get_url:
+    url: "https://dl.k8s.io/release/{{ residuum_tool_kubectl_version }}/bin/linux/amd64/kubectl"
+    dest: "{{ residuum_tools_dir }}/kubectl"
+    checksum: "sha256:{{ residuum_tool_kubectl_sha256 }}"
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Download tool archives
+  ansible.builtin.get_url:
+    url: "{{ item.url }}"
+    dest: "/tmp/residuum-tool-{{ item.name }}.tar.gz"
+    checksum: "sha256:{{ item.sha256 }}"
+    mode: "0600"
+  loop: "{{ residuum_tool_archives }}"
+  loop_control:
+    label: "{{ item.name }} {{ item.version }}"
+
+- name: Create tool extraction directories
+  ansible.builtin.file:
+    path: "/tmp/residuum-tool-{{ item.name }}"
+    state: directory
+    mode: "0700"
+  loop: "{{ residuum_tool_archives }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Extract tool archives
+  ansible.builtin.unarchive:
+    src: "/tmp/residuum-tool-{{ item.name }}.tar.gz"
+    dest: "/tmp/residuum-tool-{{ item.name }}"
+    remote_src: true
+    creates: "/tmp/residuum-tool-{{ item.name }}/{{ item.bin_path }}"
+  loop: "{{ residuum_tool_archives }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Install tool binaries into the tools dir
+  ansible.builtin.copy:
+    src: "/tmp/residuum-tool-{{ item.name }}/{{ item.bin_path }}"
+    dest: "{{ residuum_tools_dir }}/{{ item.name }}"
+    remote_src: true
+    owner: root
+    group: root
+    mode: "0755"
+  loop: "{{ residuum_tool_archives }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Clean up tool download artifacts
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop: >-
+    {{ residuum_tool_archives
+       | map(attribute='name')
+       | map('regex_replace', '^(.*)$', '/tmp/residuum-tool-\1')
+       | list
+       + residuum_tool_archives
+       | map(attribute='name')
+       | map('regex_replace', '^(.*)$', '/tmp/residuum-tool-\1.tar.gz')
+       | list }}

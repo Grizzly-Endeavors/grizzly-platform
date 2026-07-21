@@ -86,6 +86,7 @@ One line per decision, grouped by domain. See [`README.md`](README.md) for what 
 - [038-nextcloud-on-foundation-stores-and-sso](038-nextcloud-on-foundation-stores-and-sso.md) — Nextcloud on foundation stores, S3 primary storage, Authentik SSO.
 - [053-platform-services-domain-migration](053-platform-services-domain-migration.md) — platform services migrate to grizzly-endeavors.com.
 - [061-ntfy-notification-service](061-ntfy-notification-service.md) — self-hosted ntfy as a shared platform push-notification service (deny-all + tokens, its own auth).
+- [062-residuum-platform-assistant](062-residuum-platform-assistant.md) — Residuum agent on the R730xd; stock image + runtime tools volume, relay-only access, PR-only mutation.
 
 ## Mail (Stalwart)
 
