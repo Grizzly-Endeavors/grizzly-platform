@@ -65,8 +65,13 @@ RUN curl -fsSL -o /tmp/get_helm.sh https://raw.githubusercontent.com/helm/helm/m
     /tmp/get_helm.sh && \
     rm /tmp/get_helm.sh
 
-# Node.js LTS
-RUN curl -fsSL https://deb.nodesource.com/setup_lts.x | bash - && \
+# Node.js 24 LTS (Krypton) — pinned explicitly instead of floating setup_lts.x
+# to ensure reproducible builds. GitHub Actions is deprecating Node 20 for
+# running JavaScript actions; Node 24 is the current LTS that the runner
+# enforces (since actions/runner v2.333.0). See:
+# https://github.com/actions/runner/releases (v2.332.0 deprecation warning,
+# v2.333.0 Node 24 enforcement).
+RUN curl -fsSL https://deb.nodesource.com/setup_24.x | bash - && \
     apt-get install -y -qq nodejs && \
     rm -rf /var/lib/apt/lists/*
 
