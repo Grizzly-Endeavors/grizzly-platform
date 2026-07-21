@@ -1,0 +1,33 @@
+# Managed by Ansible — r730xd-residuum role.
+#
+# Git configuration for the agent's IaC workflow (clone -> edit -> commit ->
+# push -> PR).
+#
+# Why this file exists at all: setting GH_TOKEN authenticates the `gh` CLI but
+# does NOTHING for `git` — git never reads GH_TOKEN. Without a credential
+# helper the agent can read public repos but cannot push or touch a private
+# one, which fails as a confusing "can't access GitHub".
+#
+# Why it lives HERE and not at ~/.gitconfig: only {{ residuum_container_home }}
+# is the mounted state volume. The rest of the container home is the image's
+# ephemeral overlay, so a ~/.gitconfig would silently vanish on every container
+# recreation. The container is pointed at this file via GIT_CONFIG_GLOBAL.
+#
+# No secret is stored here: the helper shells out to `gh`, which reads the
+# token from the environment (residuum.env). The gh path is absolute because
+# git may be invoked by a process whose PATH does not include the tools dir.
+
+[credential "https://github.com"]
+	helper = !{{ residuum_tools_dir }}/gh auth git-credential
+
+[user]
+	name = {{ residuum_git_author_name }}
+	email = {{ residuum_git_author_email }}
+
+[init]
+	defaultBranch = main
+
+# The agent clones into paths it does not own uniformly; keep git from
+# refusing to operate on them.
+[safe]
+	directory = *

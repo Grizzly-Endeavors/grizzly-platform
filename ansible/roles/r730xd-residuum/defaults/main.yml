@@ -16,10 +16,14 @@
 # reconciles on merge — so a merge is an apply to the live cluster.
 
 # Image (pinned — bump on each residuum release; see docs/runbooks/residuum.md)
-residuum_image: "ghcr.io/grizzly-endeavors/residuum:2026.07.20-2"
+residuum_image: "ghcr.io/grizzly-endeavors/residuum:2026.07.20-3"
 
 # Filesystem layout — state on the ZFS hot tier (all agent memory lives here)
 residuum_data_dir: "/mnt/zfs/foundation/residuum"
+# Where residuum_data_dir is mounted INSIDE the container. Only this path is
+# persistent; the rest of the container home is the image's ephemeral overlay,
+# so anything that must survive a recreation belongs under here.
+residuum_container_home: "/home/residuum/.residuum"
 residuum_compose_dir: "/opt/residuum"
 # Tools volume: mounted READ-ONLY into the container. The agent can USE these
 # binaries but cannot modify its own toolbox (it can still self-install into
