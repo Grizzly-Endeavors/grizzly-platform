@@ -62,6 +62,7 @@ One line per decision, grouped by domain. See [`README.md`](README.md) for what 
 - [031-registry-cache-persistent-pvc](031-registry-cache-persistent-pvc.md) — fix the zot dedupe-restore storm; persistent metaDB.
 - [032-registry-pullthrough-cache](032-registry-pullthrough-cache.md) — transparent pull-through cache on the zot registry.
 - [057-container-builds-buildkit](057-container-builds-buildkit.md) — Kaniko → BuildKit for image builds.
+- [063-gate-runs-in-cluster](063-gate-runs-in-cluster.md) — the CI gate runs as a K8s Job (containerd-cached image, cosign key off the runners).
 
 ## Secrets
 

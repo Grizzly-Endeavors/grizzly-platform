@@ -1,0 +1,44 @@
+# RBAC for the CI gate's in-cluster execution (ADR-063). The reusable gate
+# workflow (.github/workflows/gate.yaml) runs on a runner pod and uses kubectl
+# with the runner's own ServiceAccount token to create a gate Job in this
+# namespace, watch its pod, and stream its logs.
+#
+# Deliberately NOT granted: secrets access. The gate Job's pod references the
+# cosign-signing-key and sccache-s3-credentials secrets itself; the runner only
+# submits the Job manifest. Note the residual exposure: job-create permission
+# in a namespace is effectively read access to that namespace's secrets (a
+# crafted Job could mount any of them), so this is a workflow-hygiene boundary,
+# not a hard one — acceptable single-tenant, revisit with a dedicated gate
+# namespace + admission policy if the runner pool ever runs untrusted code.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: gate-job-runner
+  namespace: arc-runners
+rules:
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["create", "get", "list", "watch", "delete"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: gate-job-runner
+  namespace: arc-runners
+subjects:
+  # The ServiceAccount the gha-runner-scale-set chart assigns to runner pods.
+  # Chart-derived name: <runnerScaleSetName>-gha-rs-no-permission — tracks
+  # runnerScaleSetName in runner-scale-set-helmrelease.yaml.
+  - kind: ServiceAccount
+    name: lab-runners-gha-rs-no-permission
+    namespace: arc-runners
+roleRef:
+  kind: Role
+  name: gate-job-runner
+  apiGroup: rbac.authorization.k8s.io

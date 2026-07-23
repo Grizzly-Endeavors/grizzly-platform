@@ -11,7 +11,7 @@ registry: [ADR-027](../decisions/027-registry-zot.md).
 |---|---|
 | Gate image + harness | external repo [grizzly-gate](https://github.com/Grizzly-Endeavors/grizzly-gate) (Dockerfile, `config/` tree, `harness/`) |
 | Gate build | `kubernetes/infrastructure/argo-workflows/build-gate-image.yaml` (clones grizzly-gate) + the gate repo's own `.github/workflows/build-gate-image.yaml` |
-| Reusable CI job | `.github/workflows/gate.yaml` (called by apps; see `.github/templates/ci/deploy-with-gate.yaml.example`) |
+| Reusable CI job | `.github/workflows/gate.yaml` (called by apps; see `.github/templates/ci/deploy-with-gate.yaml.example`). Runs the gate as a K8s Job in `arc-runners` ([ADR-063](../decisions/063-gate-runs-in-cluster.md)): the runner tars the checkout to the `build-cache` bucket, submits the Job, streams its logs. Node containerd caches the gate image across runs. |
 | Signing key | OpenBao `secret/grizzly-platform/cicd/cosign`; ESO → `cosign-signing-key` in `arc-runners` |
 | Deploy boundary | `kubernetes/infrastructure/kyverno/` + `kubernetes/infrastructure/kyverno-policies/` |
 | Registry | zot, `kubernetes/infrastructure/registry/` |
@@ -157,8 +157,10 @@ rejected the repo. Common messages and fixes:
 - `declared <lang> project has no <marker>` / `invalid path` / `tsconfig is only
   valid for node` — the declaration is malformed; fix the offending `projects[i]`.
 
-**Gate job errors with "cosign signing material not present" →** the
-`cosign-signing-key` secret isn't synced. Check ESO:
+**Gate job errors with "gate pod cannot start: CreateContainerConfigError" →**
+the gate Job's pod couldn't resolve a secret ref — usually `cosign-signing-key`
+(or `sccache-s3-credentials` for the source-fetch init container) isn't synced.
+Check ESO:
 ```sh
 kubectl -n arc-runners get externalsecret cosign-signing-key
 kubectl -n arc-runners describe externalsecret cosign-signing-key   # SecretSynced?
@@ -191,8 +193,11 @@ alert covers this.
   `ansible/roles/r730xd-prometheus`.
 - **Alerts:** `ZotRegistryDown` (critical), `KyvernoDown` (critical — blocks
   admission), `GateSignatureVerificationFailing` (warning).
-- **Logs:** gate → CI run logs; Kyverno decisions → `kubectl -n kyverno logs` +
-  Pod events on denied workloads; zot → `kubectl -n registry logs`.
+- **Logs:** gate → CI run logs (streamed from the gate Job's pod); the Job
+  itself survives an hour after finishing (`ttlSecondsAfterFinished`) for
+  `kubectl -n arc-runners logs job/gate-<repo>-<run>-<attempt>`; Kyverno
+  decisions → `kubectl -n kyverno logs` + Pod events on denied workloads;
+  zot → `kubectl -n registry logs`.
 - **Dependencies:** gate needs runners + zot + (to sign) OpenBao/ESO; Kyverno needs
   the cosign public key in-policy and reachable zot. The deploy boundary depends on
   Kyverno being up.

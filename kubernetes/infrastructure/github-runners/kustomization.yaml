@@ -8,3 +8,4 @@ resources:
   - metrics-service.yaml
   - network-policy.yaml
   - limitrange.yaml
+  - gate-job-rbac.yaml
