@@ -2,12 +2,21 @@ name: CI Gate
 
 # Reusable workflow: any repo in the grizzly-endeavors org calls this after it
 # has built and pushed its image (by digest) to the in-cluster zot registry.
-# The gate pulls the centrally-owned grizzly-gate image and runs it against the
-# source + built image: language adapters, SAST/secret/dependency scan, and an
-# image SBOM/CVE scan. On pass — and ONLY on pass — the gate cosign-signs the
-# image digest. That signature is what the Kyverno deploy boundary verifies
+# The gate runs as a Kubernetes Job in the arc-runners namespace — NOT as a
+# `docker run` inside the runner's DinD sidecar — so the ~1.4GB (compressed)
+# gate image is cached by node containerd across runs instead of being pulled
+# and extracted into an ephemeral DinD store on every single gate invocation
+# (ADR-063). The runner step tars the checkout to the build-cache bucket on
+# versitygw, creates the Job, streams its logs, and mirrors its verdict.
+#
+# The Job runs the gate against the source + built image: language adapters,
+# SAST/secret/dependency scan, and an image SBOM/CVE scan. On pass — and ONLY
+# on pass — the gate cosign-signs the image digest. That signature is what the
+# Kyverno deploy boundary verifies
 # (kubernetes/infrastructure/kyverno-policies/verify-gate-signature.yaml), so a
-# green gate is what lets an agent ship without manual review.
+# green gate is what lets an agent ship without manual review. The cosign key
+# reaches only the gate Job's pod (secret ref in arc-runners); it is not
+# exposed to workflow steps on the runners.
 #
 # Caller shape:
 #   jobs:
@@ -40,6 +49,11 @@ on:
         default: "lab-runners"
         type: string
 
+env:
+  GATE_NAMESPACE: arc-runners
+  S3_ENDPOINT: http://10.0.0.200:7072
+  S3_BUCKET: build-cache
+
 jobs:
   gate:
     runs-on: ${{ inputs.runs_on }}
@@ -47,34 +61,188 @@ jobs:
       - name: Checkout source
         uses: actions/checkout@v4
 
-      - name: Run grizzly-gate
+      - name: Compute job identity
+        id: ident
+        run: |
+          set -euo pipefail
+          # DNS-1123 job name, unique per run+attempt so concurrent gates and
+          # re-runs never collide.
+          repo=$(echo "${GITHUB_REPOSITORY#*/}" | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9-' | cut -c1-30)
+          echo "job=gate-${repo}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload source tarball to versitygw
+        env:
+          JOB: ${{ steps.ident.outputs.job }}
+        run: |
+          set -euo pipefail
+          # The gated repos are private, so the Job cannot clone; hand it the
+          # exact tree CI checked out. The runner pods already carry the
+          # build-cache S3 credentials (sccache uses the same bucket), and
+          # curl's sigv4 support signs the request — no extra CLI needed.
+          tar czf /tmp/gate-src.tar.gz .
+          curl -fsS --aws-sigv4 "aws:amz:us-east-1:s3" \
+            --user "${AWS_ACCESS_KEY_ID}:${AWS_SECRET_ACCESS_KEY}" \
+            -T /tmp/gate-src.tar.gz \
+            "${S3_ENDPOINT}/${S3_BUCKET}/gate-src/${JOB}.tar.gz"
+
+      - name: Run grizzly-gate as an in-cluster Job
         env:
           GATE_IMAGE: registry.registry.svc.cluster.local:5000/grizzly-gate:${{ inputs.gate_version }}
           TARGET_IMAGE: ${{ inputs.image }}
+          JOB: ${{ steps.ident.outputs.job }}
         run: |
           set -euo pipefail
-          if [ -z "${COSIGN_PRIVATE_KEY:-}" ] || [ -z "${COSIGN_PASSWORD:-}" ]; then
-            echo "::error::cosign signing material not present on the runner."
-            echo "Expected COSIGN_PRIVATE_KEY + COSIGN_PASSWORD env (synced from OpenBao"
-            echo "to arc-runners via ESO and exposed on the runner pod). See docs/runbooks/ci-gate.md."
+          # backoffLimit 0: a gate verdict must not be retried into a pass.
+          # ttlSecondsAfterFinished keeps the Job around an hour for postmortem
+          # (kubectl logs), then GCs it — the workflow does not delete it.
+          # imagePullPolicy Always is still fast warm: containerd re-resolves
+          # the tag (cheap HEAD against zot) and pulls only missing layers, so
+          # pinned tags hit the node cache and `latest` users stay current.
+          cat > /tmp/gate-job.yaml <<EOF
+          apiVersion: batch/v1
+          kind: Job
+          metadata:
+            name: ${JOB}
+            namespace: ${GATE_NAMESPACE}
+            labels:
+              app.kubernetes.io/name: gate-run
+          spec:
+            backoffLimit: 0
+            activeDeadlineSeconds: 1800
+            ttlSecondsAfterFinished: 3600
+            template:
+              metadata:
+                labels:
+                  app.kubernetes.io/name: gate-run
+              spec:
+                restartPolicy: Never
+                initContainers:
+                  - name: fetch-src
+                    # Pinned for reproducibility; bump deliberately (check
+                    # https://hub.docker.com/r/curlimages/curl/tags).
+                    image: curlimages/curl:8.21.0
+                    command: ["sh", "-ec"]
+                    args:
+                      - |
+                        curl -fsS --aws-sigv4 "aws:amz:us-east-1:s3" \
+                          --user "\${AWS_ACCESS_KEY_ID}:\${AWS_SECRET_ACCESS_KEY}" \
+                          -o /handoff/src.tar.gz \
+                          "${S3_ENDPOINT}/${S3_BUCKET}/gate-src/${JOB}.tar.gz"
+                    env:
+                      - name: AWS_ACCESS_KEY_ID
+                        valueFrom:
+                          secretKeyRef:
+                            name: sccache-s3-credentials
+                            key: accesskey
+                      - name: AWS_SECRET_ACCESS_KEY
+                        valueFrom:
+                          secretKeyRef:
+                            name: sccache-s3-credentials
+                            key: secretkey
+                    volumeMounts:
+                      - name: handoff
+                        mountPath: /handoff
+                containers:
+                  - name: gate
+                    image: ${GATE_IMAGE}
+                    imagePullPolicy: Always
+                    command: ["sh", "-ec"]
+                    args:
+                      - |
+                        mkdir -p /work/src
+                        tar xzf /handoff/src.tar.gz -C /work/src
+                        cd /work
+                        exec /usr/local/bin/grizzly-gate \
+                          --source /work/src \
+                          --image "\${TARGET_IMAGE}" \
+                          --sign \
+                          --cosign-key env://COSIGN_PRIVATE_KEY \
+                          --insecure-registry \
+                          --report-dir /work/grizzly-gate-report
+                    env:
+                      - name: TARGET_IMAGE
+                        value: "${TARGET_IMAGE}"
+                      - name: COSIGN_PRIVATE_KEY
+                        valueFrom:
+                          secretKeyRef:
+                            name: cosign-signing-key
+                            key: cosign.key
+                      - name: COSIGN_PASSWORD
+                        valueFrom:
+                          secretKeyRef:
+                            name: cosign-signing-key
+                            key: cosign.password
+                    resources:
+                      requests:
+                        cpu: "4"
+                        memory: 8Gi
+                      limits:
+                        cpu: "8"
+                        memory: 16Gi
+                    volumeMounts:
+                      - name: handoff
+                        mountPath: /handoff
+                      - name: work
+                        mountPath: /work
+                volumes:
+                  - name: handoff
+                    emptyDir: {}
+                  - name: work
+                    emptyDir: {}
+          EOF
+          kubectl apply -f /tmp/gate-job.yaml
+
+          # Wait for the pod to reach a loggable state. A pod stuck in a config
+          # error (e.g. the cosign secret is missing from the namespace — see
+          # docs/runbooks/ci-gate.md) is surfaced here instead of silently
+          # burning the Job's activeDeadline.
+          pod=""
+          for i in $(seq 1 90); do
+            pod=$(kubectl get pods -n "$GATE_NAMESPACE" -l "job-name=${JOB}" \
+              -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
+            if [ -n "$pod" ]; then
+              phase=$(kubectl get pod -n "$GATE_NAMESPACE" "$pod" -o jsonpath='{.status.phase}')
+              case "$phase" in Running|Succeeded|Failed) break ;; esac
+              waiting=$(kubectl get pod -n "$GATE_NAMESPACE" "$pod" \
+                -o jsonpath='{.status.initContainerStatuses[*].state.waiting.reason}{" "}{.status.containerStatuses[*].state.waiting.reason}' 2>/dev/null || true)
+              case "$waiting" in
+                *CreateContainerConfigError*|*ErrImagePull*|*ImagePullBackOff*)
+                  echo "::error::gate pod cannot start: ${waiting} — check secrets/image in ${GATE_NAMESPACE} (docs/runbooks/ci-gate.md)"
+                  kubectl describe pod -n "$GATE_NAMESPACE" "$pod" | tail -20
+                  exit 1 ;;
+              esac
+            fi
+            sleep 2
+          done
+          if [ -z "$pod" ]; then
+            echo "::error::gate pod never appeared for job ${JOB}"
             exit 1
           fi
 
-          docker pull "$GATE_IMAGE"
+          # Stream the gate's output into the CI log, then read the verdict
+          # from the Job status (log streaming can drop; the status is the
+          # source of truth).
+          kubectl logs -n "$GATE_NAMESPACE" -f "$pod" --all-containers=true || true
+          for i in $(seq 1 900); do
+            cond=$(kubectl get job -n "$GATE_NAMESPACE" "$JOB" \
+              -o jsonpath='{.status.conditions[?(@.status=="True")].type}')
+            case "$cond" in
+              *Complete*) echo "gate job succeeded"; exit 0 ;;
+              *Failed*)   echo "::error::gate failed — image NOT signed"; exit 1 ;;
+            esac
+            sleep 2
+          done
+          echo "::error::timed out waiting for gate job ${JOB} to reach a terminal state"
+          exit 1
 
-          # Source is on the shared `work` volume, also mounted into the DinD
-          # sidecar, so the bind mount resolves. The gate reaches zot via
-          # cluster DNS through DinD (same path the runners push images on).
-          docker run --rm \
-            -v "$PWD:/src" \
-            -e COSIGN_PRIVATE_KEY \
-            -e COSIGN_PASSWORD \
-            "$GATE_IMAGE" \
-            --source /src \
-            --image "$TARGET_IMAGE" \
-            --sign \
-            --cosign-key env://COSIGN_PRIVATE_KEY \
-            --insecure-registry
+      - name: Clean up source tarball
+        if: always()
+        env:
+          JOB: ${{ steps.ident.outputs.job }}
+        run: |
+          curl -fsS -X DELETE --aws-sigv4 "aws:amz:us-east-1:s3" \
+            --user "${AWS_ACCESS_KEY_ID}:${AWS_SECRET_ACCESS_KEY}" \
+            "${S3_ENDPOINT}/${S3_BUCKET}/gate-src/${JOB}.tar.gz" || true
 
       - name: Gate summary
         if: always()
