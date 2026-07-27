@@ -55,6 +55,7 @@ All four nodes are live on v1.33.10. Cilium CNI, Flux GitOps.
 | Network | `{{ intel_nuc_ip }}` |
 | Role | K8s worker |
 | Boot | Local disk |
+| Power restore | BIOS → Power → **After Power Failure: Power On**. Manual setting — the NUC has no BMC, so it can't be managed with IaC and doesn't survive a BIOS reset. Without it this is the one node that stays down after a power cut while the rest of the cluster returns on its own. |
 
 ### optiplex — Worker
 
