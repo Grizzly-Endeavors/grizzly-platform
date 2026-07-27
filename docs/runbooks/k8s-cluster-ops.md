@@ -30,6 +30,32 @@ Each playbook's own header states its specific prerequisites and verification co
 
 There is no dedicated node-removal playbook. Draining and removing a node is the standard manual `kubectl drain <node> --ignore-daemonsets --delete-emptydir-data` + `kubectl delete node <node>` + `kubeadm reset` on the node itself.
 
+## A node is down and its workloads are stuck
+
+When a node stops answering, Kubernetes evicts its pods but cannot finish: a delete completes only once a kubelet confirms the kill, so every pod on that node hangs in `Terminating` — still reporting `Running`, still holding its old pod IP — for as long as the node stays down. Anything with a finalizer waiting on those pods (an Agones `GameServer`, a PVC behind `pvc-protection`) is pinned with them, and an RWO volume stays attached to the dead node until its pod object is actually gone.
+
+Confirm that's the shape before acting:
+
+```bash
+kubectl get nodes                                   # the node reads NotReady
+kubectl get pods -A --field-selector spec.nodeName=<node>
+kubectl get pods -A -o json | jq -r '.items[] | select(.metadata.deletionTimestamp) | "\(.metadata.namespace)/\(.metadata.name) \(.metadata.deletionTimestamp)"'
+```
+
+**If the node can come back, bring it back** — that resolves everything on its own. The kubelet reaps the stranded pods within seconds of booting.
+
+**If it can't come back soon**, apply the non-graceful-shutdown taint. This is the sanctioned path: it force-deletes the node's pods *and* detaches their volumes, so RWO workloads can reschedule elsewhere.
+
+```bash
+kubectl taint node <node> node.kubernetes.io/out-of-service=nodeshutdown:NoExecute
+# ...once the node is genuinely back and Ready:
+kubectl taint node <node> node.kubernetes.io/out-of-service=nodeshutdown:NoExecute-
+```
+
+Only apply it to a node you have confirmed is actually down. On a node that is merely partitioned, its workloads may still be running and writing, and force-detaching a volume out from under a live writer is how filesystems get corrupted.
+
+`grizzly-gameservers` recovers its own game servers without this taint — it force-deletes the stranded pod inside its namespace instead, deliberately, so the bot never needs cluster-scoped node permissions ([its ADR-009](https://github.com/Grizzly-Endeavors/grizzly-gameservers/blob/main/docs/decisions/009-stranded-instance-recovery.md)). Other namespaces have no such reconciler, so the taint is the tool for everything else.
+
 ## Upgrading the cluster version
 
 `ansible-playbook ansible/playbooks/upgrade-k8s-cluster.yml` — control plane first, then workers one at a time (`serial: 1`). Update `kubernetes_version` in `ansible/inventory/group_vars/k8s_cluster/k8s.yml` and `cilium_version` in `ansible/roles/k8s-cilium/defaults/main.yml` first; see the playbook's own header for the full prerequisite/verification list. Single control plane means brief API downtime during the control-plane play.
