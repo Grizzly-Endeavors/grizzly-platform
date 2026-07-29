@@ -42,6 +42,29 @@ Publish check (with the token):
 curl -H "Authorization: Bearer tk_xxxxxxxx" -d "hello" https://ntfy.grizzly-endeavors.com/chores
 ```
 
+## Alertmanager → phone for critical alerts
+
+Discord carries every Alertmanager alert, but it is easy to miss, so `severity: critical` also pushes here. Alertmanager posts its own JSON schema, and ntfy renders it with the built-in **`alertmanager`** template (`?template=alertmanager`) so the push reads as a summary rather than raw JSON.
+
+The identity and topic:
+
+```fish
+set POD (kubectl -n ntfy get pod -l app.kubernetes.io/name=ntfy -o name)
+kubectl -n ntfy exec $POD -- ntfy user add alertmanager        # NTFY_PASSWORD=… for non-interactive
+kubectl -n ntfy exec $POD -- ntfy access alertmanager 'platform-critical' rw
+kubectl -n ntfy exec $POD -- ntfy token add alertmanager
+bao kv put secret/grizzly-platform/observability/ntfy-critical token=tk_xxxxxxxx
+```
+
+Alertmanager reads that token via `vault_monitoring_ntfy_critical_token` and renders the receiver in `r730xd-prometheus`. Critical alerts route to a receiver holding **both** Discord and ntfy — not `continue: true`, because once a child route matches, the parent's receiver never fires. An empty token disables the route, leaving Discord-only as a valid configuration.
+
+Verify routing without sending anything:
+
+```fish
+amtool config routes test --config.file=/opt/observability/prometheus/alertmanager.yml severity=critical alertname=OpenbaoUnavailable   # -> critical
+amtool config routes test --config.file=/opt/observability/prometheus/alertmanager.yml severity=warning alertname=ContainerMemoryHigh   # -> default
+```
+
 ## Operational readiness
 
 - **Health:** `GET /v1/health`; the Deployment's readiness/liveness probes hit it. `kubectl -n ntfy get pods`.

@@ -33,6 +33,9 @@ obs_s3_secret_key: "{{ vault_obs_s3_secret_key }}"
 # Alerting — Discord webhook for Alertmanager notifications
 monitoring_discord_webhook_url: "{{ vault_monitoring_discord_webhook_url }}"
 
+# Alerting — ntfy publish token for severity=critical phone pushes
+monitoring_ntfy_critical_token: "{{ vault_monitoring_ntfy_critical_token }}"
+
 # Flux CD — Discord webhook for GitOps reconciliation alerts (separate channel)
 flux_discord_webhook_url: "{{ vault_flux_discord_webhook_url }}"
 

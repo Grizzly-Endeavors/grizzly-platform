@@ -102,3 +102,10 @@ prometheus_k8s_apiserver_target: ""
 # Alertmanager — webhook receiver (optional)
 # Set monitoring_alert_webhook_url in group_vars to enable
 # monitoring_alert_webhook_url: "https://ntfy.example.com/platform-alerts"
+
+# Alertmanager — ntfy push for severity=critical, on top of the Discord trail.
+# Discord is easy to miss; anything paging-worthy also goes to a phone. Empty
+# token disables the route, so Discord-only stays a valid configuration.
+monitoring_ntfy_url: "https://ntfy.grizzly-endeavors.com"
+monitoring_ntfy_critical_topic: "platform-critical"
+monitoring_ntfy_critical_token: ""
