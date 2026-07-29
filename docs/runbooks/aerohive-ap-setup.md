@@ -66,7 +66,7 @@ render ansible/files/aerohive/ap130.hiveos | ssh $LEGACY admin@<ap130-ip>
 Notes:
 - The `sed` delimiter is `|` (not `/`) so PSKs/secrets containing a `/` don't break substitution; if a value contains a literal `|`, pick another delimiter.
 - Reuse the **same** SSIDs, PSKs, and `HIVEPW` for both APs — that's what makes them one roaming network.
-- This paste tags the **trusted** SSID onto VLAN 30 and leaves the existing SSID on native VLAN 1 (the `restricted-up` / `home-sec` binding lines are commented — that's the go-live step below). Each script ends with `save config`. Confirm with `show run` / `show ssid`.
+- This paste tags the **house** SSID onto VLAN 20 and the **trusted** SSID onto VLAN 30. Each script ends with `save config`. Confirm with `show run` / `show ssid`.
 
 ## Step 3 — Verify (per AP)
 
@@ -97,16 +97,19 @@ Rotating the Aerohive admin password off the `admin`/`aerohive` default is worth
 - **AP130 config apply needs `expect`** — the AP130's old HiveOS SSH takes an interactive `-tt` **`show`** session fine, but drops a **piped `-tt` config stream right after login** (and a no-PTY pipe hits `tcgetattr: Invalid argument`). Drive multi-line config changes on the AP130 with an `expect` script: send the password, wait for `#`, send each line waiting for `#`, then `save config`. The AP630 (modern SSH) accepts a piped `-tt` stream directly.
 - **"Connected, no internet" on a segmented SSID = EX50 DNS ACL** — a client that associates and gets a lease + gateway but resolves nothing is almost always missing from the EX50 DNS resolver's zone ACL (`service dns acl zone`). Factory default allows only internal/ipsec/hotspot; the `trusted`/`restricted` zones must be added (now in `config.dal.j2`). Routing/NAT being fine while DNS is blocked produces exactly this symptom.
 
-## VLAN tagging + go-live ([ADR-060](../decisions/060-downstream-wifi-segmentation.md))
+## VLAN tagging ([ADR-060](../decisions/060-downstream-wifi-segmentation.md))
 
 The APs carry two SSIDs on `mgt0` trunked to the SR2024 (native VLAN 1 untagged + tagged 20/30 — pair this with [`sr2024-vlan-trunks.md`](sr2024-vlan-trunks.md) and the EX50's `configure-ex50.yml`):
 
-- **Trusted SSID → VLAN 30** (`10.30.0.0/24`) — active as soon as the config is pasted. Personal + guest devices: internet, isolated from the platform.
-- **Existing SSID → VLAN 20** (`10.20.0.0/24`, restricted) — **deferred to go-live.** The two binding lines (`user-profile restricted-up …` + `security-object home-sec default-user-profile-attr 20`) are commented in both `.hiveos` files, so a normal paste leaves the existing SSID on native VLAN 1 exactly as before. Nobody is cut over early.
+- **House SSID → VLAN 20** (`10.20.0.0/24`, restricted) — the household's younger members. Isolated from the platform, and its internet egress is governed out-of-band rather than always-on.
+- **Trusted SSID → VLAN 30** (`10.30.0.0/24`) — personal + guest devices: internet, isolated from the platform.
 
-**Go-live** (do only once the out-of-band egress layer that governs VLAN 20 is in place, so the restricted segment isn't dark with no way back): apply those two lines to **both** APs and `save config`. From that point the existing SSID's clients re-associate into `10.20.0.0/24`.
+Both mappings come from the `user-profile … vlan-id N` + `security-object … default-user-profile-attr N` pairs in the `.hiveos` files, so a normal paste establishes them.
+
+**Both APs must carry identical mappings.** A client that associates to an AP missing the VLAN-20 binding lands on untagged native VLAN 1 — the *platform* segment — with unrestricted internet, silently outside the egress policy. After any factory reset or re-provision of a single AP, verify with `show running-config | include profile` on **both** before considering the job done:
 
 ```bash
-printf 'user-profile restricted-up vlan-id 20 attribute 20\nsecurity-object home-sec default-user-profile-attr 20\nsave config\n' | ssh admin@<ap630-ip>
-printf 'user-profile restricted-up vlan-id 20 attribute 20\nsecurity-object home-sec default-user-profile-attr 20\nsave config\n' | ssh $LEGACY admin@<ap130-ip>
+printf 'show running-config | include profile\n' | ssh admin@<ap-ip>
+# expect BOTH: user-profile restricted-up … vlan-id 20 attribute 20
+#              security-object home-sec default-user-profile-attr 20
 ```

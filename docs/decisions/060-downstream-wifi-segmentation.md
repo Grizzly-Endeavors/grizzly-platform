@@ -1,7 +1,7 @@
 # ADR-060: Downstream WiFi Segmentation — Trusted and Restricted Segments
 
 **Date:** 2026-07-09
-**Status:** Accepted (EX50 interfaces/zones live; SR2024 trunks + AP SSID tagging pending go-live)
+**Status:** Accepted — live (EX50 interfaces/zones, SR2024 trunks, and both APs' SSID→VLAN tagging all in place)
 **Relates to:** [ADR-046](046-platform-network-segmentation-via-home-eviction.md) (refines), [ADR-044](044-digi-ex50-as-off-the-shelf-router.md), [ADR-021](021-off-the-shelf-router-tower-pc-as-worker.md)
 
 ## Context
@@ -33,7 +33,8 @@ Replace ADR-046's single home subnet with **two tagged downstream WiFi VLANs**, 
 - **Delivers ADR-046's segmentation on the cheap WiFi path** — no wired VLAN surgery, no platform renumber, so no cert reissue, PV re-pointing, or Flux-literal churn.
 - **Refines, not replaces, ADR-046:** splits the single "home" subnet into trusted + restricted and adds `10.30.0.0/24`. Evicting the *wired* home drops (the consumer switch chain on SR2024 port 2) onto the restricted segment is out of scope here and remains ADR-046 future work.
 - **Two-repo firewall boundary.** This repo owns everything up to and including the zones, the isolation (free under default-deny), and the trusted-internet rule; it deliberately writes no restricted-egress rule. The index reservation plus the non-asserting apply make it safe for a separate layer to own the restricted segment's egress.
-- **Non-disruptive rollout.** The EX50 VLAN interfaces and the trusted SSID come up without moving any existing device. Moving the existing SSID onto the restricted VLAN is a deferred, commented go-live step in the AP configs, so nothing is cut over until the out-of-band egress layer is in place.
+- **Non-disruptive rollout.** The EX50 VLAN interfaces and the trusted SSID came up without moving any existing device; moving the house SSID onto the restricted VLAN was held as a separate step until the out-of-band egress layer existed, so nothing was cut over early.
+- **Both APs must carry identical SSID→VLAN mappings.** An AP missing the VLAN-20 binding puts house-SSID clients on untagged native VLAN 1 — the platform segment — with ungoverned internet. Re-provisioning one AP is therefore a two-AP verification, called out in [aerohive-ap-setup.md](../runbooks/aerohive-ap-setup.md).
 - Reclaims VLAN ID **20** from the (superseded) storage-sub-VLAN sketch in `docs/exploration/network-vlans.md`.
 - **Operational note:** enabling the EX50's root shell adds an SSH access menu that breaks the non-interactive `configure-ex50.yml` apply (it pipes straight to the Admin CLI). Leave shell access disabled (its default) outside of interactive debugging.
 
