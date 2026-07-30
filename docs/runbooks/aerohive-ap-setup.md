@@ -36,7 +36,19 @@ LEGACY='-oKexAlgorithms=+diffie-hellman-group14-sha1 -oHostKeyAlgorithms=+ssh-rs
 # AP130 (legacy): ssh $LEGACY admin@<ap130-ip>
 ```
 
-If a device rejects the connection with a cipher/kex error, add `-c aes128-cbc` (or `aes256-ctr`) to `LEGACY`. Device IPs: discover via the switch/DHCP (vendor class `AEROHIVE`, hostname `AH-XXXXXX`); the AP130 in scope is `AH-b614c0` per the inventory table.
+If a device rejects the connection with a cipher/kex error, add `-c aes128-cbc` (or `aes256-ctr`) to `LEGACY`.
+
+**Finding an AP's address.** `mgt0` carries no static address on either AP, so both are DHCP clients out of the EX50's pool and **an AP's address changes across a reboot**. Don't rely on a remembered IP. The most reliable locator is to ask an AP that is already up for its hive neighbours — this works even when you have no idea what address the other one took:
+
+```bash
+printf 'console page 0\nshow amrp neighbor\nexit\n' | ssh $LEGACY admin@<known-ap-ip>
+#   eth0:
+#       3485:8403:ca80 10.0.0.71 recv 1 sec ago     <- the other AP, with its current IP
+```
+
+Failing that, look for hostname `AH-XXXXXX` (the suffix is the MAC tail) in the EX50's `show arp`. The AP130 in scope is `AH-b614c0` per the inventory table.
+
+Driving the CLI non-interactively needs a paced feed: both APs drop a piped stream that arrives before the shell is ready. Sleep ~4s after connect and ~5s between commands (see the `expect` note under Gotchas for config writes).
 
 ## Step 2 — Render placeholders and paste the config
 
