@@ -43,12 +43,16 @@ services:
     # sealed or pre-init — the openbao-auto-unseal systemd unit handles
     # the transition from 503 → 200.
     healthcheck:
+      # The URL MUST stay quoted: CMD-SHELL runs this through a shell, which
+      # otherwise splits the query string on `&` — backgrounding wget and
+      # leaving grep to read empty stdin, so the check fails even when the
+      # server reports `"sealed":false`.
       test:
         - "CMD-SHELL"
         - >-
           wget -qO- --no-check-certificate
           --server-response
-          https://127.0.0.1:{{ openbao_api_port }}/v1/sys/health?standbyok=true&sealedcode=200&uninitcode=200
+          "https://127.0.0.1:{{ openbao_api_port }}/v1/sys/health?standbyok=true&sealedcode=200&uninitcode=200"
           2>&1 | grep -qE 'HTTP/1\.[01] (200|429)'
       interval: 15s
       timeout: 5s
