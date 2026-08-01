@@ -14,6 +14,7 @@ Previous K8s cluster scripts are in `archive/pre-migration-2026/scripts/`.
 | `configure-r730xd-jbod.sh` | Configure R730xd PERC H730 controller for JBOD mode via iDRAC racadm |
 | `fetch-openbao-ca.sh` | Pull the current OpenBao CA from r730xd into the committed ConfigMap + local trust store |
 | `install-k8s-cli.sh` | Install Cilium/Hubble CLI tools for cluster debugging |
+| `migrate-secrets-to-1password.sh` | Copy every OpenBao KV secret into the 1Password `grizzly-platform` vault and verify each field byte-for-byte |
 | `install-observability-cli.sh` | Install logcli/promtool/amtool + Fish env vars for the observability stack |
 | `query-r730xd-bays.sh` | Query R730xd drive bay info via iDRAC racadm (JSON, consumed by Ansible) |
 | `set-openbao-approle-secrets.sh` | Upsert the ansible-iac AppRole role_id/secret_id into the encrypted vault |
