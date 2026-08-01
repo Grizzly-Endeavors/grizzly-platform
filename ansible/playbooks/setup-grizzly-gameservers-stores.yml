@@ -17,7 +17,7 @@
 #           s3-bulk versitygw gateway, where the bot streams per-instance world
 #           backups and archives (see the grizzly-gameservers backup feature).
 #
-# Credentials come from OpenBao secret/grizzly-platform/stores/grizzly-gameservers
+# Credentials come from 1Password stores-grizzly-gameservers
 # (db_password, s3_access_key, s3_secret_key) — provisioned here, and read
 # cross-domain by the bot's K8s ExternalSecret. Kept under grizzly-platform/
 # because the ansible-platform-read AppRole policy only grants grizzly-platform/*
@@ -25,7 +25,7 @@
 #
 # Prerequisites:
 #   - Foundation Postgres + s3-bulk versitygw running (deploy-foundation-stores.yml).
-#   - OpenBao seeded: secret/grizzly-platform/stores/grizzly-gameservers with
+#   - 1Password seeded: stores-grizzly-gameservers with
 #     keys db_password, s3_access_key, s3_secret_key (+ stores/s3-bulk root creds).
 #     Generate them WITHOUT single quotes (`openssl rand -base64 36`).
 #
@@ -41,18 +41,13 @@
   gather_facts: no
   tags: [db]
 
-  # The grizzly_gameservers role password lives only in OpenBao (no static
-  # vault.yml fallback), so this play always reads from OpenBao.
-  vars:
-    openbao_read_enabled: true
-
-  vars_files:
-    - "{{ playbook_dir }}/../vars/openbao_auth.yml"
+  # The grizzly_gameservers role password lives only in 1Password (no static
+  # vault.yml fallback), so this play always reads from 1Password.
 
   pre_tasks:
-    - name: Load OpenBao-sourced platform secrets
+    - name: Load 1Password-sourced platform secrets
       ansible.builtin.include_vars:
-        file: "{{ playbook_dir }}/../vars/openbao_secrets.yml"
+        file: "{{ playbook_dir }}/../vars/onepassword_secrets.yml"
 
     - name: Verify foundation Postgres container is running
       ansible.builtin.command: docker exec foundation-postgres pg_isready -U postgres
@@ -84,7 +79,7 @@
       when: gg_role.stdout != "1"
       no_log: true
 
-    - name: Keep the grizzly_gameservers role password in sync with OpenBao
+    - name: Keep the grizzly_gameservers role password in sync with 1Password
       ansible.builtin.shell:
         cmd: >-
           set -o pipefail;
@@ -122,18 +117,12 @@
   gather_facts: no
   tags: [s3]
 
-  vars:
-    openbao_read_enabled: true
-
-  vars_files:
-    - "{{ playbook_dir }}/../vars/openbao_auth.yml"
-
   pre_tasks:
-    - name: Load OpenBao-sourced platform secrets
+    - name: Load 1Password-sourced platform secrets
       ansible.builtin.include_vars:
-        file: "{{ playbook_dir }}/../vars/openbao_secrets.yml"
+        file: "{{ playbook_dir }}/../vars/onepassword_secrets.yml"
 
-    - name: Verify grizzly-gameservers + s3-bulk credentials are present in OpenBao
+    - name: Verify grizzly-gameservers + s3-bulk credentials are present in 1Password
       ansible.builtin.assert:
         that:
           - vault_grizzly_gameservers_s3_access_key | default('') | length > 0
@@ -143,7 +132,7 @@
         fail_msg: >
           secret/grizzly-platform/stores/grizzly-gameservers (s3_access_key,
           s3_secret_key) and stores/s3-bulk (root_access_key, root_secret_key)
-          must be seeded in OpenBao.
+          must be seeded in 1Password.
         success_msg: "grizzly-gameservers + s3-bulk credentials are set"
 
   tasks:

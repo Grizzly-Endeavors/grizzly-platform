@@ -13,7 +13,7 @@
 #           (ZFS) tier, unlike Nextcloud which backs onto s3-bulk. Provisioned
 #           via the shared versitygw-provision-account task.
 #
-# Credentials come from OpenBao secret/grizzly-platform/stores/stalwart
+# Credentials come from 1Password stores-stalwart
 # (db_password, s3_access_key, s3_secret_key) — provisioned here, and read
 # cross-domain by Stalwart's K8s ExternalSecret. Kept under grizzly-platform/
 # rather than a lab-apps/ path because the ansible-platform-read AppRole policy
@@ -21,7 +21,7 @@
 #
 # Prerequisites:
 #   - Foundation Postgres + s3-hot versitygw running (deploy-foundation-stores.yml).
-#   - OpenBao seeded: secret/grizzly-platform/stores/stalwart with keys
+#   - 1Password seeded: stores-stalwart with keys
 #     db_password, s3_access_key, s3_secret_key (+ stores/s3-hot root creds).
 #     Generate db_password WITHOUT single quotes (e.g. `openssl rand -base64 36`).
 #
@@ -39,18 +39,13 @@
   gather_facts: no
   tags: [db]
 
-  # The stalwart role password lives only in OpenBao (no static vault.yml
-  # fallback), so this play always reads from OpenBao.
-  vars:
-    openbao_read_enabled: true
-
-  vars_files:
-    - "{{ playbook_dir }}/../vars/openbao_auth.yml"
+  # The stalwart role password lives only in 1Password (no static vault.yml
+  # fallback), so this play always reads from 1Password.
 
   pre_tasks:
-    - name: Load OpenBao-sourced platform secrets
+    - name: Load 1Password-sourced platform secrets
       ansible.builtin.include_vars:
-        file: "{{ playbook_dir }}/../vars/openbao_secrets.yml"
+        file: "{{ playbook_dir }}/../vars/onepassword_secrets.yml"
 
     - name: Verify foundation Postgres container is running
       ansible.builtin.command: docker exec foundation-postgres pg_isready -U postgres
@@ -82,7 +77,7 @@
       when: sw_role.stdout != "1"
       no_log: true
 
-    - name: Keep the stalwart role password in sync with OpenBao
+    - name: Keep the stalwart role password in sync with 1Password
       ansible.builtin.shell:
         cmd: >-
           set -o pipefail;
@@ -116,18 +111,12 @@
   gather_facts: no
   tags: [s3]
 
-  vars:
-    openbao_read_enabled: true
-
-  vars_files:
-    - "{{ playbook_dir }}/../vars/openbao_auth.yml"
-
   pre_tasks:
-    - name: Load OpenBao-sourced platform secrets
+    - name: Load 1Password-sourced platform secrets
       ansible.builtin.include_vars:
-        file: "{{ playbook_dir }}/../vars/openbao_secrets.yml"
+        file: "{{ playbook_dir }}/../vars/onepassword_secrets.yml"
 
-    - name: Verify Stalwart + s3-hot credentials are present in OpenBao
+    - name: Verify Stalwart + s3-hot credentials are present in 1Password
       ansible.builtin.assert:
         that:
           - vault_stalwart_s3_access_key | default('') | length > 0
@@ -137,7 +126,7 @@
         fail_msg: >
           secret/grizzly-platform/stores/stalwart (s3_access_key, s3_secret_key)
           and stores/s3-hot (root_access_key, root_secret_key) must be seeded in
-          OpenBao.
+          1Password.
         success_msg: "Stalwart + s3-hot credentials are set"
 
   tasks:

@@ -20,13 +20,3 @@ collections:
   # POSIX utilities (sysctl, mount, authorized_key hardening, etc.).
   - name: ansible.posix
     version: ">=2.0.0"
-
-  # OpenBao / Vault lookups: community.hashi_vault.vault_kv2_get (lookup
-  # plugin) and vault_kv2_write (module, added in 6.2.0), plus the
-  # AppRole auth method the IaC uses to read platform secrets. See
-  # ansible/vars/openbao_secrets.yml for the lookup contract and
-  # docs/decisions/024-platform-secrets-on-openbao.md for the rationale.
-  # Requires `hvac` Python package on the controller (apt install
-  # python3-hvac or pip install hvac).
-  - name: community.hashi_vault
-    version: ">=6.2.0"

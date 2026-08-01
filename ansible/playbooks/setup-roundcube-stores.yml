@@ -8,7 +8,7 @@
 # are NOT stored here: those live in Stalwart (Postgres + s3-hot). So unlike the
 # other stores playbooks this one provisions only a database + login role, no S3.
 #
-# The roundcube role password lives in OpenBao
+# The roundcube role password lives in 1Password
 # secret/grizzly-platform/stores/roundcube (db_password) — provisioned here and
 # read cross-domain by Roundcube's K8s ExternalSecret. Kept under
 # grizzly-platform/ (not a lab-apps/ path) because the ansible-platform-read
@@ -20,7 +20,7 @@
 #
 # Prerequisites:
 #   - Foundation Postgres running (deploy-foundation-stores.yml).
-#   - OpenBao seeded: secret/grizzly-platform/stores/roundcube with key
+#   - 1Password seeded: stores-roundcube with key
 #     db_password. Generate WITHOUT single quotes (e.g. `openssl rand -hex 24`).
 #
 # Usage:
@@ -32,18 +32,13 @@
   become: yes
   gather_facts: no
 
-  # The roundcube role password lives only in OpenBao (no static vault.yml
-  # fallback), so this play always reads from OpenBao.
-  vars:
-    openbao_read_enabled: true
-
-  vars_files:
-    - "{{ playbook_dir }}/../vars/openbao_auth.yml"
+  # The roundcube role password lives only in 1Password (no static vault.yml
+  # fallback), so this play always reads from 1Password.
 
   pre_tasks:
-    - name: Load OpenBao-sourced platform secrets
+    - name: Load 1Password-sourced platform secrets
       ansible.builtin.include_vars:
-        file: "{{ playbook_dir }}/../vars/openbao_secrets.yml"
+        file: "{{ playbook_dir }}/../vars/onepassword_secrets.yml"
 
     - name: Verify foundation Postgres container is running
       ansible.builtin.command: docker exec foundation-postgres pg_isready -U postgres
@@ -75,7 +70,7 @@
       when: rc_role.stdout != "1"
       no_log: true
 
-    - name: Keep the roundcube role password in sync with OpenBao
+    - name: Keep the roundcube role password in sync with 1Password
       ansible.builtin.shell:
         cmd: >-
           set -o pipefail;

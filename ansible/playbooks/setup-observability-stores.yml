@@ -17,7 +17,7 @@
 #
 # Prerequisites:
 #   - s3-hot versitygw gateway running (deploy-foundation-stores.yml --tags s3-hot).
-#   - OpenBao seeded: observability/s3-client + stores/s3-hot.
+#   - 1Password seeded: observability-s3-client + stores-s3-hot.
 #
 # Usage:
 #   ansible-playbook -i ansible/inventory ansible/playbooks/setup-observability-stores.yml \
@@ -28,18 +28,12 @@
   become: yes
   gather_facts: no
 
-  vars:
-    openbao_read_enabled: true
-
-  vars_files:
-    - "{{ playbook_dir }}/../vars/openbao_auth.yml"
-
   pre_tasks:
-    - name: Load OpenBao-sourced platform secrets
+    - name: Load 1Password-sourced platform secrets
       ansible.builtin.include_vars:
-        file: "{{ playbook_dir }}/../vars/openbao_secrets.yml"
+        file: "{{ playbook_dir }}/../vars/onepassword_secrets.yml"
 
-    - name: Verify observability + s3-hot credentials are present in OpenBao
+    - name: Verify observability + s3-hot credentials are present in 1Password
       ansible.builtin.assert:
         that:
           - vault_obs_s3_access_key | default('') | length > 0
@@ -48,7 +42,7 @@
           - vault_s3_hot_root_secret_key | default('') | length > 0
         fail_msg: >
           observability/s3-client (access_key, secret_key) and stores/s3-hot
-          (root_access_key, root_secret_key) must be seeded in OpenBao.
+          (root_access_key, root_secret_key) must be seeded in 1Password.
         success_msg: "observability + s3-hot credentials are set"
 
   tasks:
