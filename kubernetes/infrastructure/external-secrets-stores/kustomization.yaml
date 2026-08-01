@@ -15,6 +15,7 @@ kind: Kustomization
 # order hazards.
 resources:
   - openbao-store.yaml
+  - onepassword-store.yaml
   - registry.yaml
   - github-runners.yaml
   - argo-workflows.yaml
