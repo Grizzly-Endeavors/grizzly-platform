@@ -22,31 +22,35 @@ spec:
   values:
     installCRDs: true
     replicaCount: 1
+    # Sized for 2.x with provider SDKs loaded. The controller links a client
+    # per configured provider, so its footprint grows as stores are added —
+    # 128Mi was survivable on 0.18.2 with one provider and OOMKilled the
+    # moment the 1Password SDK came into play.
     resources:
       requests:
-        cpu: 20m
-        memory: 64Mi
+        cpu: 50m
+        memory: 192Mi
       limits:
-        cpu: 100m
-        memory: 128Mi
+        cpu: 1000m
+        memory: 768Mi
     webhook:
       replicaCount: 1
       resources:
         requests:
-          cpu: 20m
-          memory: 32Mi
+          cpu: 25m
+          memory: 64Mi
         limits:
-          cpu: 100m
-          memory: 128Mi
+          cpu: 500m
+          memory: 256Mi
     certController:
       replicaCount: 1
       resources:
         requests:
-          cpu: 20m
-          memory: 32Mi
+          cpu: 25m
+          memory: 96Mi
         limits:
-          cpu: 100m
-          memory: 128Mi
+          cpu: 500m
+          memory: 256Mi
     # ServiceMonitor requires Prometheus Operator; r730xd Prometheus
     # scrapes ESO via a NodePort-exposed /metrics endpoint instead.
     serviceMonitor:
