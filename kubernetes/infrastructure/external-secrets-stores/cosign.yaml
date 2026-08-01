@@ -25,9 +25,7 @@ spec:
     # exports COSIGN_PASSWORD from cosign.password.
     - secretKey: cosign.key
       remoteRef:
-        key: cicd-cosign
-        property: private_key
+        key: cicd-cosign/private_key
     - secretKey: cosign.password
       remoteRef:
-        key: cicd-cosign
-        property: password
+        key: cicd-cosign/password

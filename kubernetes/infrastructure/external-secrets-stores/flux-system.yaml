@@ -30,13 +30,10 @@ spec:
   data:
     - secretKey: githubAppID
       remoteRef:
-        key: platform-github-app
-        property: app_id
+        key: platform-github-app/app_id
     - secretKey: githubAppInstallationID
       remoteRef:
-        key: platform-github-app
-        property: installation_id
+        key: platform-github-app/installation_id
     - secretKey: githubAppPrivateKey
       remoteRef:
-        key: platform-github-app
-        property: private_key
+        key: platform-github-app/private_key

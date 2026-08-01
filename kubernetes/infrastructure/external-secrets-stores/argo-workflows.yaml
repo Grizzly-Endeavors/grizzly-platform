@@ -14,9 +14,7 @@ spec:
   data:
     - secretKey: accesskey
       remoteRef:
-        key: cicd-argo-s3
-        property: access_key
+        key: cicd-argo-s3/access_key
     - secretKey: secretkey
       remoteRef:
-        key: cicd-argo-s3
-        property: secret_key
+        key: cicd-argo-s3/secret_key

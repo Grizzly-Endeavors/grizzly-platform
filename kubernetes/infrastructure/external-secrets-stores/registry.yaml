@@ -16,9 +16,7 @@ spec:
   data:
     - secretKey: accessKey
       remoteRef:
-        key: stores-registry
-        property: access_key
+        key: stores-registry/access_key
     - secretKey: secretKey
       remoteRef:
-        key: stores-registry
-        property: secret_key
+        key: stores-registry/secret_key
