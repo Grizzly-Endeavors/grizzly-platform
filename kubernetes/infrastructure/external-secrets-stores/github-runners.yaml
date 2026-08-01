@@ -2,28 +2,28 @@
 #   - sccache-s3-credentials (s3-bulk creds for Rust build cache)
 #   - github-runner-pat (org-level PAT for ARC v2)
 # Both previously seeded imperatively by seed-app-secrets.yml /
-# setup-k8s-cicd.yml; now reconciled from OpenBao via ESO.
+# setup-k8s-cicd.yml; now reconciled from 1Password via ESO.
 apiVersion: external-secrets.io/v1
 kind: ExternalSecret
 metadata:
   name: sccache-s3-credentials
   namespace: arc-runners
 spec:
-  refreshInterval: 1h
+  refreshPolicy: OnChange
   secretStoreRef:
     kind: ClusterSecretStore
-    name: openbao
+    name: onepassword
   target:
     name: sccache-s3-credentials
     creationPolicy: Owner
   data:
     - secretKey: accesskey
       remoteRef:
-        key: grizzly-platform/cicd/sccache-s3
+        key: cicd-sccache-s3
         property: access_key
     - secretKey: secretkey
       remoteRef:
-        key: grizzly-platform/cicd/sccache-s3
+        key: cicd-sccache-s3
         property: secret_key
 ---
 apiVersion: external-secrets.io/v1
@@ -32,15 +32,15 @@ metadata:
   name: github-runner-pat
   namespace: arc-runners
 spec:
-  refreshInterval: 1h
+  refreshPolicy: OnChange
   secretStoreRef:
     kind: ClusterSecretStore
-    name: openbao
+    name: onepassword
   target:
     name: github-runner-pat
     creationPolicy: Owner
   data:
     - secretKey: github_token
       remoteRef:
-        key: grizzly-platform/platform/github-runner
+        key: platform-github-runner
         property: pat

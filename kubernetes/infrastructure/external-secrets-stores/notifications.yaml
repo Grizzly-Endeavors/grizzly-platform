@@ -4,15 +4,15 @@ metadata:
   name: discord-webhook
   namespace: flux-system
 spec:
-  refreshInterval: 1h
+  refreshPolicy: OnChange
   secretStoreRef:
     kind: ClusterSecretStore
-    name: openbao
+    name: onepassword
   target:
     name: discord-webhook
     creationPolicy: Owner
   data:
     - secretKey: address
       remoteRef:
-        key: grizzly-platform/flux/discord-webhook
+        key: flux-discord-webhook
         property: url

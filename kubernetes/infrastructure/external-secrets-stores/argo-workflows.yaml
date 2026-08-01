@@ -4,19 +4,19 @@ metadata:
   name: argo-s3-credentials
   namespace: argo
 spec:
-  refreshInterval: 1h
+  refreshPolicy: OnChange
   secretStoreRef:
     kind: ClusterSecretStore
-    name: openbao
+    name: onepassword
   target:
     name: argo-s3-credentials
     creationPolicy: Owner
   data:
     - secretKey: accesskey
       remoteRef:
-        key: grizzly-platform/cicd/argo-s3
+        key: cicd-argo-s3
         property: access_key
     - secretKey: secretkey
       remoteRef:
-        key: grizzly-platform/cicd/argo-s3
+        key: cicd-argo-s3
         property: secret_key

@@ -1,5 +1,5 @@
 # Cloudflare API token for cert-manager's Let's Encrypt DNS-01 solver
-# (ADR-052). Synced from OpenBao into the cert-manager namespace so the
+# (ADR-052). Synced from 1Password into the cert-manager namespace so the
 # letsencrypt-staging / letsencrypt-prod ClusterIssuers can solve the
 # ACME DNS-01 challenge for mail.grizzly-endeavors.com by writing a
 # _acme-challenge TXT record.
@@ -16,15 +16,15 @@ metadata:
   name: cloudflare-api-token
   namespace: cert-manager
 spec:
-  refreshInterval: 1h
+  refreshPolicy: OnChange
   secretStoreRef:
     kind: ClusterSecretStore
-    name: openbao
+    name: onepassword
   target:
     name: cloudflare-api-token
     creationPolicy: Owner
   data:
     - secretKey: api-token
       remoteRef:
-        key: grizzly-platform/platform/cloudflare-certmanager
+        key: platform-cloudflare-certmanager
         property: api_token

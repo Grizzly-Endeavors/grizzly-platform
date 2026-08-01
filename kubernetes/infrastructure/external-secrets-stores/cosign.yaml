@@ -1,4 +1,4 @@
-# cosign signing key for the CI gate, synced from OpenBao into arc-runners so
+# cosign signing key for the CI gate, synced from 1Password into arc-runners so
 # the gate step (running in an ephemeral runner pod) can sign the built image
 # on pass. The public half is NOT secret — it is embedded in the Kyverno
 # verify-gate-signature ClusterPolicy (kubernetes/infrastructure/kyverno-policies).
@@ -13,10 +13,10 @@ metadata:
   name: cosign-signing-key
   namespace: arc-runners
 spec:
-  refreshInterval: 1h
+  refreshPolicy: OnChange
   secretStoreRef:
     kind: ClusterSecretStore
-    name: openbao
+    name: onepassword
   target:
     name: cosign-signing-key
     creationPolicy: Owner
@@ -25,9 +25,9 @@ spec:
     # exports COSIGN_PASSWORD from cosign.password.
     - secretKey: cosign.key
       remoteRef:
-        key: grizzly-platform/cicd/cosign
+        key: cicd-cosign
         property: private_key
     - secretKey: cosign.password
       remoteRef:
-        key: grizzly-platform/cicd/cosign
+        key: cicd-cosign
         property: password

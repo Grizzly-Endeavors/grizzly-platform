@@ -6,7 +6,7 @@
 #
 # Sequence guarantee (see docs/runbooks/secrets-migration.md Phase D):
 #   1. ESO HelmRelease Ready
-#   2. ClusterSecretStore "openbao" reports Valid
+#   2. ClusterSecretStore "onepassword" reports Valid
 #   3. A throwaway ExternalSecret in a non-critical namespace reconciles
 #   4. Only then: remove Play 4 of setup-k8s-gitops.yml (imperative seed)
 #      and let this manifest take over.
@@ -20,23 +20,23 @@ metadata:
   name: github-app-credentials
   namespace: flux-system
 spec:
-  refreshInterval: 1h
+  refreshPolicy: OnChange
   secretStoreRef:
     kind: ClusterSecretStore
-    name: openbao
+    name: onepassword
   target:
     name: github-app-credentials
     creationPolicy: Owner
   data:
     - secretKey: githubAppID
       remoteRef:
-        key: grizzly-platform/platform/github-app
+        key: platform-github-app
         property: app_id
     - secretKey: githubAppInstallationID
       remoteRef:
-        key: grizzly-platform/platform/github-app
+        key: platform-github-app
         property: installation_id
     - secretKey: githubAppPrivateKey
       remoteRef:
-        key: grizzly-platform/platform/github-app
+        key: platform-github-app
         property: private_key
