@@ -27,13 +27,12 @@
 # Prerequisites:
 #   - R730xd baseline applied (setup-r730xd.yml — installs Docker)
 #   - ZFS pool mounted (r730xd-zfs.yml)
-#   - Secrets present in OpenBao at secret/grizzly-platform/platform/residuum:
+#   - Secrets present in 1Password at platform-residuum:
 #       ollama_api_key, gemini_api_key, cloud_token, github_token
 #
 # Usage:
 #   ansible-playbook -i ansible/inventory \
 #     ansible/playbooks/deploy-residuum.yml \
-#     -e openbao_read_enabled=true
 #
 #   Refresh just the tools volume:  ... --tags tools
 
@@ -42,12 +41,7 @@
   become: yes
   gather_facts: yes
 
-  # OpenBao auth defaults for community.hashi_vault lookups. Inert unless
-  # `openbao_read_enabled: true` (then openbao_secrets.yml loads in pre_tasks
   # and defines the vault_* vars). See
-  # docs/decisions/024-platform-secrets-on-openbao.md.
-  vars_files:
-    - "{{ playbook_dir }}/../vars/openbao_auth.yml"
 
   vars:
     residuum_ollama_api_key: "{{ vault_residuum_ollama_api_key }}"
@@ -56,10 +50,9 @@
     residuum_github_token: "{{ vault_residuum_github_token }}"
 
   pre_tasks:
-    - name: Load OpenBao-sourced platform secrets
+    - name: Load 1Password-sourced platform secrets
       ansible.builtin.include_vars:
-        file: "{{ playbook_dir }}/../vars/openbao_secrets.yml"
-      when: openbao_read_enabled | default(false) | bool
+        file: "{{ playbook_dir }}/../vars/onepassword_secrets.yml"
       tags: [always]
 
     - name: Verify ZFS pool is mounted

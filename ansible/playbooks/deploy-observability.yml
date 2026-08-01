@@ -41,18 +41,12 @@
   become: yes
   gather_facts: yes
 
-  # OpenBao auth defaults for community.hashi_vault lookups. Inert
-  # unless `openbao_read_enabled: true` (then openbao_secrets.yml loads
-  # in pre_tasks and redefines vault_* to read from OpenBao). See
-  # docs/decisions/024-platform-secrets-on-openbao.md.
-  vars_files:
-    - "{{ playbook_dir }}/../vars/openbao_auth.yml"
+  # in pre_tasks and redefines vault_* to read from 1Password). See
 
   pre_tasks:
-    - name: Load OpenBao-sourced platform secrets
+    - name: Load 1Password-sourced platform secrets
       ansible.builtin.include_vars:
-        file: "{{ playbook_dir }}/../vars/openbao_secrets.yml"
-      when: openbao_read_enabled | default(false) | bool
+        file: "{{ playbook_dir }}/../vars/onepassword_secrets.yml"
       tags: [always]
 
     - name: Verify ZFS pool is mounted

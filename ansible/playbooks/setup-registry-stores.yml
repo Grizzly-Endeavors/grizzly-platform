@@ -20,7 +20,7 @@
 #
 # Prerequisites:
 #   - s3-bulk versitygw gateway running (deploy-foundation-stores.yml --tags s3-bulk).
-#   - OpenBao seeded: stores/registry + stores/s3-bulk.
+#   - 1Password seeded: stores-registry + stores-s3-bulk.
 #
 # Usage:
 #   ansible-playbook -i ansible/inventory ansible/playbooks/setup-registry-stores.yml \
@@ -31,18 +31,12 @@
   become: yes
   gather_facts: no
 
-  vars:
-    openbao_read_enabled: true
-
-  vars_files:
-    - "{{ playbook_dir }}/../vars/openbao_auth.yml"
-
   pre_tasks:
-    - name: Load OpenBao-sourced platform secrets
+    - name: Load 1Password-sourced platform secrets
       ansible.builtin.include_vars:
-        file: "{{ playbook_dir }}/../vars/openbao_secrets.yml"
+        file: "{{ playbook_dir }}/../vars/onepassword_secrets.yml"
 
-    - name: Verify registry + s3-bulk credentials are present in OpenBao
+    - name: Verify registry + s3-bulk credentials are present in 1Password
       ansible.builtin.assert:
         that:
           - vault_registry_s3_access_key | default('') | length > 0
@@ -52,7 +46,7 @@
         fail_msg: >
           secret/grizzly-platform/stores/registry (access_key, secret_key) and
           stores/s3-bulk (root_access_key, root_secret_key) must be seeded in
-          OpenBao.
+          1Password.
         success_msg: "registry + s3-bulk credentials are set"
 
   tasks:
