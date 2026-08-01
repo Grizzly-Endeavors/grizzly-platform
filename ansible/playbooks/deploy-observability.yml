@@ -28,7 +28,7 @@
 #   ... --tags grafana
 #   ... --tags alloy
 #
-# Endpoints (after deploy) — IPs from ansible/group_vars/all/network.yml:
+# Endpoints (after deploy) — IPs from ansible/inventory/group_vars/all/network.yml:
 #   Prometheus:   http://<r730xd_ip>:9090
 #   Alertmanager: http://<r730xd_ip>:9093
 #   Loki:         http://<r730xd_ip>:3100

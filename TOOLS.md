@@ -15,7 +15,7 @@ Everything below is on `PATH` here. No "why" column — check the relevant runbo
 **Kubernetes:** `kubectl`, `helm`, `flux`, `k9s`, `cilium`, `hubble`, `argo`
 - `kubectl kustomize` covers standalone kustomize — no separate `kustomize` binary.
 
-**Secrets:** `bao` (OpenBao — server runs on r730xd, `BAO_ADDR=https://10.0.0.200:8200`; persistent root session via `~/.vault-token` + CA on this node, `bao kv put/get/patch` directly — see `docs/runbooks/openbao-add-secret.md`), `infisical` (bootstrap-only: unseal keys)
+**Secrets:** `bao` (OpenBao — server runs on r730xd, `BAO_ADDR=https://10.0.0.200:8200`; persistent root session via `~/.vault-token` + CA on this node, `bao kv put/get/patch` directly — see `docs/runbooks/openbao-add-secret.md`), `infisical` (bootstrap-only: unseal keys), `op` (1Password CLI — authenticates via `OP_SERVICE_ACCOUNT_TOKEN`; `op read op://<vault>/<item>/<field>`)
 
 **IaC / linting:** `ansible`, `ansible-playbook`, `ansible-vault`, `ansible-lint`, `pre-commit`, `shellcheck`, `yamllint`
 - Ansible collections: `community.crypto`, `community.general`, `community.hashi_vault`, `community.aws`, `community.dns`, `community.docker`, `kubernetes.core`, `ansible.posix` — see `ansible/requirements.yml` for version floors.
@@ -37,7 +37,7 @@ Everything below is on `PATH` here. No "why" column — check the relevant runbo
 
 ## Remote hosts
 
-Nothing below runs locally — reach it over SSH or through Kubernetes/Docker exec. IPs are the plaintext source of truth in `ansible/group_vars/all/network.yml` (already public — this repo has no PII/secrets in git; see `.claude` memory).
+Nothing below runs locally — reach it over SSH or through Kubernetes/Docker exec. IPs are the plaintext source of truth in `ansible/inventory/group_vars/all/network.yml` (already public — this repo has no PII/secrets in git; see `.claude` memory).
 
 ### r730xd (`10.0.0.200`) — `ssh bearf@10.0.0.200`
 Storage backbone + foundation stores + observability host.
@@ -69,7 +69,7 @@ DAL Admin CLI over SSH (IPv6 link-local for bench access, LAN IP `10.0.0.1` post
 ## Verifying the local list
 
 ```fish
-for t in git gh docker kubectl helm flux k9s cilium hubble argo bao infisical ansible ansible-lint pre-commit shellcheck yamllint yq jq envsubst psql mc logcli promtool amtool wg nmap dig nslookup sshpass netbird gpg openssl terraform cosign aws valkey-cli
+for t in git gh docker kubectl helm flux k9s cilium hubble argo bao infisical op ansible ansible-lint pre-commit shellcheck yamllint yq jq envsubst psql mc logcli promtool amtool wg nmap dig nslookup sshpass netbird gpg openssl terraform cosign aws valkey-cli
     if command -v $t >/dev/null
         echo "OK   $t"
     else

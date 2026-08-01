@@ -2,7 +2,7 @@
 
 The live lab network. The platform rides untagged VLAN 1 on the SR2024; two tagged VLANs carry the downstream WiFi segments. A dedicated point-to-point WireGuard tunnel between the Hetzner VPS and the R730xd carries public ingress.
 
-> **IP addresses:** Authoritative values are in `ansible/group_vars/all/network.yml`. This doc renders the Jinja vars literally.
+> **IP addresses:** Authoritative values are in `ansible/inventory/group_vars/all/network.yml`. This doc renders the Jinja vars literally.
 
 The EX50 is the gateway at `10.0.0.1` (Xfinity in bridge mode). It routes and firewalls three segments: the platform on native/untagged VLAN 1, plus two tagged downstream WiFi segments — `trusted` (VLAN 30, `10.30.0.0/24`) and `restricted` (VLAN 20, `10.20.0.0/24`) — per [ADR-060](decisions/060-downstream-wifi-segmentation.md). Both downstream segments are denied the platform and each other; `trusted` reaches the internet directly, `restricted`'s egress is governed out-of-band. Public ingress still terminates on the R730xd; moving the tunnel onto the EX50 ([ADR-047](decisions/047-ingress-tunnel-relocation-to-ex50.md)) is later work. See [runbooks/sr2024-vlan-trunks.md](runbooks/sr2024-vlan-trunks.md), [runbooks/aerohive-ap-setup.md](runbooks/aerohive-ap-setup.md).
 
@@ -46,7 +46,7 @@ All lab machines are in the garage on the SR2024 (relocated from the closet 2026
 
 - **The Digi EX50 is the router/gateway at `10.0.0.1`** ([ADR-044](decisions/044-digi-ex50-as-off-the-shelf-router.md)) — routing, DHCP, and DNS forwarding. The Xfinity gateway is in **bridge mode** (WAN uplink only), cut over 2026-07-08.
 - Lab machines use static IPs configured at the OS level (Ansible-managed).
-- **DHCP (issue #80, resolved):** the EX50 serves a dynamic pool of **`10.0.0.50–10.0.0.150`**, carved to contain **none** of the OS-static node IPs (`.46`, `.153`, `.187`, `.200–.203`, `.226`, `.249`) — statics are "reserved by exclusion" (outside the assignable pool), so a lease-table reset can never hand out a held address. No per-host MAC reservations. The SR2024 switch (the one device that leased) is now static `10.0.0.153` on the switch itself (DHCP client disabled). Boundaries live in `ansible/group_vars/all/network.yml` (`ex50_dhcp_pool_*`), applied by `ansible/playbooks/configure-ex50.yml`.
+- **DHCP (issue #80, resolved):** the EX50 serves a dynamic pool of **`10.0.0.50–10.0.0.150`**, carved to contain **none** of the OS-static node IPs (`.46`, `.153`, `.187`, `.200–.203`, `.226`, `.249`) — statics are "reserved by exclusion" (outside the assignable pool), so a lease-table reset can never hand out a held address. No per-host MAC reservations. The SR2024 switch (the one device that leased) is now static `10.0.0.153` on the switch itself (DHCP client disabled). Boundaries live in `ansible/inventory/group_vars/all/network.yml` (`ex50_dhcp_pool_*`), applied by `ansible/playbooks/configure-ex50.yml`.
 
 ### Switching
 

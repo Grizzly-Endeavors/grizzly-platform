@@ -1,7 +1,7 @@
 ---
 # Lab Node Inventory
 # All physical lab machines on the lab network
-# IP addresses: see ansible/group_vars/all/network.yml (single source of truth)
+# IP addresses: see ansible/inventory/group_vars/all/network.yml (single source of truth)
 #
 # Usage (target specific groups):
 #   ansible-playbook -l k8s_cluster ansible/playbooks/some-playbook.yml
@@ -53,7 +53,7 @@ all:
     # (tower-pc host entry removed 2026-04-17 alongside ADR-021. Tower PC
     # will join the cluster as a plain K8s worker — the host entry will be
     # re-added under k8s_workers at join time. The reserved IP stays in
-    # ansible/group_vars/all/network.yml as tower_pc_ip. The previous
+    # ansible/inventory/group_vars/all/network.yml as tower_pc_ip. The previous
     # "standalone" group had only tower-pc in it, so it's removed too.)
 
     storage_servers:

@@ -2,7 +2,7 @@
 
 Machines, specs, and live roles. This is the day-to-day "what's where" reference.
 
-> **IP addresses:** Authoritative values are in `ansible/group_vars/all/network.yml`. This doc renders the Jinja vars literally so it doesn't drift from the source of truth.
+> **IP addresses:** Authoritative values are in `ansible/inventory/group_vars/all/network.yml`. This doc renders the Jinja vars literally so it doesn't drift from the source of truth.
 
 **Update when:** a machine is added, removed, or takes on a different role; a disk is replaced; firmware/OS changes materially affect operations.
 
@@ -172,7 +172,7 @@ Tracked here rather than in the active sections so the active tables stay truthf
 | Network | `{{ tower_pc_ip }}` (reserved) |
 | Planned role | Plain K8s worker |
 | Status | Physically in/near the closet. Not yet joined. Will be added to `ansible/inventory/lab-nodes.yml` at join time. See [ADR-021](decisions/021-off-the-shelf-router-tower-pc-as-worker.md). |
-| IaC | Hostname/IP reserved in `ansible/group_vars/all/network.yml`; joins via `ansible/playbooks/join-k8s-workers.yml`. |
+| IaC | Hostname/IP reserved in `ansible/inventory/group_vars/all/network.yml`; joins via `ansible/playbooks/join-k8s-workers.yml`. |
 | Previous history | Was the K8s GPU-workload worker + planned router + planned GPU-inference host. All three roles retired in ADR-021. |
 
 ### GPU inference host — Being Built

@@ -32,7 +32,7 @@
 #   ... --tags s3-hot      (versitygw — requires setup-versitygw-iam.yml first)
 #   ... --tags s3-bulk     (versitygw — requires setup-versitygw-iam.yml first)
 #
-# Endpoints (after deploy) — IPs from ansible/group_vars/all/network.yml:
+# Endpoints (after deploy) — IPs from ansible/inventory/group_vars/all/network.yml:
 #   PostgreSQL:        postgresql://postgres:<password>@<r730xd_ip>:5432/
 #   kv-cache (Valkey): redis://:<password>@<r730xd_ip>:6379
 #   s3-hot (versitygw):  http://<r730xd_ip>:7070  (metrics :9102)
