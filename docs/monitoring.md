@@ -1,6 +1,6 @@
 # Monitoring — Operations
 
-> **IP addresses:** Authoritative values are in `ansible/group_vars/all/network.yml`.
+> **IP addresses:** Authoritative values are in `ansible/inventory/group_vars/all/network.yml`.
 
 How the platform monitors **its own hosts** — the exporters, cron health checks, Prometheus alert rules, Grafana dashboards, and log/trace pipelines that keep the machines observable — and how to extend that as the infrastructure grows. This is the operator's view.
 
