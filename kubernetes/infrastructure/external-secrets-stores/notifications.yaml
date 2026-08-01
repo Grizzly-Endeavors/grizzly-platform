@@ -14,5 +14,4 @@ spec:
   data:
     - secretKey: address
       remoteRef:
-        key: flux-discord-webhook
-        property: url
+        key: flux-discord-webhook/url

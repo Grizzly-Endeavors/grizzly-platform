@@ -19,12 +19,10 @@ spec:
   data:
     - secretKey: accesskey
       remoteRef:
-        key: cicd-sccache-s3
-        property: access_key
+        key: cicd-sccache-s3/access_key
     - secretKey: secretkey
       remoteRef:
-        key: cicd-sccache-s3
-        property: secret_key
+        key: cicd-sccache-s3/secret_key
 ---
 apiVersion: external-secrets.io/v1
 kind: ExternalSecret
@@ -42,5 +40,4 @@ spec:
   data:
     - secretKey: github_token
       remoteRef:
-        key: platform-github-runner
-        property: pat
+        key: platform-github-runner/pat
