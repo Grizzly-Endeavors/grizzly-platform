@@ -88,6 +88,7 @@ One line per decision, grouped by domain. See [`README.md`](README.md) for what 
 - [053-platform-services-domain-migration](053-platform-services-domain-migration.md) — platform services migrate to grizzly-endeavors.com.
 - [061-ntfy-notification-service](061-ntfy-notification-service.md) — self-hosted ntfy as a shared platform push-notification service (deny-all + tokens, its own auth).
 - [062-residuum-platform-assistant](062-residuum-platform-assistant.md) — Residuum agent on the R730xd; stock image + runtime tools volume, relay-only access, PR-only mutation.
+- [064-langfuse-llm-observability](064-langfuse-llm-observability.md) — Langfuse as the shared LLM-observability service, on foundation stores with ClickHouse added as a fifth.
 
 ## Mail (Stalwart)
 

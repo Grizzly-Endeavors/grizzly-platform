@@ -21,6 +21,10 @@ One line per runbook. See [`README.md`](README.md) for what runbooks are and whe
 - [versitygw-deploy.md](versitygw-deploy.md) — how the s3-hot / s3-bulk gateways are stood up and operated.
 - [versitygw-cli.md](versitygw-cli.md) — driving the versitygw tool (accounts, buckets, IAM).
 
+## LLM observability
+
+- [langfuse.md](langfuse.md) — operating Langfuse: health, adding projects, onboarding, upgrades, and the migration/SSO/S3 failure modes.
+
 ## CI Gate
 
 - [ci-gate.md](ci-gate.md) — bootstrap, Audit→Enforce rollout, key rotation, gate version bump, deploy-denied diagnosis.

@@ -7,6 +7,7 @@ One line per guide. See [`README.md`](README.md) for what an integration guide i
 - [postgres.md](postgres.md) — get a scoped database + login role on the foundation PostgreSQL, and wire your app's connection string.
 - [valkey.md](valkey.md) — use the shared kv-cache (Valkey) for caching, sessions, queues; connection, logical isolation, eviction caveats.
 - [s3.md](s3.md) — get an S3 account + bucket on s3-hot or s3-bulk; endpoint, SDK config, hot-vs-bulk choice.
+- [clickhouse.md](clickhouse.md) — get a scoped user + database on the foundation ClickHouse for column-oriented analytical data; includes the single-node/no-`ON CLUSTER` rule.
 
 ## Cross-cutting platform services
 
