@@ -203,7 +203,16 @@ spec:
       # leaving event ingestion looking healthy.
       region: "us-east-1"
       forcePathStyle: true
-      auth:
-        existingSecret: langfuse-secrets
-        rootUserSecretKey: s3-access-key
-        rootPasswordSecretKey: s3-secret-key
+      # `s3.auth.*` is the bundled Bitnami MinIO subchart's credential path and is
+      # read only when `deploy: true`. With the subchart off, the app's own
+      # credentials come from these two keys — set them and nothing reaches blob
+      # storage, which fails at ingestion ("Could not load credentials from any
+      # providers") while the UI and API stay up, so the instance looks healthy.
+      accessKeyId:
+        secretKeyRef:
+          name: langfuse-secrets
+          key: s3-access-key
+      secretAccessKey:
+        secretKeyRef:
+          name: langfuse-secrets
+          key: s3-secret-key
