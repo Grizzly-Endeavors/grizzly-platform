@@ -169,11 +169,17 @@
 
     # ALL is scoped to the one database. Langfuse runs its own schema
     # migrations on worker startup, so it needs DDL there — but nowhere else.
+    #
+    # system.parts is the one exception, and it is read-only: the v4 worker's
+    # event-propagation job inspects table parts, and without the grant that job
+    # fails every run with "Not enough privileges" — which strands ingested events
+    # in blob storage so no trace ever reaches the UI, while the app itself stays
+    # up and looks healthy. Upstream's documented grant list doesn't mention it.
     - name: Create the langfuse database and grant the langfuse user
       ansible.builtin.shell:
         cmd: >-
           set -o pipefail;
-          printf "CREATE DATABASE IF NOT EXISTS langfuse;\nGRANT ALL ON langfuse.* TO langfuse;\n"
+          printf "CREATE DATABASE IF NOT EXISTS langfuse;\nGRANT ALL ON langfuse.* TO langfuse;\nGRANT SELECT ON system.parts TO langfuse;\n"
           | docker exec -i foundation-clickhouse
           clickhouse-client --password "$ADMINPW" --multiquery
         executable: /bin/bash
