@@ -76,7 +76,15 @@ spec:
         providers:
           custom:
             name: "Authentik"
-            issuer: "https://sso.grizzly-endeavors.com/application/o/langfuse/"
+            # NO trailing slash, even though Authentik's own issuer value and
+            # docs/integration/sso.md both carry one. NextAuth builds the
+            # discovery URL by concatenating `issuer + "/.well-known/..."`, so a
+            # trailing slash yields `langfuse//.well-known/...`; Authentik
+            # answers that with a 301 and openid-client refuses to follow
+            # redirects, throwing before the browser is ever redirected. The
+            # symptom is a bare SIGNIN_OAUTH_ERROR with nothing at all in
+            # Authentik's logs.
+            issuer: "https://sso.grizzly-endeavors.com/application/o/langfuse"
             clientId:
               secretKeyRef:
                 name: langfuse-secrets
