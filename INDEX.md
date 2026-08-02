@@ -29,10 +29,10 @@ Self-hosted Stalwart mail server, in-cluster, own-MX inbound (VPS HAProxy → WG
 - **Code:** `kubernetes/infrastructure/stalwart/` + `kubernetes/clusters/grizzly-platform/stalwart.yaml`, `ansible/playbooks/configure-stalwart.yml` + `ansible/files/stalwart/plan.json`.
 
 ### Storage & foundation stores
-Durable app state lives on the R730xd foundation stores, never node disks: Postgres, kv-cache (Valkey), and versitygw S3 (s3-hot on ZFS `:7070`, s3-bulk on MergerFS `:7072`).
+Durable app state lives on the R730xd foundation stores, never node disks: Postgres, kv-cache (Valkey), ClickHouse (OLAP, `:8123`/`:9000`), and versitygw S3 (s3-hot on ZFS `:7070`, s3-bulk on MergerFS `:7072`).
 - **Why:** [ADR-003](docs/decisions/003-foundation-stores-on-r730xd.md) (foundation stores), [004-zfs](docs/decisions/004-zfs-iscsi-for-k8s-storage.md), [015](docs/decisions/015-dynamic-storage-provisioning.md) (democratic-csi), [055](docs/decisions/055-s3-object-store-versitygw.md) (versitygw), [056](docs/decisions/056-redis-to-valkey.md) (Valkey).
 - **How:** [versitygw-deploy.md](docs/runbooks/versitygw-deploy.md), [versitygw-cli.md](docs/runbooks/versitygw-cli.md).
-- **Integrate:** [integration/postgres.md](docs/integration/postgres.md) (database), [integration/valkey.md](docs/integration/valkey.md) (cache), [integration/s3.md](docs/integration/s3.md) (object storage).
+- **Integrate:** [integration/postgres.md](docs/integration/postgres.md) (database), [integration/valkey.md](docs/integration/valkey.md) (cache), [integration/s3.md](docs/integration/s3.md) (object storage), [integration/clickhouse.md](docs/integration/clickhouse.md) (analytical/OLAP).
 - **Code:** `ansible/roles/r730xd-{zfs,s3-hot,s3-bulk,snapraid}/`, `ansible/playbooks/deploy-foundation-stores.yml`.
 
 ### Identity & invites (Authentik)
@@ -52,6 +52,12 @@ Self-hosted ntfy — a shared platform push-notification service. Any app publis
 - **How:** [runbooks/ntfy.md](docs/runbooks/ntfy.md) (mint users/tokens, grant topics, ops).
 - **Integrate:** [integration/ntfy.md](docs/integration/ntfy.md) (publish, subscribe, action buttons).
 - **Code:** `kubernetes/infrastructure/ntfy/` + `kubernetes/clusters/grizzly-platform/ntfy.yaml`.
+
+### LLM observability (Langfuse)
+Langfuse on `langfuse.grizzly-endeavors.com` — traces, token/cost accounting, prompt management and eval scores for the platform's first-party agents (Gary in grizzly-gameservers first). Behind Authentik; projects are unlimited, so each agentic app gets its own. Every bundled Bitnami sub-chart is disabled and pointed at the foundation stores instead.
+- **Why:** [ADR-064](docs/decisions/064-langfuse-llm-observability.md) (Langfuse + ClickHouse as a foundation store).
+- **How:** [runbooks/langfuse.md](docs/runbooks/langfuse.md) (operate, add projects, upgrade, failure modes) · **integrate:** [integration/clickhouse.md](docs/integration/clickhouse.md) (use the ClickHouse store from an app).
+- **Code:** `kubernetes/infrastructure/langfuse/` + `kubernetes/clusters/grizzly-platform/langfuse.yaml`, `ansible/playbooks/setup-langfuse-stores.yml`, `ansible/roles/r730xd-clickhouse/`.
 
 ### Assistant (Residuum)
 Residuum personal agent on the R730xd — a first-party AI assistant that helps operate the platform. Runs the **stock** upstream image (no custom build) as a systemd-managed compose service; external CLIs come from a read-only tools volume on its PATH, so adding a tool needs no rebuild. Browser access is via residuum's outbound Cloud relay only — no published port, no ingress rule. It changes the platform through PRs and can merge its own, with Flux applying on merge — so every change is recorded and revertable, but it can reach production unattended.
