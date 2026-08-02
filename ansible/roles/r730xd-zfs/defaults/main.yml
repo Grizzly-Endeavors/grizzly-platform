@@ -42,6 +42,8 @@ zfs_datasets:
     recordsize: 8K        # matches PostgreSQL 8K page size
   - name: foundation/kv-cache
     recordsize: 64K       # sequential AOF append + RDB dumps (Valkey)
+  - name: foundation/clickhouse
+    recordsize: 1M        # large MergeTree parts, read in wide ranges
   # versitygw hot tier (ADR-055) — large S3 objects (Loki/Tempo/Stalwart
   # backend).
   - name: foundation/s3-hot

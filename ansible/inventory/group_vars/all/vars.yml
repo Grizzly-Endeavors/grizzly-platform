@@ -14,6 +14,12 @@ claude_ssh_public_key: "{{ vault_claude_ssh_public_key }}"
 # Foundation data stores (R730xd)
 postgres_password: "{{ vault_postgres_password }}"
 kv_cache_password: "{{ vault_kv_cache_password }}"
+clickhouse_password: "{{ vault_clickhouse_password }}"
+# ClickHouse's server-wide memory ceiling, in bytes. Lives here rather than in
+# the r730xd-clickhouse role because the Prometheus alert rules compare against
+# it too, and those render from a different playbook — a role default would be
+# out of scope there and the threshold would silently evaluate against nothing.
+clickhouse_max_server_memory_bytes: 8589934592  # 8 GiB
 
 # versitygw stores (ADR-055). Root creds per gateway
 # + the shared OpenBao AppRole the gateways use for their Vault-IAM account

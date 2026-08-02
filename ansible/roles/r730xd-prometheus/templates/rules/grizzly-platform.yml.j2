@@ -536,6 +536,40 @@ groups:
         annotations:
           summary: "kv-cache is evicting keys — memory pressure"
 
+      # ClickHouse backs Langfuse's trace tables. It exposes Prometheus
+      # natively, so `up` on this job is the store's own liveness — there is no
+      # exporter in between that could be the thing that died.
+      - alert: ClickHouseDown
+        expr: up{job="clickhouse"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "ClickHouse is not responding — Langfuse ingestion is stalled"
+
+      - alert: ClickHouseMemoryHigh
+        expr: >-
+          ClickHouseMetrics_MemoryTracking
+          / {{ clickhouse_max_server_memory_bytes }} > 0.85
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: >-
+            ClickHouse memory at {{ '{{' }} $value | humanizePercentage {{ '}}' }}
+            of its configured ceiling
+
+      # Rejected inserts mean the merge scheduler has fallen behind the write
+      # rate. Langfuse's worker will retry, so this is a warning — but left
+      # alone it becomes dropped traces.
+      - alert: ClickHouseDelayedInserts
+        expr: rate(ClickHouseProfileEvents_DelayedInserts[10m]) > 0
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "ClickHouse is throttling inserts — merges are behind"
+
   # External Secrets Operator materialises every platform secret in the
   # cluster from 1Password. ExternalSecrets use refreshPolicy: OnChange, so
   # nothing re-reads the provider on a timer — a dead service account token or

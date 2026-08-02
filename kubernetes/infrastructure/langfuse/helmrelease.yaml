@@ -1,0 +1,166 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: langfuse
+  namespace: flux-system
+spec:
+  interval: 30m
+  releaseName: langfuse
+  chart:
+    spec:
+      chart: langfuse
+      # Verified current at pin time against the langfuse-k8s chart index.
+      # Upstream ships weekly, so re-check when bumping.
+      version: "1.5.41"
+      sourceRef:
+        kind: HelmRepository
+        name: langfuse
+  targetNamespace: langfuse
+  install:
+    createNamespace: false
+  values:
+    langfuse:
+      # The chart's appVersion still tracks the v3 line, so running v4 requires
+      # this override. v4 needs a newer ClickHouse than the chart's bundled
+      # sub-chart ships, which is one more reason the store is external.
+      image:
+        tag: "4.2.0"
+
+      nextauth:
+        url: https://langfuse.grizzly-endeavors.com
+        secret:
+          secretKeyRef:
+            name: langfuse-secrets
+            key: nextauth-secret
+      salt:
+        secretKeyRef:
+          name: langfuse-secrets
+          key: salt
+      encryptionKey:
+        secretKeyRef:
+          name: langfuse-secrets
+          key: encryption-key
+
+      # TLS terminates upstream at the VPS Caddy (wildcard
+      # *.grizzly-endeavors.com), which reverse-proxies to this nginx ingress
+      # over the WireGuard tunnel — so no cert-manager issuer here and no DNS
+      # change (the wildcard already resolves).
+      ingress:
+        enabled: true
+        className: nginx
+        hosts:
+          - host: langfuse.grizzly-endeavors.com
+            paths:
+              - path: /
+                pathType: Prefix
+
+      # Login is Authentik-only. AUTH_DISABLE_USERNAME_PASSWORD closes the
+      # password form; AUTH_DISABLE_SIGNUP stops an authenticated stranger from
+      # self-provisioning an org. The `custom` provider id is fixed by Auth.js
+      # and is what makes the callback path /api/auth/callback/custom.
+      additionalEnv:
+        - name: AUTH_CUSTOM_NAME
+          value: "Authentik"
+        - name: AUTH_CUSTOM_ISSUER
+          value: "https://sso.grizzly-endeavors.com/application/o/langfuse/"
+        - name: AUTH_CUSTOM_CLIENT_ID
+          valueFrom:
+            secretKeyRef:
+              name: langfuse-secrets
+              key: oidc-client-id
+        - name: AUTH_CUSTOM_CLIENT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: langfuse-secrets
+              key: oidc-client-secret
+        - name: AUTH_DISABLE_USERNAME_PASSWORD
+          value: "true"
+        - name: AUTH_DISABLE_SIGNUP
+          value: "true"
+
+      web:
+        resources:
+          requests:
+            cpu: 500m
+            memory: 1Gi
+          limits:
+            cpu: "4"
+            memory: 6Gi
+      worker:
+        resources:
+          requests:
+            cpu: 500m
+            memory: 1Gi
+          limits:
+            cpu: "4"
+            memory: 6Gi
+
+    # --- Data stores --------------------------------------------------------
+    # Every one of the chart's four bundled sub-charts is disabled. They are all
+    # Bitnami, and since 2025-08-28 they default to `bitnamilegacy/*` images
+    # that no longer receive updates. Each points at a foundation store on the
+    # R730xd instead (ADR-003), which is where durable state belongs anyway.
+    postgresql:
+      deploy: false
+      host: "10.0.0.200"
+      port: 5432
+      auth:
+        username: langfuse
+        database: langfuse
+        existingSecret: langfuse-secrets
+        secretKeys:
+          userPasswordKey: postgres-password
+          adminPasswordKey: postgres-password
+
+    redis:
+      deploy: false
+      host: "10.0.0.200"
+      port: 6379
+      auth:
+        # MUST be null. kv-cache is a plain `requirepass` Valkey with no ACL
+        # users, so the connection string has to be redis://:<password>@host —
+        # the chart's default of "default" would send a username the server
+        # does not know and every auth fails.
+        username: null
+        existingSecret: langfuse-secrets
+        existingSecretPasswordKey: redis-password
+        # Logical DB 2. Authentik holds 1. A courtesy boundary, not a security
+        # one — the password is shared, so keys are also namespaced by prefix.
+        database: 2
+
+    clickhouse:
+      deploy: false
+      host: "10.0.0.200"
+      httpPort: 8123
+      nativePort: 9000
+      database: langfuse
+      auth:
+        username: langfuse
+        existingSecret: langfuse-secrets
+        existingSecretKey: clickhouse-password
+      migration:
+        url: "clickhouse://10.0.0.200:9000"
+        autoMigrate: true
+      # MUST be false. The chart defaults this to true, which issues `ON
+      # CLUSTER` DDL — and the foundation ClickHouse is a single node with no
+      # Keeper, so every migration statement would fail.
+      clusterEnabled: false
+
+    s3:
+      deploy: false
+      storageProvider: "s3"
+      # versitygw s3-hot (ADR-055). Path-style addressing is required against a
+      # non-AWS gateway.
+      endpoint: "http://10.0.0.200:7070"
+      bucket: langfuse
+      # MUST be us-east-1, not the chart's "auto" default. Ordinary SigV4
+      # requests pass with any region string, but versitygw validates the
+      # region embedded in a presigned URL's X-Amz-Credential and rejects
+      # anything else — so "auto" breaks media uploads specifically while
+      # leaving event ingestion looking healthy.
+      region: "us-east-1"
+      forcePathStyle: true
+      auth:
+        existingSecret: langfuse-secrets
+        rootUserSecretKey: s3-access-key
+        rootPasswordSecretKey: s3-secret-key

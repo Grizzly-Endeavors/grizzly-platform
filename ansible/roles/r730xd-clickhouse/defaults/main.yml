@@ -1,0 +1,59 @@
+---
+# r730xd-clickhouse: OLAP foundation store (ClickHouse) on Docker
+# Persistent on the ZFS pool (tank/foundation/clickhouse, recordsize=1M)
+#
+# Backs Langfuse's trace/observation/score tables. Column-oriented and
+# write-heavy, so it lives on the ZFS tier next to the other latency-sensitive
+# stores rather than the MergerFS bulk pool (ADR-012).
+#
+# Single node, no ClickHouse Keeper: replication is what needs Keeper, and one
+# server means non-replicated MergeTree. Consumers must therefore issue plain
+# DDL, never `ON CLUSTER`.
+#
+# Connections: http://<r730xd_ip>:8123   (HTTP)
+#              clickhouse://<r730xd_ip>:9000  (native)
+
+# Image — pinned to the 26.3 LTS line
+clickhouse_version: "26.3.17.56"
+clickhouse_image: "clickhouse/clickhouse-server:{{ clickhouse_version }}"
+
+# Networking (host network mode — binds directly to host interface)
+clickhouse_http_port: 8123
+clickhouse_native_port: 9000
+clickhouse_prometheus_port: 9126
+
+# Which sources may authenticate. Tighter than the pool default because
+# 10.0.0.0/8 covers both the LAN and the cluster pod network, so nothing
+# outside the homelab needs an entry here.
+clickhouse_allowed_networks:
+  - "10.0.0.0/8"
+  - "127.0.0.1"
+
+# Directories
+clickhouse_data_dir: "/mnt/zfs/foundation/clickhouse/data"
+clickhouse_logs_dir: "/mnt/zfs/foundation/clickhouse/logs"
+clickhouse_compose_dir: "/opt/foundation/clickhouse"
+
+# Admin password (set via vault — see group_vars/all/vars.yml)
+# clickhouse_password: "{{ vault_clickhouse_password }}"
+# (inherited from group_vars/all/vars.yml)
+
+# Memory ceilings — set explicitly rather than letting ClickHouse size itself
+# against total RAM. This host also carries Postgres, kv-cache, versitygw x2,
+# OpenBao and the whole observability stack, and ClickHouse will happily take
+# whatever ratio of RAM it is allowed.
+#
+# The server-wide ceiling lives in group_vars/all/vars.yml, not here: the
+# Prometheus alert rules compare against the same number and render from a
+# different playbook, where a role default would be out of scope.
+clickhouse_max_server_memory_usage: "{{ clickhouse_max_server_memory_bytes }}"
+clickhouse_max_memory_usage: "4294967296"          # 4 GiB for any one query
+clickhouse_max_concurrent_queries: 100
+
+# Caches
+clickhouse_mark_cache_size: "1073741824"           # 1 GiB
+clickhouse_uncompressed_cache_size: "1073741824"   # 1 GiB
+
+# Retention on the server's own system.* log tables. These grow unbounded by
+# default and are diagnostics, not data anyone queries after the fact.
+clickhouse_system_log_ttl_days: 14
