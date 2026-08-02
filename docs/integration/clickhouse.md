@@ -72,13 +72,19 @@ ansible-playbook -i ansible/inventory ansible/playbooks/setup-<app>-stores.yml \
 
 ## 2 — Wire it into your app
 
-Land the password in your namespace with an `ExternalSecret` (full pattern in [secrets.md](secrets.md)):
+Land the password in your namespace with an `ExternalSecret` against the `onepassword` `ClusterSecretStore`. The `remoteRef` key is `<item>/<field>`:
 
 ```yaml
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: onepassword
+  data:
     - secretKey: clickhouse-password
       remoteRef:
         key: stores-<app>/clickhouse_password
 ```
+
+> Do **not** follow [secrets.md](secrets.md) for this yet — it still documents the older OpenBao store and a `key`/`property` ref shape that will not sync. Secret delivery has moved to 1Password in code but not in that guide; see [in-progress/openbao-to-1password.md](../in-progress/openbao-to-1password.md). `kubernetes/infrastructure/langfuse/externalsecret.yaml` is a full working example.
 
 Then point your client at it. Most libraries want the HTTP port; migration tools often want the native one:
 
