@@ -55,7 +55,7 @@ spec:
 
     # --- Secrets + connection env, injected into server AND worker ----------
     # global.env applies to every authentik Deployment. Secret values come from
-    # the authentik-secrets Secret (synced from OpenBao by externalsecret.yaml);
+    # the authentik-secrets Secret (synced from 1Password by externalsecret.yaml);
     # env entries override the chart-generated config secret on name collision.
     global:
       env:
@@ -119,6 +119,17 @@ spec:
             secretKeyRef:
               name: authentik-secrets
               key: oidc_career_scanner_client_secret
+        # Langfuse OIDC pair, consumed by blueprints/langfuse.yaml via !Env.
+        - name: AUTHENTIK_LANGFUSE_CLIENT_ID
+          valueFrom:
+            secretKeyRef:
+              name: authentik-secrets
+              key: oidc_langfuse_client_id
+        - name: AUTHENTIK_LANGFUSE_CLIENT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: authentik-secrets
+              key: oidc_langfuse_client_secret
         # OAuth client creds for the Discord + GitHub social sources, consumed by
         # blueprints/social-login.yaml via !Env. The worker (which applies
         # blueprints) reads these; injecting on every Deployment is harmless.
