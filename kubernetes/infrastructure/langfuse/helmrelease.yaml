@@ -54,29 +54,32 @@ spec:
               - path: /
                 pathType: Prefix
 
-      # Login is Authentik-only. AUTH_DISABLE_USERNAME_PASSWORD closes the
-      # password form; AUTH_DISABLE_SIGNUP stops an authenticated stranger from
-      # self-provisioning an org. The `custom` provider id is fixed by Auth.js
-      # and is what makes the callback path /api/auth/callback/custom.
-      additionalEnv:
-        - name: AUTH_CUSTOM_NAME
-          value: "Authentik"
-        - name: AUTH_CUSTOM_ISSUER
-          value: "https://sso.grizzly-endeavors.com/application/o/langfuse/"
-        - name: AUTH_CUSTOM_CLIENT_ID
-          valueFrom:
-            secretKeyRef:
-              name: langfuse-secrets
-              key: oidc-client-id
-        - name: AUTH_CUSTOM_CLIENT_SECRET
-          valueFrom:
-            secretKeyRef:
-              name: langfuse-secrets
-              key: oidc-client-secret
-        - name: AUTH_DISABLE_USERNAME_PASSWORD
-          value: "true"
-        - name: AUTH_DISABLE_SIGNUP
-          value: "true"
+      features:
+        # Stops an authenticated stranger from self-provisioning an org. The
+        # chart emits AUTH_DISABLE_SIGNUP unconditionally, so this has to be
+        # set here rather than through additionalEnv — a second copy there is a
+        # duplicate env key and Helm refuses the patch outright.
+        signUpDisabled: true
+
+      # Login is Authentik-only. The provider key `custom` is what Auth.js
+      # names a generic OIDC provider: the chart renders each option as
+      # AUTH_<PROVIDER>_<OPTION>, so this becomes AUTH_CUSTOM_ISSUER and
+      # friends, and it is also what fixes the callback path at
+      # /api/auth/callback/custom (see the Authentik blueprint).
+      auth:
+        disableUsernamePassword: true
+        providers:
+          custom:
+            name: "Authentik"
+            issuer: "https://sso.grizzly-endeavors.com/application/o/langfuse/"
+            clientId:
+              secretKeyRef:
+                name: langfuse-secrets
+                key: oidc-client-id
+            clientSecret:
+              secretKeyRef:
+                name: langfuse-secrets
+                key: oidc-client-secret
 
       web:
         resources:
