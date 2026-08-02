@@ -188,6 +188,27 @@
       no_log: true
       changed_when: false
 
+    # The grant task above is `changed_when: false` and `no_log: true`, so a
+    # statement that lands as a no-op leaves no trace in the play recap. Assert
+    # the outcome instead of trusting the exit code — a missing system.parts
+    # grant only shows up later as a worker that can't propagate events, which
+    # looks like a healthy Langfuse holding no traces.
+    - name: Verify the langfuse user holds the system.parts grant
+      ansible.builtin.shell:
+        cmd: >-
+          set -o pipefail;
+          docker exec -i foundation-clickhouse
+          clickhouse-client --password "$ADMINPW"
+          --query "SELECT count() FROM system.grants
+          WHERE user_name = 'langfuse' AND database = 'system' AND table = 'parts'"
+        executable: /bin/bash
+      environment:
+        ADMINPW: "{{ vault_clickhouse_password }}"
+      register: lf_ch_system_grant
+      changed_when: false
+      no_log: true
+      failed_when: lf_ch_system_grant.stdout | trim != "1"
+
     - name: Verify the langfuse user can reach its database
       ansible.builtin.shell:
         cmd: >-
