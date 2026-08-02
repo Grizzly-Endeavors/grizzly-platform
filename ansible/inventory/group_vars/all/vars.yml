@@ -90,6 +90,19 @@ openbao_infisical_project_id: >-
 # play only spends API calls on the variables it actually references.
 onepassword_vault: "grizzly-platform"
 
+# Date the eso-reader / ansible-reader service account tokens were minted,
+# YYYY-MM-DD. This is recorded by hand because a token's expiry is not
+# readable from the token: `op whoami`, `op account get` and
+# `op service-account` all omit it, and the token itself carries no exp
+# claim. 1Password caps service account lifetime at 90 days (the CLI rejects
+# --expires-in >= 2160h), so age since minting is a sound proxy for "running
+# out of time" without needing the exact --expires-in value.
+#
+# Prometheus turns this into onepassword_token_minted_timestamp_seconds and
+# alerts on age (see the external-secrets rule group). Update this whenever a
+# token is re-minted, and re-run setup-1password-eso.yml.
+onepassword_tokens_minted: "2026-08-01"
+
 # OpenBao API endpoint — LAN-only, served on r730xd. Surfaced here (not just
 # in the role defaults) because plays that don't apply the r730xd-openbao role
 # still need to reach the API. Port from the role defaults.
