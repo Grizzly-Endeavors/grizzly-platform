@@ -18,3 +18,4 @@ resources:
   - helmrepository.yaml
   - helmrelease.yaml
   - openbao-ca-configmap.yaml
+  - metrics-service.yaml
