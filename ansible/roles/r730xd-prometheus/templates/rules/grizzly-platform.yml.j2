@@ -620,6 +620,29 @@ groups:
             Exhausting it breaks Ansible secret lookups too.
           runbook: "docs/runbooks/onepassword-quickref.md"
 
+      # A service account token's expiry cannot be read back from the token,
+      # so this alerts on age against 1Password's hard 90-day cap on service
+      # account lifetime rather than on a known expiry date. It fires 14 days
+      # before that ceiling, whatever --expires-in was actually used. The
+      # mint date comes from onepassword_tokens_minted in group_vars,
+      # published as a node_exporter textfile metric.
+      #
+      # ClusterSecretStoreNotReady is the backstop: if a token was minted with
+      # a shorter lifetime than assumed here, that alert catches the death
+      # even though this one stayed quiet.
+      - alert: OnePasswordTokenNearingMaxAge
+        expr: (time() - onepassword_token_minted_timestamp_seconds) > 76 * 86400
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: >-
+            1Password service account tokens have been live for
+            {{ '{{' }} humanizeDuration $value {{ '}}' }} — 1Password caps service
+            account lifetime at 90 days. Re-mint eso-reader and ansible-reader,
+            then update onepassword_tokens_minted.
+          runbook: "docs/runbooks/onepassword-quickref.md"
+
   - name: openbao
     rules:
       # `up{job="openbao"} == 0` fires for EITHER "server down" OR
