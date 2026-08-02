@@ -1,0 +1,104 @@
+---
+# r730xd-clickhouse: Deploy the OLAP foundation store (ClickHouse) as a Docker Compose service
+
+- name: Create clickhouse compose directory
+  ansible.builtin.file:
+    path: "{{ clickhouse_compose_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Create clickhouse data directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    # The container runs as the image's clickhouse user (101:101); it cannot
+    # write into a root-owned dataset.
+    owner: 101
+    group: 101
+    mode: "0750"
+  loop:
+    - "{{ clickhouse_data_dir }}"
+    - "{{ clickhouse_logs_dir }}"
+
+- name: Deploy clickhouse server configuration
+  ansible.builtin.template:
+    src: config.xml.j2
+    dest: "{{ clickhouse_compose_dir }}/config.xml"
+    owner: 101
+    group: 101
+    mode: "0444"
+  notify: Restart foundation-clickhouse
+
+- name: Deploy clickhouse user configuration
+  ansible.builtin.template:
+    src: users.xml.j2
+    dest: "{{ clickhouse_compose_dir }}/users.xml"
+    owner: 101
+    group: 101
+    mode: "0400"
+  no_log: true
+  notify: Restart foundation-clickhouse
+
+- name: Deploy clickhouse docker-compose.yml
+  ansible.builtin.template:
+    src: docker-compose.yml.j2
+    dest: "{{ clickhouse_compose_dir }}/docker-compose.yml"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+  notify: Restart foundation-clickhouse
+
+- name: Ensure clickhouse is running
+  ansible.builtin.command: docker compose up -d
+  args:
+    chdir: "{{ clickhouse_compose_dir }}"
+  register: clickhouse_up
+  changed_when: "'Started' in clickhouse_up.stderr or 'Created' in clickhouse_up.stderr"
+
+- name: Wait for clickhouse to accept connections
+  ansible.builtin.wait_for:
+    port: "{{ clickhouse_native_port }}"
+    delay: 5
+    timeout: 120
+
+- name: Verify clickhouse health
+  ansible.builtin.command: >-
+    docker exec foundation-clickhouse
+    clickhouse-client --port {{ clickhouse_native_port }}
+    --password {{ clickhouse_password }}
+    --query "SELECT version()"
+  register: clickhouse_health
+  retries: 6
+  delay: 5
+  until: clickhouse_health.rc == 0
+  changed_when: false
+  no_log: true
+
+- name: Verify the prometheus endpoint is serving
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ clickhouse_prometheus_port }}/metrics"
+    return_content: false
+  register: clickhouse_metrics
+  retries: 3
+  delay: 5
+  until: clickhouse_metrics.status == 200
+  changed_when: false
+
+- name: Display clickhouse summary
+  ansible.builtin.debug:
+    msg:
+      - "=== clickhouse (ClickHouse {{ clickhouse_version }}) ==="
+      - ""
+      - "HTTP:    http://{{ ansible_facts['default_ipv4']['address'] | default(r730xd_ip) }}:{{ clickhouse_http_port }}"
+      - "Native:  clickhouse://{{ ansible_facts['default_ipv4']['address'] | default(r730xd_ip) }}:{{ clickhouse_native_port }}"
+      - "Metrics: http://{{ ansible_facts['default_ipv4']['address'] | default(r730xd_ip) }}:{{ clickhouse_prometheus_port }}/metrics"
+      - "Data:    {{ clickhouse_data_dir }}"
+      - "Compose: {{ clickhouse_compose_dir }}"
+      - ""
+      - "Server version: {{ clickhouse_health.stdout | default('unknown') | trim }}"
+      - "Memory ceiling: {{ (clickhouse_max_server_memory_usage | int / 1073741824) | round(1) }} GiB server, {{ (clickhouse_max_memory_usage | int / 1073741824) | round(1) }} GiB per query"
+      - ""
+      - "Single node — no Keeper, no replication. Consumers must not use ON CLUSTER."

@@ -1,0 +1,33 @@
+<?xml version="1.0"?>
+<!-- Managed by Ansible — r730xd-clickhouse role.
+     Dropped into /etc/clickhouse-server/users.d/ and merged over the shipped
+     users.xml.
+
+     This file defines the admin account only. Per-app accounts (their user,
+     database and grants) are provisioned by that app's setup-<app>-stores.yml
+     play, mirroring how each app gets its own Postgres role and database — the
+     store role owns the server, the app play owns the account. -->
+<clickhouse>
+    <profiles>
+        <default>
+            <max_memory_usage>{{ clickhouse_max_memory_usage }}</max_memory_usage>
+        </default>
+    </profiles>
+
+    <users>
+        <default>
+            <!-- Hashed here so the password never lands on disk in clear text.
+                 ClickHouse compares the SHA-256 of what the client sends. -->
+            <password remove="remove"/>
+            <password_sha256_hex>{{ clickhouse_password | hash('sha256') }}</password_sha256_hex>
+            <networks>
+{% for net in clickhouse_allowed_networks %}
+                <ip>{{ net }}</ip>
+{% endfor %}
+            </networks>
+            <profile>default</profile>
+            <quota>default</quota>
+            <access_management>1</access_management>
+        </default>
+    </users>
+</clickhouse>
