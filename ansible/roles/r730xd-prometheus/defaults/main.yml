@@ -75,6 +75,9 @@ prometheus_observability_targets:
         regex: 'redis_(.*)'
         target_label: __name__
         replacement: 'kv_cache_${1}'
+  # ClickHouse serves Prometheus natively — no exporter sidecar needed.
+  - job: "clickhouse"
+    target: "{{ r730xd_ip }}:9126"
   - job: "cadvisor"
     target: "{{ r730xd_ip }}:8080"
   # Caddy's dedicated metrics listener (caddy_metrics_port), scraped over the

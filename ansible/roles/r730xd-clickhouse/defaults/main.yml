@@ -42,7 +42,11 @@ clickhouse_compose_dir: "/opt/foundation/clickhouse"
 # against total RAM. This host also carries Postgres, kv-cache, versitygw x2,
 # OpenBao and the whole observability stack, and ClickHouse will happily take
 # whatever ratio of RAM it is allowed.
-clickhouse_max_server_memory_usage: "8589934592"   # 8 GiB across the server
+#
+# The server-wide ceiling lives in group_vars/all/vars.yml, not here: the
+# Prometheus alert rules compare against the same number and render from a
+# different playbook, where a role default would be out of scope.
+clickhouse_max_server_memory_usage: "{{ clickhouse_max_server_memory_bytes }}"
 clickhouse_max_memory_usage: "4294967296"          # 4 GiB for any one query
 clickhouse_max_concurrent_queries: 100
 

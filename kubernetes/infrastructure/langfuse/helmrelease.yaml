@@ -153,7 +153,12 @@ spec:
       # non-AWS gateway.
       endpoint: "http://10.0.0.200:7070"
       bucket: langfuse
-      region: "auto"
+      # MUST be us-east-1, not the chart's "auto" default. Ordinary SigV4
+      # requests pass with any region string, but versitygw validates the
+      # region embedded in a presigned URL's X-Amz-Credential and rejects
+      # anything else — so "auto" breaks media uploads specifically while
+      # leaving event ingestion looking healthy.
+      region: "us-east-1"
       forcePathStyle: true
       auth:
         existingSecret: langfuse-secrets
