@@ -1,0 +1,238 @@
+---
+# setup-langfuse-stores.yml — foundation-side provisioning for Langfuse, the
+# platform LLM-observability service (deployed to K8s by Flux from
+# kubernetes/infrastructure/langfuse/).
+#
+# Langfuse rides the shared foundation stores rather than the bundled
+# sub-charts the upstream Helm chart ships (ADR-003). All four of those
+# sub-charts are Bitnami, and since 2025-08-28 they default to
+# `bitnamilegacy/*` images that no longer receive updates — so every one of
+# them is disabled in the HelmRelease and pointed here instead. This playbook
+# provisions the three that need an account:
+#
+#   Play 1  The `langfuse` database + login role on the foundation PostgreSQL.
+#           The role OWNS its DB and nothing else; Langfuse applies its own
+#           migrations at startup.
+#   Play 2  The `langfuse` user + database on the foundation ClickHouse, which
+#           holds the trace/observation/score tables.
+#   Play 3  The `langfuse` bucket + a scoped userplus account on the s3-hot
+#           versitygw gateway (event and media uploads), via the shared
+#           versitygw-provision-account task.
+#
+# Valkey needs nothing provisioned — kv-cache is a single shared instance with
+# one password, and Langfuse namespaces its own keys.
+#
+# Credentials come from 1Password stores-langfuse (db_password,
+# clickhouse_password, s3_access_key, s3_secret_key) and are read back
+# cross-domain by Langfuse's K8s ExternalSecret.
+#
+# Prerequisites:
+#   - Foundation Postgres, ClickHouse + s3-hot versitygw running
+#     (deploy-foundation-stores.yml).
+#   - 1Password seeded: stores-langfuse with the four keys above, plus
+#     stores-clickhouse (password) and stores-s3-hot (root creds).
+#     Generate db_password WITHOUT single quotes (e.g. `openssl rand -base64 36`).
+#
+# Usage (all three plays run on the r730xd host):
+#   ansible-playbook -i ansible/inventory ansible/playbooks/setup-langfuse-stores.yml \
+#     --vault-password-file .vault_pass -v
+#
+# Run just one part:
+#   ... --tags db
+#   ... --tags clickhouse
+#   ... --tags s3
+
+- name: Provision langfuse database on foundation Postgres
+  hosts: r730xd
+  become: yes
+  gather_facts: no
+  tags: [db]
+
+  pre_tasks:
+    - name: Load 1Password-sourced platform secrets
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/../vars/onepassword_secrets.yml"
+
+    - name: Verify foundation Postgres container is running
+      ansible.builtin.command: docker exec foundation-postgres pg_isready -U postgres
+      changed_when: false
+
+  tasks:
+    # psql -U postgres connects over the container's local socket (trust auth) —
+    # no superuser password needed. The role password is passed via psql's
+    # :'pw' literal (safe quoting); the SQL is fed on stdin (docker exec -i),
+    # because psql only interpolates variables for stdin/-f input, NOT for -c.
+    - name: Check whether the langfuse role exists
+      ansible.builtin.command: >-
+        docker exec foundation-postgres
+        psql -U postgres -tAc
+        "SELECT 1 FROM pg_roles WHERE rolname='langfuse'"
+      register: lf_role
+      changed_when: false
+
+    - name: Create the langfuse login role
+      ansible.builtin.shell:
+        cmd: >-
+          set -o pipefail;
+          printf "CREATE ROLE langfuse LOGIN PASSWORD :'pw';\n"
+          | docker exec -i foundation-postgres
+          psql -U postgres -v ON_ERROR_STOP=1 -v pw="$PGPW"
+        executable: /bin/bash
+      environment:
+        PGPW: "{{ vault_langfuse_db_password }}"
+      when: lf_role.stdout != "1"
+      no_log: true
+
+    - name: Keep the langfuse role password in sync with 1Password
+      ansible.builtin.shell:
+        cmd: >-
+          set -o pipefail;
+          printf "ALTER ROLE langfuse LOGIN PASSWORD :'pw';\n"
+          | docker exec -i foundation-postgres
+          psql -U postgres -v ON_ERROR_STOP=1 -v pw="$PGPW"
+        executable: /bin/bash
+      environment:
+        PGPW: "{{ vault_langfuse_db_password }}"
+      no_log: true
+      changed_when: false
+
+    - name: Check whether the langfuse database exists
+      ansible.builtin.command: >-
+        docker exec foundation-postgres
+        psql -U postgres -tAc
+        "SELECT 1 FROM pg_database WHERE datname='langfuse'"
+      register: lf_db
+      changed_when: false
+
+    - name: Create the langfuse database owned by the langfuse role
+      ansible.builtin.command: >-
+        docker exec foundation-postgres
+        psql -U postgres -v ON_ERROR_STOP=1
+        -c "CREATE DATABASE langfuse OWNER langfuse"
+      when: lf_db.stdout != "1"
+
+- name: Provision langfuse user and database on foundation ClickHouse
+  hosts: r730xd
+  become: yes
+  gather_facts: no
+  tags: [clickhouse]
+
+  pre_tasks:
+    - name: Load 1Password-sourced platform secrets
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/../vars/onepassword_secrets.yml"
+
+    - name: Verify langfuse + clickhouse credentials are present in 1Password
+      ansible.builtin.assert:
+        that:
+          - vault_langfuse_clickhouse_password | default('') | length > 0
+          - vault_clickhouse_password | default('') | length > 0
+        fail_msg: >
+          stores-langfuse (clickhouse_password) and stores-clickhouse
+          (password) must be seeded in 1Password.
+        success_msg: "langfuse + clickhouse credentials are set"
+
+  tasks:
+    # Statements are fed on stdin so the passwords never appear in the process
+    # table on the host, and `docker exec -i` keeps them off the command line.
+    # All three are idempotent, so this play converges rather than branching on
+    # existence checks the way the Postgres play has to.
+    - name: Create the langfuse ClickHouse user
+      ansible.builtin.shell:
+        cmd: >-
+          set -o pipefail;
+          printf "CREATE USER IF NOT EXISTS langfuse IDENTIFIED WITH sha256_password BY '%s';\n"
+          "$CHPW"
+          | docker exec -i foundation-clickhouse
+          clickhouse-client --password "$ADMINPW" --multiquery
+        executable: /bin/bash
+      environment:
+        CHPW: "{{ vault_langfuse_clickhouse_password }}"
+        ADMINPW: "{{ vault_clickhouse_password }}"
+      no_log: true
+      changed_when: false
+
+    - name: Keep the langfuse ClickHouse password in sync with 1Password
+      ansible.builtin.shell:
+        cmd: >-
+          set -o pipefail;
+          printf "ALTER USER langfuse IDENTIFIED WITH sha256_password BY '%s';\n"
+          "$CHPW"
+          | docker exec -i foundation-clickhouse
+          clickhouse-client --password "$ADMINPW" --multiquery
+        executable: /bin/bash
+      environment:
+        CHPW: "{{ vault_langfuse_clickhouse_password }}"
+        ADMINPW: "{{ vault_clickhouse_password }}"
+      no_log: true
+      changed_when: false
+
+    # ALL is scoped to the one database. Langfuse runs its own schema
+    # migrations on worker startup, so it needs DDL there — but nowhere else.
+    - name: Create the langfuse database and grant the langfuse user
+      ansible.builtin.shell:
+        cmd: >-
+          set -o pipefail;
+          printf "CREATE DATABASE IF NOT EXISTS langfuse;\nGRANT ALL ON langfuse.* TO langfuse;\n"
+          | docker exec -i foundation-clickhouse
+          clickhouse-client --password "$ADMINPW" --multiquery
+        executable: /bin/bash
+      environment:
+        ADMINPW: "{{ vault_clickhouse_password }}"
+      no_log: true
+      changed_when: false
+
+    - name: Verify the langfuse user can reach its database
+      ansible.builtin.shell:
+        cmd: >-
+          set -o pipefail;
+          docker exec -i foundation-clickhouse
+          clickhouse-client --user langfuse --password "$CHPW"
+          --query "SELECT currentDatabase() FROM system.one" --database langfuse
+        executable: /bin/bash
+      environment:
+        CHPW: "{{ vault_langfuse_clickhouse_password }}"
+      register: lf_ch_check
+      changed_when: false
+      no_log: true
+
+    - name: Report the ClickHouse account
+      ansible.builtin.debug:
+        msg: "langfuse ClickHouse user reaches database: {{ lf_ch_check.stdout | trim }}"
+
+- name: Provision langfuse S3 bucket and scoped account on s3-hot
+  hosts: r730xd
+  become: yes
+  gather_facts: no
+  tags: [s3]
+
+  pre_tasks:
+    - name: Load 1Password-sourced platform secrets
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/../vars/onepassword_secrets.yml"
+
+    - name: Verify langfuse + s3-hot credentials are present in 1Password
+      ansible.builtin.assert:
+        that:
+          - vault_langfuse_s3_access_key | default('') | length > 0
+          - vault_langfuse_s3_secret_key | default('') | length > 0
+          - vault_s3_hot_root_access_key | default('') | length > 0
+          - vault_s3_hot_root_secret_key | default('') | length > 0
+        fail_msg: >
+          stores-langfuse (s3_access_key, s3_secret_key) and stores-s3-hot
+          (root_access_key, root_secret_key) must be seeded in 1Password.
+        success_msg: "langfuse + s3-hot credentials are set"
+
+  tasks:
+    # s3-hot rather than s3-bulk: Langfuse writes every ingested event as a
+    # blob here before the worker folds it into ClickHouse, so this is a
+    # continuous-write hot path, not write-once archival.
+    - name: Provision the langfuse account + bucket on s3-hot
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/versitygw-provision-account.yml"
+      vars:
+        vgw_instance: s3-hot
+        vgw_root_access: "{{ vault_s3_hot_root_access_key }}"
+        vgw_root_secret: "{{ vault_s3_hot_root_secret_key }}"
+        vgw_access: "{{ vault_langfuse_s3_access_key }}"
+        vgw_secret: "{{ vault_langfuse_s3_secret_key }}"
+        vgw_bucket: langfuse
