@@ -87,6 +87,25 @@ spec:
                 key: oidc-client-secret
 
       web:
+        # The web container applies the Prisma migrations before it serves, and
+        # on a cold database that is 400+ of them — far longer than the chart's
+        # default liveness budget of 20s + 3x10s. Exceeding it gets the
+        # container killed mid-migration, which leaves a half-applied row in
+        # _prisma_migrations and puts Langfuse into a permanent P3009 crash
+        # loop that no restart can clear.
+        #
+        # A startupProbe is the right tool here, but the chart renders only
+        # liveness and readiness — so the runway has to come from a generous
+        # liveness budget instead: 3 min before the first check, then 2 more
+        # before it gives up.
+        livenessProbe:
+          initialDelaySeconds: 180
+          periodSeconds: 10
+          failureThreshold: 12
+        readinessProbe:
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          failureThreshold: 30
         resources:
           requests:
             cpu: 500m
