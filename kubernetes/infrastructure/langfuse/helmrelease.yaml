@@ -23,8 +23,13 @@ spec:
       # The chart's appVersion still tracks the v3 line, so running v4 requires
       # this override. v4 needs a newer ClickHouse than the chart's bundled
       # sub-chart ships, which is one more reason the store is external.
+      #
+      # Pin against the published *image* tags, not the GitHub release list —
+      # the two are not in step. Verify with:
+      #   curl -sI https://hub.docker.com/v2/repositories/langfuse/langfuse/tags/<tag>
+      # and check langfuse-worker too; both must carry the tag.
       image:
-        tag: "4.2.0"
+        tag: "4.1.0"
 
       nextauth:
         url: https://langfuse.grizzly-endeavors.com
