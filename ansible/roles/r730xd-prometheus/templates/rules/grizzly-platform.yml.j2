@@ -536,6 +536,90 @@ groups:
         annotations:
           summary: "kv-cache is evicting keys — memory pressure"
 
+  # External Secrets Operator materialises every platform secret in the
+  # cluster from 1Password. ExternalSecrets use refreshPolicy: OnChange, so
+  # nothing re-reads the provider on a timer — a dead service account token or
+  # a bad reference stays invisible until the next rotation, and the already-
+  # materialised Secrets keep workloads running in the meantime. That makes
+  # these the only signals that the secrets plane has stopped working, and it
+  # is why every alert here is a warning: the impact is deferred, not live.
+  - name: external-secrets
+    rules:
+      - alert: ExternalSecretsOperatorDown
+        expr: up{job="external-secrets"} == 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: >-
+            External Secrets Operator is unreachable — secrets will not sync
+            until it is back (existing Secrets keep serving)
+
+      # Store validation calls the 1Password API, so Ready=False is the
+      # liveness signal for the eso-reader service account token: it goes
+      # False when the token expires, is revoked, or loses vault access.
+      # Nothing else surfaces that — the token's expiry date is not readable
+      # from the token itself.
+      - alert: ClusterSecretStoreNotReady
+        expr: clustersecretstore_status_condition{condition="Ready",status="True"} == 0
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: >-
+            ClusterSecretStore {{ '{{' }} $labels.name {{ '}}' }} failed validation —
+            the service account token is likely expired, revoked, or missing
+            vault access
+          runbook: "docs/runbooks/onepassword-quickref.md"
+
+      # The alert that catches a broken secret reference. Emitted per
+      # condition (True / False), so ==0 on the Ready=True series means the
+      # ExternalSecret is not syncing. 30m is deliberately long: a rollout or
+      # a store reconcile can blip, but a bad remoteRef stays broken forever.
+      - alert: ExternalSecretNotReady
+        expr: externalsecret_status_condition{condition="Ready",status="True"} == 0
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: >-
+            ExternalSecret {{ '{{' }} $labels.namespace {{ '}}' }}/{{ '{{' }} $labels.name {{ '}}' }}
+            is not syncing — its target Secret is stale
+          runbook: "docs/runbooks/onepassword-quickref.md"
+
+      - alert: ExternalSecretsProviderErrors
+        expr: |
+          sum by (provider) (
+            increase(externalsecret_provider_api_calls_count{status="error"}[1h])
+          ) > 5
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: >-
+            External Secrets is getting errors from {{ '{{' }} $labels.provider {{ '}}' }}
+            ({{ '{{' }} $value | printf "%.0f" {{ '}}' }} in the last hour) —
+            check credentials and provider rate limits
+
+      # 1Password's daily request cap is per ACCOUNT and shared by every
+      # service account token, so a runaway ESO would exhaust the quota that
+      # Ansible also depends on. OnChange means steady-state ESO traffic is
+      # near zero — periodic store validation only — so sustained volume here
+      # means something is re-reading in a loop. Half the daily cap is the
+      # threshold; Ansible's share is human-initiated and fails loudly.
+      - alert: OnePasswordApiVolumeHigh
+        expr: |
+          sum(increase(externalsecret_provider_api_calls_count{provider="1Password/SDK"}[24h])) > 500
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: >-
+            External Secrets made {{ '{{' }} $value | printf "%.0f" {{ '}}' }} 1Password
+            API calls in 24h — over half the shared daily account quota.
+            Exhausting it breaks Ansible secret lookups too.
+          runbook: "docs/runbooks/onepassword-quickref.md"
+
   - name: openbao
     rules:
       # `up{job="openbao"} == 0` fires for EITHER "server down" OR
