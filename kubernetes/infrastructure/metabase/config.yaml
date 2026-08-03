@@ -1,0 +1,55 @@
+# Non-secret Metabase configuration, loaded wholesale as container env. The
+# matching password and encryption key come from metabase-secrets.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: metabase-config
+  namespace: metabase
+  labels:
+    app.kubernetes.io/name: metabase
+data:
+  # Application database: the foundation Postgres on the R730xd, reached over
+  # the flat L2 rather than through a K8s Service (ADR-003). Metabase runs its
+  # own schema migrations here at startup, which is why the role owns the DB.
+  MB_DB_TYPE: "postgres"
+  MB_DB_HOST: "10.0.0.200"
+  MB_DB_PORT: "5432"
+  MB_DB_DBNAME: "metabase"
+  MB_DB_USER: "metabase"
+
+  # Must match the public hostname: Metabase builds absolute links (dashboard
+  # subscriptions, password resets, "share" URLs) from this, and a wrong value
+  # produces links that 404 for everyone but the person who clicked.
+  MB_SITE_URL: "https://analytics.grizzly-endeavors.com"
+
+  MB_JETTY_HOST: "0.0.0.0"
+  MB_JETTY_PORT: "3000"
+
+  # Driver JARs are extracted here at every start. Mounted as an emptyDir so
+  # the root filesystem can stay read-only.
+  MB_PLUGINS_DIR: "/plugins"
+
+  # No usage pings home. This is a private homelab instance behind an SSO gate;
+  # upstream analytics on it would be noise for them and egress for us.
+  MB_ANON_TRACKING_ENABLED: "false"
+
+  # Metabase sizes its heap from the container limit, but only when it can read
+  # a cgroup limit it understands — pin it so a JVM that guesses wrong doesn't
+  # get OOMKilled mid-query. Leaves ~2Gi of the 6Gi limit for JVM overhead and
+  # the driver's off-heap buffers.
+  JAVA_OPTS: "-Xmx4g"
+---
+# The forward-auth subrequest reaches Authentik with Host set to the authentik
+# Service, not analytics.grizzly-endeavors.com — so the outpost cannot tell
+# which proxy provider applies unless the real host is passed explicitly.
+# nginx snippet annotations are disabled cluster-wide, hence a ConfigMap.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: metabase-auth-headers
+  namespace: metabase
+  labels:
+    app.kubernetes.io/name: metabase
+data:
+  X-Forwarded-Host: "analytics.grizzly-endeavors.com"
+  X-Forwarded-Proto: "https"

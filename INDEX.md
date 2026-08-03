@@ -59,6 +59,12 @@ Langfuse on `langfuse.grizzly-endeavors.com` — traces, token/cost accounting, 
 - **How:** [runbooks/langfuse.md](docs/runbooks/langfuse.md) (operate, add projects, upgrade, failure modes) · **integrate:** [integration/clickhouse.md](docs/integration/clickhouse.md) (use the ClickHouse store from an app).
 - **Code:** `kubernetes/infrastructure/langfuse/` + `kubernetes/clusters/grizzly-platform/langfuse.yaml`, `ansible/playbooks/setup-langfuse-stores.yml`, `ansible/roles/r730xd-clickhouse/`.
 
+### Analytics (Metabase)
+Metabase on `analytics.grizzly-endeavors.com` — dashboards and ad-hoc exploration over the platform's own data (the grizzly-gameservers product event log and occupancy series first, plus Langfuse's ClickHouse). Behind Authentik forward-auth scoped to `grizzly-admins`. Reads every data source through a `metabase_ro` account holding SELECT and nothing else; owns only its own database.
+- **Why:** [ADR-065](docs/decisions/065-metabase-analytics-service.md) (Metabase + read-only store accounts).
+- **How:** [runbooks/metabase.md](docs/runbooks/metabase.md) (standup, adding a database, upgrades, failure modes) · **integrate:** [integration/metabase.md](docs/integration/metabase.md) (expose your app's database).
+- **Code:** `kubernetes/infrastructure/metabase/` + `kubernetes/clusters/grizzly-platform/metabase.yaml`, `ansible/playbooks/setup-metabase-stores.yml`, `kubernetes/infrastructure/authentik/blueprints/metabase.yaml`, `scripts/metabase-add-database.sh`.
+
 ### Assistant (Residuum)
 Residuum personal agent on the R730xd — a first-party AI assistant that helps operate the platform. Runs the **stock** upstream image (no custom build) as a systemd-managed compose service; external CLIs come from a read-only tools volume on its PATH, so adding a tool needs no rebuild. Browser access is via residuum's outbound Cloud relay only — no published port, no ingress rule. It changes the platform through PRs and can merge its own, with Flux applying on merge — so every change is recorded and revertable, but it can reach production unattended.
 - **Why:** [ADR-062](docs/decisions/062-residuum-platform-assistant.md).

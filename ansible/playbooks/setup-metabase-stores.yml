@@ -1,0 +1,343 @@
+---
+# setup-metabase-stores.yml — foundation-side provisioning for Metabase, the
+# platform analytics/BI service (deployed to K8s by Flux from
+# kubernetes/infrastructure/metabase/).
+#
+# Metabase needs two categories of account, and the split is the whole point of
+# this playbook (ADR-065):
+#
+#   Play 1  `metabase` — a login role OWNING the `metabase` database on the
+#           foundation PostgreSQL. This is Metabase's *own* state: questions,
+#           dashboards, users, and the encrypted data source credentials.
+#           Metabase runs its own migrations against it at startup.
+#
+#   Play 2  `metabase_ro` — a login role with SELECT and nothing else on each
+#           app database Metabase is allowed to read. Metabase's SQL editor
+#           hands raw SQL straight to the connection, so a data source
+#           connected as the app's owner role would let anyone with dashboard
+#           access DELETE from the app's tables. The read-only role makes that
+#           a permission error rather than a policy.
+#
+#   Play 3  `metabase_ro` on the foundation ClickHouse — SELECT on the
+#           `langfuse` database, so Gary's traces are queryable alongside the
+#           product event log. Same reasoning: Langfuse's own user owns its
+#           schema and runs migrations with it; Metabase gets neither.
+#
+# Adding another app database to Metabase is one entry in
+# `metabase_readonly_databases` below plus a re-run with `--tags readonly` —
+# see docs/integration/metabase.md.
+#
+# Credentials come from 1Password stores-metabase (db_password,
+# readonly_db_password, clickhouse_password) and platform-metabase
+# (encryption_key), and are read back by Metabase's K8s ExternalSecret.
+#
+# Prerequisites:
+#   - Foundation Postgres + ClickHouse running (deploy-foundation-stores.yml).
+#   - The app databases in metabase_readonly_databases already exist.
+#   - 1Password seeded: stores-metabase with the three passwords, plus
+#     stores-clickhouse (password) for the ClickHouse admin.
+#     Generate each WITHOUT single quotes (e.g. `openssl rand -base64 36`) —
+#     the Postgres plays pass them through psql's :'pw' literal and a ' breaks
+#     the quoting.
+#
+# Usage (all three plays run on the r730xd host):
+#   ansible-playbook -i ansible/inventory ansible/playbooks/setup-metabase-stores.yml \
+#     --vault-password-file .vault_pass -v
+#
+# Run just one part:
+#   ... --tags db
+#   ... --tags readonly
+#   ... --tags clickhouse
+
+- name: Provision the metabase application database on foundation Postgres
+  hosts: r730xd
+  become: yes
+  gather_facts: no
+  tags: [db]
+
+  pre_tasks:
+    - name: Load 1Password-sourced platform secrets
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/../vars/onepassword_secrets.yml"
+
+    - name: Verify foundation Postgres container is running
+      ansible.builtin.command: docker exec foundation-postgres pg_isready -U postgres
+      changed_when: false
+
+  tasks:
+    # psql -U postgres connects over the container's local socket (trust auth) —
+    # no superuser password needed. The role password is passed via psql's
+    # :'pw' literal (safe quoting); the SQL is fed on stdin (docker exec -i),
+    # because psql only interpolates variables for stdin/-f input, NOT for -c.
+    - name: Check whether the metabase role exists
+      ansible.builtin.command: >-
+        docker exec foundation-postgres
+        psql -U postgres -tAc
+        "SELECT 1 FROM pg_roles WHERE rolname='metabase'"
+      register: mb_role
+      changed_when: false
+
+    - name: Create the metabase login role
+      ansible.builtin.shell:
+        cmd: >-
+          set -o pipefail;
+          printf "CREATE ROLE metabase LOGIN PASSWORD :'pw';\n"
+          | docker exec -i foundation-postgres
+          psql -U postgres -v ON_ERROR_STOP=1 -v pw="$PGPW"
+        executable: /bin/bash
+      environment:
+        PGPW: "{{ vault_metabase_db_password }}"
+      when: mb_role.stdout != "1"
+      no_log: true
+
+    - name: Keep the metabase role password in sync with 1Password
+      ansible.builtin.shell:
+        cmd: >-
+          set -o pipefail;
+          printf "ALTER ROLE metabase LOGIN PASSWORD :'pw';\n"
+          | docker exec -i foundation-postgres
+          psql -U postgres -v ON_ERROR_STOP=1 -v pw="$PGPW"
+        executable: /bin/bash
+      environment:
+        PGPW: "{{ vault_metabase_db_password }}"
+      no_log: true
+      changed_when: false
+
+    - name: Check whether the metabase database exists
+      ansible.builtin.command: >-
+        docker exec foundation-postgres
+        psql -U postgres -tAc
+        "SELECT 1 FROM pg_database WHERE datname='metabase'"
+      register: mb_db
+      changed_when: false
+
+    - name: Create the metabase database owned by the metabase role
+      ansible.builtin.command: >-
+        docker exec foundation-postgres
+        psql -U postgres -v ON_ERROR_STOP=1
+        -c "CREATE DATABASE metabase OWNER metabase"
+      when: mb_db.stdout != "1"
+
+- name: Provision the metabase_ro read-only role on the app databases
+  hosts: r730xd
+  become: yes
+  gather_facts: no
+  tags: [readonly]
+
+  vars:
+    # Every database Metabase may read, with the role that owns it. The owner
+    # matters: ALTER DEFAULT PRIVILEGES is per-granting-role, so tables the app
+    # creates later are only covered if the app's own role is named here.
+    # Databases are added here, never by hand in psql — a hand grant is invisible
+    # to this play and silently lost the next time the DB is rebuilt.
+    metabase_readonly_databases:
+      - database: grizzly_gameservers
+        owner: grizzly_gameservers
+
+  pre_tasks:
+    - name: Load 1Password-sourced platform secrets
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/../vars/onepassword_secrets.yml"
+
+    - name: Verify the metabase_ro password is present in 1Password
+      ansible.builtin.assert:
+        that:
+          - vault_metabase_readonly_db_password | default('') | length > 0
+        fail_msg: "stores-metabase (readonly_db_password) must be seeded in 1Password."
+        success_msg: "metabase_ro credential is set"
+
+  tasks:
+    - name: Check whether the metabase_ro role exists
+      ansible.builtin.command: >-
+        docker exec foundation-postgres
+        psql -U postgres -tAc
+        "SELECT 1 FROM pg_roles WHERE rolname='metabase_ro'"
+      register: mb_ro_role
+      changed_when: false
+
+    # NOSUPERUSER NOCREATEDB NOCREATEROLE are the defaults, but they are spelled
+    # out because this role's entire purpose is what it cannot do.
+    - name: Create the metabase_ro login role
+      ansible.builtin.shell:
+        cmd: >-
+          set -o pipefail;
+          printf "CREATE ROLE metabase_ro LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE PASSWORD :'pw';\n"
+          | docker exec -i foundation-postgres
+          psql -U postgres -v ON_ERROR_STOP=1 -v pw="$PGPW"
+        executable: /bin/bash
+      environment:
+        PGPW: "{{ vault_metabase_readonly_db_password }}"
+      when: mb_ro_role.stdout != "1"
+      no_log: true
+
+    - name: Keep the metabase_ro role password in sync with 1Password
+      ansible.builtin.shell:
+        cmd: >-
+          set -o pipefail;
+          printf "ALTER ROLE metabase_ro LOGIN PASSWORD :'pw';\n"
+          | docker exec -i foundation-postgres
+          psql -U postgres -v ON_ERROR_STOP=1 -v pw="$PGPW"
+        executable: /bin/bash
+      environment:
+        PGPW: "{{ vault_metabase_readonly_db_password }}"
+      no_log: true
+      changed_when: false
+
+    # Four statements, each idempotent, run inside the target database:
+    #   CONNECT  — reach the database at all.
+    #   USAGE    — see the public schema.
+    #   SELECT   — read the tables that exist right now.
+    #   DEFAULT PRIVILEGES — read the tables the app creates from here on. The
+    #     app runs its own migrations, so without this a new table (or a table
+    #     recreated by a migration) is invisible to Metabase until someone
+    #     remembers to re-run this play. FOR ROLE names the granting role
+    #     because default privileges attach to whoever creates the object, not
+    #     to the database.
+    - name: Grant metabase_ro read-only access to each app database
+      ansible.builtin.command: >-
+        docker exec foundation-postgres
+        psql -U postgres -v ON_ERROR_STOP=1 -d {{ item.database }}
+        -c "GRANT CONNECT ON DATABASE {{ item.database }} TO metabase_ro;
+            GRANT USAGE ON SCHEMA public TO metabase_ro;
+            GRANT SELECT ON ALL TABLES IN SCHEMA public TO metabase_ro;
+            ALTER DEFAULT PRIVILEGES FOR ROLE {{ item.owner }} IN SCHEMA public
+              GRANT SELECT ON TABLES TO metabase_ro"
+      loop: "{{ metabase_readonly_databases }}"
+      loop_control:
+        label: "{{ item.database }}"
+      changed_when: false
+
+    # The grant task is `changed_when: false`, so a statement that lands as a
+    # no-op leaves no trace in the play recap. Assert the outcome instead of
+    # trusting the exit code: a missing default-privileges grant is invisible
+    # until months later, when a table added by a migration turns up empty in
+    # Metabase and looks like an application bug.
+    - name: Verify metabase_ro can read every table in each app database
+      ansible.builtin.shell:
+        cmd: >-
+          set -o pipefail;
+          docker exec foundation-postgres
+          psql -U postgres -tAd {{ item.database }} -c
+          "SELECT count(*) FROM pg_tables t
+             WHERE t.schemaname = 'public'
+               AND NOT has_table_privilege('metabase_ro', quote_ident(t.schemaname)
+                   || '.' || quote_ident(t.tablename), 'SELECT')"
+        executable: /bin/bash
+      loop: "{{ metabase_readonly_databases }}"
+      loop_control:
+        label: "{{ item.database }}"
+      register: mb_ro_unreadable
+      changed_when: false
+      failed_when: mb_ro_unreadable.stdout | trim != "0"
+
+    # The mirror image of the check above: confirm the role is read-only in
+    # fact, not just by intent. A future edit that grants too much should fail
+    # here rather than ship a Metabase that can write to the product database.
+    - name: Verify metabase_ro holds no write privilege on any app table
+      ansible.builtin.shell:
+        cmd: >-
+          set -o pipefail;
+          docker exec foundation-postgres
+          psql -U postgres -tAd {{ item.database }} -c
+          "SELECT count(*) FROM pg_tables t
+             WHERE t.schemaname = 'public'
+               AND has_table_privilege('metabase_ro', quote_ident(t.schemaname)
+                   || '.' || quote_ident(t.tablename),
+                   'INSERT, UPDATE, DELETE, TRUNCATE')"
+        executable: /bin/bash
+      loop: "{{ metabase_readonly_databases }}"
+      loop_control:
+        label: "{{ item.database }}"
+      register: mb_ro_writable
+      changed_when: false
+      failed_when: mb_ro_writable.stdout | trim != "0"
+
+- name: Provision the metabase_ro user on foundation ClickHouse
+  hosts: r730xd
+  become: yes
+  gather_facts: no
+  tags: [clickhouse]
+
+  pre_tasks:
+    - name: Load 1Password-sourced platform secrets
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/../vars/onepassword_secrets.yml"
+
+    - name: Verify metabase + clickhouse credentials are present in 1Password
+      ansible.builtin.assert:
+        that:
+          - vault_metabase_clickhouse_password | default('') | length > 0
+          - vault_clickhouse_password | default('') | length > 0
+        fail_msg: >
+          stores-metabase (clickhouse_password) and stores-clickhouse
+          (password) must be seeded in 1Password.
+        success_msg: "metabase + clickhouse credentials are set"
+
+  tasks:
+    # Statements are fed on stdin so the passwords never appear in the process
+    # table on the host, and `docker exec -i` keeps them off the command line.
+    # All are idempotent, so this play converges rather than branching on
+    # existence checks the way the Postgres plays have to.
+    - name: Create the metabase_ro ClickHouse user
+      ansible.builtin.shell:
+        cmd: >-
+          set -o pipefail;
+          printf "CREATE USER IF NOT EXISTS metabase_ro IDENTIFIED WITH sha256_password BY '%s';\n"
+          "$CHPW"
+          | docker exec -i foundation-clickhouse
+          clickhouse-client --password "$ADMINPW" --multiquery
+        executable: /bin/bash
+      environment:
+        CHPW: "{{ vault_metabase_clickhouse_password }}"
+        ADMINPW: "{{ vault_clickhouse_password }}"
+      no_log: true
+      changed_when: false
+
+    - name: Keep the metabase_ro ClickHouse password in sync with 1Password
+      ansible.builtin.shell:
+        cmd: >-
+          set -o pipefail;
+          printf "ALTER USER metabase_ro IDENTIFIED WITH sha256_password BY '%s';\n"
+          "$CHPW"
+          | docker exec -i foundation-clickhouse
+          clickhouse-client --password "$ADMINPW" --multiquery
+        executable: /bin/bash
+      environment:
+        CHPW: "{{ vault_metabase_clickhouse_password }}"
+        ADMINPW: "{{ vault_clickhouse_password }}"
+      no_log: true
+      changed_when: false
+
+    # SELECT on langfuse.* is the data. The three system tables are the schema:
+    # Metabase's sync walks system.databases/tables/columns to build its
+    # metadata, and without them the connection saves fine and then shows zero
+    # tables — which reads as "Langfuse has no data" rather than as a missing
+    # grant. Langfuse's own play learned the same lesson with system.parts.
+    - name: Grant metabase_ro read-only access to the langfuse database
+      ansible.builtin.shell:
+        cmd: >-
+          set -o pipefail;
+          printf "GRANT SELECT ON langfuse.* TO metabase_ro;\nGRANT SELECT ON system.databases TO metabase_ro;\nGRANT SELECT ON system.tables TO metabase_ro;\nGRANT SELECT ON system.columns TO metabase_ro;\n"
+          | docker exec -i foundation-clickhouse
+          clickhouse-client --password "$ADMINPW" --multiquery
+        executable: /bin/bash
+      environment:
+        ADMINPW: "{{ vault_clickhouse_password }}"
+      no_log: true
+      changed_when: false
+
+    - name: Verify metabase_ro holds exactly the expected ClickHouse grants
+      ansible.builtin.shell:
+        cmd: >-
+          set -o pipefail;
+          docker exec -i foundation-clickhouse
+          clickhouse-client --password "$ADMINPW" --query
+          "SELECT count() FROM system.grants
+             WHERE user_name = 'metabase_ro' AND access_type != 'SELECT'"
+        executable: /bin/bash
+      environment:
+        ADMINPW: "{{ vault_clickhouse_password }}"
+      register: mb_ch_grants
+      no_log: true
+      changed_when: false
+      failed_when: mb_ch_grants.stdout | trim != "0"

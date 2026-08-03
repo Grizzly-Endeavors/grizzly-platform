@@ -1,0 +1,25 @@
+# metabase — platform analytics/BI service. Its own Flux Kustomization (like
+# langfuse/ntfy/roundcube/stalwart) so a transiently-unhealthy pod never blocks
+# core infrastructure from reaching Ready. dependsOn infrastructure so
+# ingress-nginx and the onepassword ClusterSecretStore exist before this
+# applies.
+#
+# All state is external: the application database is on foundation Postgres,
+# and every data source is a read-only account on a store that already exists.
+# Nothing here provisions a PVC.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: metabase
+  namespace: flux-system
+spec:
+  dependsOn:
+    - name: infrastructure
+  interval: 5m
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  path: ./kubernetes/infrastructure/metabase
+  prune: true
+  wait: true
+  timeout: 10m

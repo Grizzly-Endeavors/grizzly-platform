@@ -24,6 +24,7 @@ configMapGenerator:
       - blueprints/nextcloud.yaml
       - blueprints/career-scanner.yaml
       - blueprints/langfuse.yaml
+      - blueprints/metabase.yaml
       - blueprints/social-login.yaml
   # Brand images served by authentik-brand-assets (nginx) and mounted at
   # /usr/share/nginx/html/brand/. Binary files land in the ConfigMap's
