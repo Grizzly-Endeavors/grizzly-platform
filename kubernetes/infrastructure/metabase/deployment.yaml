@@ -1,0 +1,95 @@
+# Metabase — the platform analytics/BI front-end (ADR-065). A single JVM
+# serving the query UI on :3000. Stateless in-cluster: questions, dashboards
+# and encrypted data source credentials all live on foundation Postgres, so the
+# pod reschedules freely and nothing here provisions a PVC.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: metabase
+  namespace: metabase
+  labels:
+    app.kubernetes.io/name: metabase
+spec:
+  replicas: 1
+  # Two Metabase instances against one application database is a supported
+  # topology, but a rolling update would briefly run two versions against a
+  # schema one of them has already migrated. Recreate keeps the migration
+  # single-writer at the cost of a few seconds of downtime on upgrade.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: metabase
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: metabase
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 2000
+        runAsGroup: 2000
+        # Makes the emptyDir mounts below group-writable by uid 2000. Without
+        # it they arrive root-owned and the driver extraction fails at startup.
+        fsGroup: 2000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: metabase
+          # Metabase 0.63.2.7 OSS (current stable, released 2026-07-29;
+          # actively maintained, near-weekly patch releases). The v0.x line is
+          # the open-source build — v1.x is the commercial one. The ClickHouse
+          # driver has been part of the core bundle since 0.54, so no plugin
+          # JAR is baked in or side-loaded.
+          image: metabase/metabase:v0.63.2.7
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 3000
+          envFrom:
+            - configMapRef:
+                name: metabase-config
+            - secretRef:
+                name: metabase-secrets
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: plugins
+              mountPath: /plugins
+            - name: tmp
+              mountPath: /tmp
+          # A cold JVM plus Liquibase migrations can take well over a minute on
+          # first boot, and a startup probe is what keeps the liveness probe
+          # from killing the pod mid-migration — which on an interrupted
+          # migration means a half-applied schema, not just a restart.
+          startupProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            periodSeconds: 10
+            failureThreshold: 30
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: 500m
+              memory: 2Gi
+            limits:
+              cpu: "2"
+              memory: 6Gi
+      volumes:
+        - name: plugins
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
