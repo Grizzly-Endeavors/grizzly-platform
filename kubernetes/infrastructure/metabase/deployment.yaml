@@ -61,16 +61,17 @@ spec:
               mountPath: /plugins
             - name: tmp
               mountPath: /tmp
-          # A cold JVM plus Liquibase migrations can take well over a minute on
-          # first boot, and a startup probe is what keeps the liveness probe
-          # from killing the pod mid-migration — which on an interrupted
-          # migration means a half-applied schema, not just a restart.
+          # A cold JVM plus Liquibase migrations is what this window is for: an
+          # interrupted migration leaves a half-applied schema, not just a
+          # restart. The first boot on 0.63 took just over four minutes to go
+          # Ready, so ten is deliberate headroom — a minor-version bump that
+          # migrates more data must not be the thing that discovers the limit.
           startupProbe:
             httpGet:
               path: /api/health
               port: http
             periodSeconds: 10
-            failureThreshold: 30
+            failureThreshold: 60
           readinessProbe:
             httpGet:
               path: /api/health
