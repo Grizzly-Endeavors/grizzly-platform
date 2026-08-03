@@ -16,6 +16,7 @@ One line per guide. See [`README.md`](README.md) for what an integration guide i
 - [mail.md](mail.md) — send transactional email through Stalwart: get a submission credential and keep your from-address DMARC-aligned.
 - [observability.md](observability.md) — emit logs (free), metrics, and traces; where each signal goes and how to see it in Grafana.
 - [ntfy.md](ntfy.md) — send push notifications (and interactive approval buttons) from your app to phones/browsers/services via the shared ntfy service.
+- [metabase.md](metabase.md) — expose your app's database to the shared Metabase for dashboards and ad-hoc exploration, through a read-only role.
 
 ## Delivery
 

@@ -25,6 +25,10 @@ One line per runbook. See [`README.md`](README.md) for what runbooks are and whe
 
 - [langfuse.md](langfuse.md) — operating Langfuse: health, adding projects, onboarding, upgrades, and the migration/SSO/S3 failure modes.
 
+## Analytics
+
+- [metabase.md](metabase.md) — operating Metabase: standup, adding a database, upgrades (one-way migrations), and the grant/SSO failure modes.
+
 ## CI Gate
 
 - [ci-gate.md](ci-gate.md) — bootstrap, Audit→Enforce rollout, key rotation, gate version bump, deploy-denied diagnosis.
