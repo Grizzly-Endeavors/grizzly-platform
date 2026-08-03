@@ -53,9 +53,9 @@ Three tagged plays: `--tags db` (Metabase's own role + database), `--tags readon
 
 **3 — Let Flux apply it.** The Kustomization reconciles on merge to `main`; force it with `flux reconcile kustomization metabase --with-source`.
 
-**4 — Create the first admin.** Visit <https://analytics.grizzly-endeavors.com> (you must be in `grizzly-admins` to get past the gate) and complete the setup wizard. Metabase's account model is separate from Authentik — the gate decides who reaches the login page, not who has an account. Skip the "add your data" step; step 6 does it properly.
+**4 — Create the first admin.** Visit <https://analytics.grizzly-endeavors.com> (you must be in `grizzly-admins` to get past the gate) and complete the setup wizard. Skip the "add your data" step; step 6 does it properly. Store the credentials in 1Password as `platform-metabase` / `admin_email` + `admin_password` — this is the instance's bootstrap account, the equivalent of Authentik's `akadmin`, and it is the only way back in if the gate itself is what's broken.
 
-**5 — Mint an API key.** Admin → Settings → Authentication → API keys → Create, in the **Administrators** group. Store it in 1Password as `platform-metabase` / `api_key`; it cannot be retrieved again afterwards.
+**5 — Mint an API key.** Admin → Settings → Authentication → API keys → Create, in the **Administrators** group. Store it in 1Password as `platform-metabase` / `api_key`; it cannot be retrieved again afterwards. Both scripts below read it from there.
 
 **6 — Add the data sources:**
 
@@ -65,6 +65,14 @@ scripts/metabase-add-database.sh clickhouse langfuse
 ```
 
 **7 — Seed an app's questions**, from that app's own repo — for gameservers, `just seed-metabase` in `grizzly-gameservers`.
+
+## Accounts
+
+Metabase's account model is **separate from Authentik**. The forward-auth binding decides who reaches the login page; Metabase decides who has an account. Both have to be true, and neither implies the other.
+
+- **`platform-metabase` in 1Password** holds the bootstrap admin (`admin_email` / `admin_password`) and the `api_key` the scripts use. Keep the bootstrap account — it is the way in when the SSO path is the thing that's broken.
+- **Adding a person:** Admin → People → Invite, and make sure they are also in `grizzly-admins` in Authentik or they will never see the login page. There is no SMTP wired up, so hand them the invite link out of band.
+- **Removing a person** takes both halves too: deactivate them in Metabase *and* drop them from `grizzly-admins`. Doing only the second leaves an account that works the moment anyone re-adds them to the group.
 
 ## Health
 
@@ -99,7 +107,11 @@ The Deployment uses `Recreate` deliberately: the new pod runs Liquibase migratio
 
 **`Cannot decrypt encrypted String`.** `MB_ENCRYPTION_SECRET_KEY` changed or was lost. Dashboards and questions are fine; the stored data source passwords are not. Restore the original key from 1Password, or delete and re-add each data source. Note the ExternalSecret is `refreshPolicy: OnChange` and does not poll — after changing the 1Password value you must also touch the ExternalSecret, or the pod keeps using the old one until it restarts.
 
-**A data source shows zero tables.** Missing grants, not missing data. For Postgres, re-run `--tags readonly`; for ClickHouse, `--tags clickhouse` (the `system.databases`/`tables`/`columns` grants are what Metabase's schema sync walks — without them the connection looks healthy and empty). Then Admin → Databases → the database → *Sync database schema now*.
+**A data source shows zero tables.** Two different causes that look identical.
+
+First check `initial_sync_status` — `scripts/metabase-add-database.sh` waits for it, but a sync requested while Metabase is still finishing startup is accepted and quietly does nothing. If it is `incomplete`, just ask again: Admin → Databases → the database → *Sync database schema now*.
+
+If it is `complete` and the tables are still missing, it is grants. For Postgres, re-run the play with `--tags readonly`; for ClickHouse, `--tags clickhouse` — the `system.databases`/`tables`/`columns` grants are what the schema sync walks, and without them the connection health-checks green and finds nothing.
 
 **A saved question against Langfuse breaks after a Langfuse upgrade.** Expected. Langfuse's ClickHouse schema is internal and unversioned; questions built on it are best-effort by design ([ADR-065](../decisions/065-metabase-analytics-service.md)). Fix the question or fall back to the Langfuse UI.
 

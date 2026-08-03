@@ -181,5 +181,32 @@ log "added '${DATABASE}' as ${ENGINE} data source ${DB_ID}"
 # Schema sync is asynchronous. Kick it now so the tables show up without
 # waiting for the hourly scan — a connection that looks empty for an hour reads
 # as a broken grant.
+#
+# Then wait for it, rather than reporting success and leaving. A sync requested
+# while Metabase is still finishing startup is accepted and quietly does
+# nothing, which leaves a connection that looks added and has no tables; the
+# fix is simply to ask again, so retry until the database says complete.
 api POST "/api/database/${DB_ID}/sync_schema" >/dev/null
-log "schema sync requested; tables appear once it finishes (seconds, not minutes)"
+log "waiting for schema sync..."
+
+SYNCED=""
+for attempt in $(seq 1 10); do
+  sleep 6
+  STATUS_JSON="$(api GET "/api/database/${DB_ID}")"
+  SYNC_STATUS="$(printf '%s' "${STATUS_JSON}" | jq -r '.initial_sync_status // empty')"
+  if [[ "${SYNC_STATUS}" == "complete" ]]; then
+    SYNCED=yes
+    break
+  fi
+  if [[ $((attempt % 3)) -eq 0 ]]; then
+    api POST "/api/database/${DB_ID}/sync_schema" >/dev/null
+  fi
+done
+
+if [[ -z "${SYNCED}" ]]; then
+  die "'${DATABASE}' was added (id ${DB_ID}) but its schema never synced — check the grants, then re-sync from Admin -> Databases"
+fi
+
+META="$(api GET "/api/database/${DB_ID}/metadata")"
+TABLE_COUNT="$(printf '%s' "${META}" | jq -r '[.tables[]?.name] | length')"
+log "schema synced: ${TABLE_COUNT} table(s) visible to ${DB_USER}"
