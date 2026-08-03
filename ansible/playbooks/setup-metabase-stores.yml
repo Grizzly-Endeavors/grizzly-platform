@@ -308,16 +308,26 @@
       no_log: true
       changed_when: false
 
-    # SELECT on langfuse.* is the data. The three system tables are the schema:
-    # Metabase's sync walks system.databases/tables/columns to build its
-    # metadata, and without them the connection saves fine and then shows zero
-    # tables — which reads as "Langfuse has no data" rather than as a missing
-    # grant. Langfuse's own play learned the same lesson with system.parts.
+    # SELECT on langfuse.* is the data. The four system tables are the plumbing:
+    #
+    #   databases/tables/columns — Metabase's sync walks these to build its
+    #     metadata. Without them the connection saves fine and then shows zero
+    #     tables, which reads as "Langfuse has no data" rather than as a missing
+    #     grant. Langfuse's own play learned the same lesson with system.parts.
+    #   processes — the driver cancels a timed-out or abandoned query by looking
+    #     its id up here. Without it the cancel fails and ClickHouse keeps
+    #     running the query to completion on the R730xd, unattached to anyone.
+    #     It logs only at INFO ("Statement cancelation failed"), so the cost is
+    #     wasted CPU nobody is watching rather than a visible error.
+    #
+    # system.processes exposes other users' in-flight query text. That is the
+    # actual price of this grant, accepted because metabase_ro is a first-party
+    # service account on a single-tenant store.
     - name: Grant metabase_ro read-only access to the langfuse database
       ansible.builtin.shell:
         cmd: >-
           set -o pipefail;
-          printf "GRANT SELECT ON langfuse.* TO metabase_ro;\nGRANT SELECT ON system.databases TO metabase_ro;\nGRANT SELECT ON system.tables TO metabase_ro;\nGRANT SELECT ON system.columns TO metabase_ro;\n"
+          printf "GRANT SELECT ON langfuse.* TO metabase_ro;\nGRANT SELECT ON system.databases TO metabase_ro;\nGRANT SELECT ON system.tables TO metabase_ro;\nGRANT SELECT ON system.columns TO metabase_ro;\nGRANT SELECT ON system.processes TO metabase_ro;\n"
           | docker exec -i foundation-clickhouse
           clickhouse-client --password "$ADMINPW" --multiquery
         executable: /bin/bash
