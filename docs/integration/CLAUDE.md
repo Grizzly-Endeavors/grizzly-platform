@@ -15,8 +15,8 @@ This is the same discipline `versitygw-cli.md` states for itself, applied to the
 ## Keep the shape
 
 - **Consumer-facing, not operator-facing.** These answer "how do I *use* this from an app." How to *run/rotate/recover* the service is a [runbook](../runbooks/); *why* it's built this way is an [ADR](../decisions/). If you're about to document rotating a key or tuning a store here, it belongs in the runbook — link to it instead.
-- **Even depth, one skeleton.** Match the existing structure (what you get → when → prerequisites → provision → wire → verify → troubleshoot → see also). Real hostnames, real OpenBao paths, copy-paste examples modeled on a live consumer — not hand-wavy prose.
+- **Even depth, one skeleton.** Match the existing structure (what you get → when → prerequisites → provision → wire → verify → troubleshoot → see also). Real hostnames, real 1Password item/field keys, copy-paste examples modeled on a live consumer — not hand-wavy prose.
 - **New consumable capability?** Add a guide here and a line to [`INDEX.md`](INDEX.md); wire it into the root [`INDEX.md`](../../INDEX.md) subsystem map.
-- **This is a public repo.** No secret values in examples — always route through OpenBao/ESO (see [secrets.md](secrets.md)).
+- **This is a public repo.** No secret values in examples — always route through 1Password/ESO (see [secrets.md](secrets.md)).
 
 Updating a guide as part of your task is not scope creep — it's the point of the guide existing.
