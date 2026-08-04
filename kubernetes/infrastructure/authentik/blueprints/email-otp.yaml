@@ -1,0 +1,354 @@
+version: 1
+metadata:
+  name: grizzly-email-otp
+# Email one-time-code enrollment and passwordless sign-in, alongside the social
+# paths in social-login.yaml. See docs/decisions/066-email-otp-passwordless.md.
+#
+# Sign-up: the invitee opens their invite link (which plants the `grizzly_invite`
+# cookie), clicks "Sign up" on the login page, gives an address, and confirms a
+# code mailed to it. Enrollment stays invitation-gated — the SAME
+# `grizzly-invite-gate` policy from social-login.yaml is bound to the user-write
+# binding here, so an uninvited visitor is denied and no account is written.
+#
+# Sign-in: the address is the credential. There is no password. The identification
+# stage resolves the user, the password stage is skipped by policy, and the
+# authenticator-validation stage mails a fresh code.
+#
+# THE INVARIANT THAT MAKES PASSWORDLESS SAFE: the password stage is skipped only
+# for a user that has a *confirmed* EmailDevice, and the validation stage always
+# challenges a user that has a device. Skipping the password therefore always
+# implies a challenge — there is no path to a session without proving something.
+# `last_auth_threshold: seconds=0` on the validation stage is what keeps that true
+# on repeat visits; a non-zero threshold would let a recent code stand in for this
+# login and hand out a session for nothing but a known address.
+#
+# PATCHING AUTHENTIK'S BUILT-IN LOGIN FLOW is safe for the fields touched here.
+# authentik's own blueprints/default/flow-default-authentication-flow.yaml declares
+# `default-authentication-mfa-validation` with no attrs at all, and the
+# identification stage with only `user_fields` — so everything set below is
+# unmanaged upstream and survives an authentik upgrade. What is NOT safe is the
+# `default-authentication-flow-password-stage` policy: its expression IS managed
+# upstream and any edit would be reverted on the next version bump. So the
+# password stage is skipped by adding a SECOND policy next to it and switching the
+# binding to `all` mode, never by touching the built-in one.
+#
+# ENTRY ORDER MATTERS: `!KeyOf` resolves to an already-applied entry, so every
+# target appears above its references — flows -> prompts -> policies -> stages ->
+# bindings -> built-in patches.
+entries:
+  # --- Flows ----------------------------------------------------------------
+  - model: authentik_flows.flow
+    id: email-enrollment-flow
+    identifiers:
+      slug: grizzly-email-enrollment
+    attrs:
+      name: Grizzly email enrollment
+      title: Sign up
+      designation: enrollment
+      # Reachable directly (it is linked from the login page as the sign-up
+      # path), but useless without an invitation cookie.
+      authentication: none
+
+  # Stage-configuration flow for the email authenticator. Its only job is to let
+  # someone already signed in — a Discord/GitHub/Google enrollee, say — add an
+  # email code from User Settings and gain the passwordless path. Opt-in: nothing
+  # pushes a user into it (see not_configured_action on the validation stage).
+  - model: authentik_flows.flow
+    id: email-otp-setup-flow
+    identifiers:
+      slug: grizzly-email-otp-setup
+    attrs:
+      name: Grizzly email code setup
+      title: Set up email sign-in codes
+      designation: stage_configuration
+      authentication: require_authenticated
+
+  # --- Sign-up prompt -------------------------------------------------------
+  # Only an address and a name. The username is derived from the address by the
+  # invitation gate policy (its existing username-fallback branch), and there is
+  # no password field because these accounts never have one.
+  - model: authentik_stages_prompt.prompt
+    id: prompt-email
+    identifiers:
+      name: grizzly-email-enrollment-field-email
+    attrs:
+      field_key: email
+      label: Email address
+      type: email
+      required: true
+      placeholder: you@example.com
+      sub_text: We'll email you a one-time code to confirm this address.
+      order: 0
+
+  - model: authentik_stages_prompt.prompt
+    id: prompt-name
+    identifiers:
+      name: grizzly-email-enrollment-field-name
+    attrs:
+      field_key: name
+      label: Name
+      type: text
+      required: true
+      placeholder: Your name
+      order: 1
+
+  # --- Policies -------------------------------------------------------------
+  # Prompt validation: refuse an address that already has an account. Without
+  # this the user-write stage would collide on the unique username and surface a
+  # server error instead of an answer. Checks username too, since accounts
+  # enrolled through this flow use the address as their username.
+  - model: authentik_policies_expression.expressionpolicy
+    id: email-taken-policy
+    identifiers:
+      name: grizzly-email-taken
+    attrs:
+      expression: |
+        email = (request.context.get("prompt_data") or {}).get("email", "").strip()
+        if not email:
+            return False
+        from django.db.models import Q
+        from authentik.core.models import User
+        if User.objects.filter(Q(email__iexact=email) | Q(username__iexact=email)).exists():
+            ak_message("That address already has an account. Sign in instead.")
+            return False
+        return True
+
+  # Activation, run on the second user-write binding — after the code is
+  # confirmed. The account is written inactive and only becomes usable here, so
+  # "an account exists" always implies "its address was proven". An abandoned
+  # sign-up leaves an inactive shell that cannot be logged into by any path,
+  # including social (authentik refuses inactive users).
+  #
+  # Writes to the live FlowPlan, never to request.context: the policy engine
+  # copies context IN to a throwaway dict and never copies it back out, so a
+  # request.context write would be silently dropped. Same reasoning as the
+  # invitation gate in social-login.yaml — see ADR-041's correction.
+  - model: authentik_policies_expression.expressionpolicy
+    id: email-activate-policy
+    identifiers:
+      name: grizzly-email-activate
+    attrs:
+      expression: |
+        plan = request.context.get("flow_plan")
+        if plan is None:
+            ak_logger.warning("email activate ran with no flow_plan; not on a stage binding?")
+            return False
+        # UserWriteStage.update_user() setattr's any prompt_data key matching a
+        # field on the user model, so this is what flips is_active.
+        plan.context.setdefault("prompt_data", {})["is_active"] = True
+        return True
+
+  # Skip the password stage for accounts that sign in with a mailed code. Bound
+  # to authentik's built-in password binding in `all` mode, so it can only ever
+  # REMOVE the password step — never add one, and never override the built-in
+  # policy's own decision.
+  - model: authentik_policies_expression.expressionpolicy
+    id: email-passwordless-policy
+    identifiers:
+      name: grizzly-email-passwordless
+    attrs:
+      expression: |
+        flow_plan = request.context.get("flow_plan")
+        if not flow_plan:
+            return True
+        user = flow_plan.context.get("pending_user")
+        if not user or not user.pk:
+            return True
+        # A real password hash means this account signs in with a password —
+        # akadmin's break-glass login lands here and is unaffected.
+        if user.password and user.has_usable_password():
+            return True
+        # Only skip when a code can actually be sent, so that dropping the
+        # password always hands off to a challenge rather than to nothing.
+        from authentik.stages.authenticator_email.models import EmailDevice
+        return not EmailDevice.objects.filter(user=user, confirmed=True).exists()
+
+  # --- Stages ---------------------------------------------------------------
+  - model: authentik_stages_prompt.promptstage
+    id: email-enrollment-prompt
+    identifiers:
+      name: grizzly-email-enrollment-prompt
+    attrs:
+      fields:
+        - !KeyOf prompt-email
+        - !KeyOf prompt-name
+      validation_policies:
+        - !KeyOf email-taken-policy
+
+  # user_type: internal to match the social enrollment path — internal users can
+  # reach their dashboard and manage their account; the stage default (external)
+  # is barred from the authentik interface. Inactive until the code lands.
+  - model: authentik_stages_user_write.userwritestage
+    id: email-enrollment-write
+    identifiers:
+      name: grizzly-email-enrollment-write
+    attrs:
+      user_creation_mode: always_create
+      create_users_as_inactive: true
+      user_type: internal
+      create_users_group: !Find [authentik_core.group, [name, grizzly-users]]
+
+  # Sends the code and registers the EmailDevice that later sign-ins validate
+  # against. The device is held unsaved in the flow plan and only persisted once
+  # the code is confirmed, so an abandoned sign-up leaves no device behind and a
+  # retry is clean. Credentials come from AUTHENTIK_EMAIL__* (the Stalwart
+  # noreply@ submission account) via use_global_settings.
+  - model: authentik_stages_authenticator_email.authenticatoremailstage
+    id: email-otp-stage
+    identifiers:
+      name: grizzly-email-otp
+    attrs:
+      use_global_settings: true
+      friendly_name: Email code
+      # Long enough to absorb the hairpin out to the VPS and the SMTP2GO relay,
+      # short enough that a code left in an inbox goes stale quickly.
+      token_expiry: minutes=15
+      subject: Your Grizzly Endeavors sign-in code
+      configure_flow: !KeyOf email-otp-setup-flow
+
+  # never_create: this stage exists only to update the user the first write
+  # created. It must not be able to mint a second account.
+  - model: authentik_stages_user_write.userwritestage
+    id: email-enrollment-activate
+    identifiers:
+      name: grizzly-email-enrollment-activate
+    attrs:
+      user_creation_mode: never_create
+
+  - model: authentik_stages_user_login.userloginstage
+    id: email-enrollment-login
+    identifiers:
+      name: grizzly-email-enrollment-login
+
+  # --- Enrollment flow bindings ---------------------------------------------
+  - model: authentik_flows.flowstagebinding
+    identifiers:
+      target: !KeyOf email-enrollment-flow
+      stage: !KeyOf email-enrollment-prompt
+      order: 10
+
+  # The invitation gate rides this binding, exactly as it does on the social
+  # enrollment flow: evaluate_on_plan:false + re_evaluate_policies:true means it
+  # runs once, at execution time, when the live FlowPlan exists (so it can write
+  # the derived username and the invite's groups into it) and the invite is
+  # consumed exactly once. evaluate_on_plan:true would consume it twice.
+  # A denied invitation removes this binding, so no user is written.
+  - model: authentik_flows.flowstagebinding
+    id: email-enrollment-write-binding
+    identifiers:
+      target: !KeyOf email-enrollment-flow
+      stage: !KeyOf email-enrollment-write
+      order: 20
+    attrs:
+      evaluate_on_plan: false
+      re_evaluate_policies: true
+
+  - model: authentik_flows.flowstagebinding
+    identifiers:
+      target: !KeyOf email-enrollment-flow
+      stage: !KeyOf email-otp-stage
+      order: 30
+
+  - model: authentik_flows.flowstagebinding
+    id: email-enrollment-activate-binding
+    identifiers:
+      target: !KeyOf email-enrollment-flow
+      stage: !KeyOf email-enrollment-activate
+      order: 40
+    attrs:
+      evaluate_on_plan: false
+      re_evaluate_policies: true
+
+  - model: authentik_flows.flowstagebinding
+    identifiers:
+      target: !KeyOf email-enrollment-flow
+      stage: !KeyOf email-enrollment-login
+      order: 50
+
+  # Reuse the invitation gate from social-login.yaml rather than a second copy —
+  # one policy means one place where the access rule lives. Cross-file, so !Find
+  # (lazy, resolved against the DB) rather than !KeyOf. failure_result:false =>
+  # a policy error denies; timeout > the in-policy /verify timeout.
+  - model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf email-enrollment-write-binding
+      policy: !Find [authentik_policies_expression.expressionpolicy, [name, grizzly-invite-gate]]
+      order: 0
+    attrs:
+      enabled: true
+      negate: false
+      timeout: 6
+      failure_result: false
+
+  - model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf email-enrollment-activate-binding
+      policy: !KeyOf email-activate-policy
+      order: 0
+    attrs:
+      enabled: true
+      negate: false
+      failure_result: false
+
+  # --- Setup-flow binding ---------------------------------------------------
+  - model: authentik_flows.flowstagebinding
+    identifiers:
+      target: !KeyOf email-otp-setup-flow
+      stage: !KeyOf email-otp-stage
+      order: 0
+
+  # --- Patches to authentik's built-in authentication flow ------------------
+  # Links the sign-up path from the login page. social-login.yaml patches this
+  # same stage's `sources` list; blueprint attrs are partial upserts, so the two
+  # coexist — but keep each attr owned by exactly one file.
+  - model: authentik_stages_identification.identificationstage
+    identifiers:
+      name: default-authentication-identification
+    attrs:
+      enrollment_flow: !KeyOf email-enrollment-flow
+
+  # Upsert of authentik's own order-20 password binding. `all` mode is the whole
+  # point: with the default `any`, the built-in password-optional policy
+  # returning true would win and the password prompt would appear anyway.
+  # re_evaluate_policies is restated because this is an upsert of an existing
+  # object and the attr must not be dropped.
+  - model: authentik_flows.flowstagebinding
+    id: default-password-binding
+    identifiers:
+      target: !Find [authentik_flows.flow, [slug, default-authentication-flow]]
+      stage: !Find [authentik_stages_password.passwordstage, [name, default-authentication-password]]
+      order: 20
+    attrs:
+      re_evaluate_policies: true
+      policy_engine_mode: all
+
+  # failure_result:true => if this policy errors, keep the password prompt. Fail
+  # towards asking for more proof, not less.
+  - model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf default-password-binding
+      policy: !KeyOf email-passwordless-policy
+      order: 20
+    attrs:
+      enabled: true
+      negate: false
+      failure_result: true
+
+  # These match authentik's current defaults; they are pinned because the
+  # passwordless invariant depends on all three and a changed default would break
+  # it silently. not_configured_action:skip in particular must NOT become
+  # `configure` — that would force every password user (akadmin included) to
+  # register an email authenticator before they could finish logging in.
+  - model: authentik_stages_authenticator_validate.authenticatorvalidatestage
+    identifiers:
+      name: default-authentication-mfa-validation
+    attrs:
+      device_classes:
+        - static
+        - totp
+        - webauthn
+        - duo
+        - sms
+        - email
+      not_configured_action: skip
+      last_auth_threshold: seconds=0
