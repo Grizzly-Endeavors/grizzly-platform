@@ -298,15 +298,14 @@ entries:
       order: 0
 
   # --- Patches to authentik's built-in authentication flow ------------------
-  # Links the sign-up path from the login page. social-login.yaml patches this
-  # same stage's `sources` list; blueprint attrs are partial upserts, so the two
-  # coexist — but keep each attr owned by exactly one file.
-  - model: authentik_stages_identification.identificationstage
-    identifiers:
-      name: default-authentication-identification
-    attrs:
-      enrollment_flow: !KeyOf email-enrollment-flow
-
+  # The login page's "Sign up" link is NOT set here. It is `enrollment_flow` on
+  # `default-authentication-identification`, and that stage's serializer rejects
+  # any payload carrying neither `user_fields` nor `sources` ("When no user
+  # fields are selected, at least one source must be selected") — validation
+  # sees only the attrs the entry supplies, not the stored object, so a
+  # single-attr patch of that stage cannot pass. social-login.yaml owns the
+  # whole stage for that reason and sets `enrollment_flow` alongside `sources`.
+  #
   # Upsert of authentik's own order-20 password binding. `all` mode is the whole
   # point: with the default `any`, the built-in password-optional policy
   # returning true would win and the password prompt would appear anyway.
