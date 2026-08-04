@@ -11,14 +11,15 @@ Config is **blueprints** — declarative config-as-code applied by the Authentik
 
 Model on [`blueprints/career-scanner.yaml`](../../kubernetes/infrastructure/authentik/blueprints/career-scanner.yaml). It registers two objects in one file: an `oauth2provider` and the `application` bound to it.
 
-### 1 — Store the client credentials in OpenBao
+### 1 — Store the client credentials in 1Password
 
-The `client_id`/`client_secret` are the OIDC contract shared by **both** sides, so they get one source of truth. Generate them and write to `secret/grizzly-platform/platform/authentik`:
+The `client_id`/`client_secret` are the OIDC contract shared by **both** sides, so they get one source of truth: two fields on the `platform-authentik` item in the `grizzly-platform` vault. Generate them so the values never echo:
 
 ```bash
-bao kv patch secret/grizzly-platform/platform/authentik \
-  oidc_<app>_client_id="$(openssl rand -hex 16)" \
-  oidc_<app>_client_secret="$(openssl rand -base64 48)"
+OP_SERVICE_ACCOUNT_TOKEN="$(cat ~/.config/op-tokens/operator)" \
+  op item edit platform-authentik --vault grizzly-platform \
+  "oidc_<app>_client_id[password]=$(openssl rand -hex 16)" \
+  "oidc_<app>_client_secret[password]=$(openssl rand -base64 48)" > /dev/null
 ```
 
 They are injected into the Authentik worker (which applies blueprints) via `global.env` as `AUTHENTIK_<APP>_CLIENT_ID` / `_SECRET`, sourced by the authentik `ExternalSecret`. **Never put them in the blueprint literally** — the blueprint reads them with `!Env`.
@@ -93,9 +94,10 @@ Your app then trusts the `X-authentik-*` headers for identity. See the invite-ad
 
 ## Onboarding people & scoping access
 
-Users are **not** blueprint objects — no human PII lands in this public repo. Identity comes from the social provider (Discord/GitHub/Google) at first login, and access is **closed, gated by invitation** ([ADR-040](../decisions/040-invite-broker-cookie-bridged-enrollment.md)).
+Users are **not** blueprint objects — no human PII lands in this public repo. Identity comes from the social provider (Discord/GitHub/Google) at first login, or from the address someone enters in the email sign-up flow, and access is **closed, gated by invitation** on both paths ([ADR-040](../decisions/040-invite-broker-cookie-bridged-enrollment.md), [ADR-066](../decisions/066-email-otp-passwordless-signin.md)).
 
-- **Invite someone:** mint an invite on the broker (`POST /api/invites` with the admin bearer token) and send them the `invite.grizzly-endeavors.com/i/<token>` link. They click, sign in with a social provider, and are enrolled into `grizzly-users`.
+- **Invite someone:** mint an invite on the broker (`POST /api/invites` with the admin bearer token) and send them the `invite.grizzly-endeavors.com/i/<token>` link. They click, then either sign in with a social provider or use **Sign up** to enroll with an email address and the one-time code they are sent. Either way they land in `grizzly-users`.
+- **Two credential shapes:** social enrollees sign in with their provider; email enrollees have no password at all and get a fresh code each time. Your app sees the same OIDC/forward-auth identity either way — don't assume a password exists anywhere.
 - **Pre-scope into a group:** pass `{"groups": ["<group>"]}` in the mint body (groups from `blueprints/groups.yaml`).
 - **Gate your app to a subset:** either restrict app *visibility* by group policy binding ([ADR-049](../decisions/049-app-visibility-scoped-via-group-policy-bindings.md)), or add a `groups` scope mapping + check the claim in-app (modeled on `blueprints/nextcloud.yaml`). By default any enrolled `grizzly-users` member can use an app.
 
@@ -114,7 +116,8 @@ Then drive a real login end-to-end in a browser: hit your app, get bounced to Au
 - **`redirect_uri` mismatch** — `matching_mode: strict` means the URL must match byte-for-byte, including scheme and trailing path. Fix the blueprint or the app config so they're identical.
 - **Blueprint won't apply / `KeyOf: failed to find entry`** — a `!KeyOf` reference points at an entry *below* it in the file. Order dependencies-first: provider above application. Cross-file references must use `!Find`, not `!KeyOf`.
 - **Removed a client but it still works** — blueprints are stateless upsert; deleting the file doesn't delete the object. Mark it `state: absent`, let one reconcile delete it, then drop the file (see `blueprints/CLAUDE.md`).
-- **Client secret rejected** — the app and the blueprint are reading different values. Both must source the *same* OpenBao keys.
+- **Client secret rejected** — the app and the blueprint are reading different values. Both must source the *same* `platform-authentik` fields.
+- **Sign-up code never arrives** — the email enrollment path depends on the mail plant. See [authentik-email-otp.md](../runbooks/authentik-email-otp.md).
 
 ## See also
 

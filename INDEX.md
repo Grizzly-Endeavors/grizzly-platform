@@ -36,9 +36,9 @@ Durable app state lives on the R730xd foundation stores, never node disks: Postg
 - **Code:** `ansible/roles/r730xd-{zfs,s3-hot,s3-bulk,snapraid}/`, `ansible/playbooks/deploy-foundation-stores.yml`.
 
 ### Identity & invites (Authentik)
-Authentik is the central IdP; invitation-gated enrollment via a cookie-bridged invite broker; app-library visibility scoped by group policy.
-- **Why:** [ADR-033](docs/decisions/033-central-identity-authentik.md), [037](docs/decisions/037-authentik-config-as-code-blueprints.md) (config-as-code), [039](docs/decisions/039-authentik-social-federation-invitation-enrollment.md)–[043](docs/decisions/043-invite-admin-ui-forward-auth.md) (federation/invites), [049](docs/decisions/049-app-visibility-scoped-via-group-policy-bindings.md).
-- **How:** [invite-authentik-reader.md](docs/runbooks/invite-authentik-reader.md).
+Authentik is the central IdP; invitation-gated enrollment via a cookie-bridged invite broker, by social provider or by email one-time code; app-library visibility scoped by group policy.
+- **Why:** [ADR-033](docs/decisions/033-central-identity-authentik.md), [037](docs/decisions/037-authentik-config-as-code-blueprints.md) (config-as-code), [039](docs/decisions/039-authentik-social-federation-invitation-enrollment.md)–[043](docs/decisions/043-invite-admin-ui-forward-auth.md) (federation/invites), [049](docs/decisions/049-app-visibility-scoped-via-group-policy-bindings.md), [066](docs/decisions/066-email-otp-passwordless-signin.md) (email codes, passwordless).
+- **How:** [invite-authentik-reader.md](docs/runbooks/invite-authentik-reader.md), [authentik-email-otp.md](docs/runbooks/authentik-email-otp.md).
 - **Integrate:** [integration/sso.md](docs/integration/sso.md) (put an app behind Authentik — OIDC or forward-auth — and onboard people).
 - **Code:** `kubernetes/infrastructure/authentik/`; invite broker in the sibling `grizzly-invite` repo.
 
