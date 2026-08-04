@@ -114,4 +114,4 @@ k8s_ingress_ip: "{{ wg_r730xd_ip }}"
 # Game-server pods land on any worker via NodePort Services, no node-pinning
 # (grizzly-gameservers ADR-002) — kube-proxy routes regardless of which node
 # the pod is scheduled to. See grizzly-gameservers docs/design/00-overview.md.
-game_ingress_port_range: "7000:7010"
+game_ingress_port_range: "7000:7099"
