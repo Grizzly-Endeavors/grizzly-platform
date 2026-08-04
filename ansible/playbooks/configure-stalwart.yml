@@ -16,9 +16,10 @@
 #     by querying the live objects — the CLI's in-plan "#ref" resolution is
 #     unreliable for id<Certificate> fields).
 #   - stdout logging (Stalwart defaults to a file tracer inside the container).
-#   - the bootstrap mailbox + its password (a directory secret can't be an
-#     env reference or committed to this public repo — it is injected here from
-#     1Password). TEMPORARY: accounts move to an Authentik-backed directory later.
+#   - the mailboxes + their passwords (a directory secret can't be an env
+#     reference or committed to this public repo — they are injected here from
+#     1Password): the bootstrap mailbox and the claude agent mailbox.
+#     TEMPORARY: accounts move to an Authentik-backed directory later.
 #
 # Gotchas baked in (learned the hard way):
 #   - Stalwart 0.16 does NOT expand %{env:...}% macros anywhere; secrets use
@@ -32,7 +33,8 @@
 #   - Stalwart deployed and Running; stalwart-secrets carries a non-empty
 #     STALWART_RECOVERY_ADMIN (PR #109). Verify: kubectl -n stalwart get secret
 #     stalwart-secrets -o jsonpath='{.data.STALWART_RECOVERY_ADMIN}' | base64 -d
-#   - 1Password platform-stalwart holds admin_password + account_password.
+#   - 1Password platform-stalwart holds admin_password + account_password
+#     + claude_password.
 #   - docker + kubeconfig (~/.kube/config) on the control node (the jumpbox has both).
 #   - Vault decrypted (--vault-password-file or .vault_pass).
 #
@@ -58,6 +60,10 @@
     stalwart_domain_bearflinn: "bearflinn.com"
     stalwart_tls_san: "mail.grizzly-endeavors.com"
     stalwart_account_local: "bearflinn"
+    # Agent mailbox used by the grizzly-mail Claude Code plugin (test/automation
+    # sends and receives). Provisioned check-then-create — independent of
+    # stalwart_fresh_config, so it lands on re-runs against a live server.
+    stalwart_claude_local: "claude"
     # SMTP2GO outbound smarthost (ADR-050 Part C). Home ISP blocks :25, so all
     # outbound relays through SMTP2GO; 587/STARTTLS is reachable from the cluster.
     # authUsername is injected from 1Password (vault_smtp2go_username); the password
@@ -400,6 +406,106 @@
       environment: *cli_env
       register: stalwart_account_aliases
       changed_when: "'Updated' in stalwart_account_aliases.stdout"
+      no_log: true
+
+    # --- claude agent mailbox (grizzly-mail plugin) ---------------------------
+    # Check-then-create rather than stalwart_fresh_config-gated: the account
+    # must land on re-runs against an already-configured server. The password
+    # re-applies every run, same as the bootstrap mailbox. No aliases.
+    - name: Detect whether the claude agent mailbox already exists
+      ansible.builtin.command:
+        argv:
+          - docker
+          - run
+          - --rm
+          - -e
+          - STALWART_URL
+          - -e
+          - STALWART_USER
+          - -e
+          - STALWART_PASSWORD
+          - "{{ stalwart_cli_image }}"
+          - -k
+          - query
+          - Account
+          - --where
+          - "name={{ stalwart_claude_local }}"
+          - --json
+      environment: *cli_env
+      register: stalwart_claude_q_before
+      changed_when: false
+      no_log: true
+
+    - name: Create the claude agent mailbox account if absent
+      ansible.builtin.command:
+        argv:
+          - docker
+          - run
+          - --rm
+          - -e
+          - STALWART_URL
+          - -e
+          - STALWART_USER
+          - -e
+          - STALWART_PASSWORD
+          - "{{ stalwart_cli_image }}"
+          - -k
+          - create
+          - Account/User
+          - --json
+          - "{{ {'name': stalwart_claude_local, 'domainId': stalwart_domain_id, 'description': 'Claude agent mailbox (grizzly-mail plugin; test/automation use)'} | to_json }}"
+      environment: *cli_env
+      register: stalwart_claude_create
+      when: stalwart_claude_local not in stalwart_claude_q_before.stdout
+      changed_when: "'Created' in stalwart_claude_create.stdout"
+      no_log: true
+
+    - name: Look up the claude agent mailbox account id
+      ansible.builtin.command:
+        argv:
+          - docker
+          - run
+          - --rm
+          - -e
+          - STALWART_URL
+          - -e
+          - STALWART_USER
+          - -e
+          - STALWART_PASSWORD
+          - "{{ stalwart_cli_image }}"
+          - -k
+          - query
+          - Account
+          - --where
+          - "name={{ stalwart_claude_local }}"
+          - --json
+      environment: *cli_env
+      register: stalwart_claude_q
+      changed_when: false
+      no_log: true
+
+    - name: Inject the claude mailbox password from 1Password (directory secret)
+      ansible.builtin.command:
+        argv:
+          - docker
+          - run
+          - --rm
+          - -e
+          - STALWART_URL
+          - -e
+          - STALWART_USER
+          - -e
+          - STALWART_PASSWORD
+          - "{{ stalwart_cli_image }}"
+          - -k
+          - update
+          - Account
+          - "{{ (stalwart_claude_q.stdout_lines | select('match', '.+') | first | from_json).id }}"
+          - --field
+          - "credentials/0={{ {'@type': 'Password', 'secret': vault_stalwart_claude_password} | to_json }}"
+      environment: *cli_env
+      register: stalwart_claude_pw
+      changed_when: "'Updated' in stalwart_claude_pw.stdout"
       no_log: true
 
     # --- outbound smarthost (SMTP2GO relay, ADR-050 Part C) -------------------
