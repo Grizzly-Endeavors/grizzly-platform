@@ -15,14 +15,15 @@ Stalwart 0.16 uses a **JSON, database-backed** config. The static file (`config.
 ### Manifests + secrets (Flux)
 - `kubernetes/infrastructure/stalwart/` applied by its own Flux Kustomization `kubernetes/clusters/grizzly-platform/stalwart.yaml` (deliberately not in `infrastructure`). Image `stalwartlabs/stalwart:v0.16.11`, 1/1 Running.
 - **Data store:** foundation Postgres `10.0.0.200:5432` db/user `stalwart`. `config.json` = the PostgreSql data-store object; auth via `authSecret` → env `POSTGRES_PASSWORD`.
-- **Secrets:** `ExternalSecret/stalwart-secrets` templates pod env from OpenBao: `POSTGRES_PASSWORD`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, **`STALWART_RECOVERY_ADMIN`** (`admin:<admin_password>`, the deterministic CLI admin — `user:pass`, built in the ExternalSecret `target.template`), **`ACCOUNT_PASSWORD`** (bootstrap mailbox).
+- **Secrets:** `ExternalSecret/stalwart-secrets` templates pod env from 1Password (`stores-stalwart` / `platform-stalwart` items): `POSTGRES_PASSWORD`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, **`STALWART_RECOVERY_ADMIN`** (`admin:<admin_password>`, the deterministic CLI admin — `user:pass`, built in the ExternalSecret `target.template`), **`ACCOUNT_PASSWORD`** (bootstrap mailbox).
 - **TLS:** cert-manager `Certificate/stalwart-tls` for `mail.grizzly-endeavors.com` on **letsencrypt-prod** (DNS-01, dedicated CF token `platform/cloudflare-certmanager`). Mounted at `/etc/stalwart/tls/{tls.crt,tls.key}`; Stalwart references them via a `Certificate` object with `File` refs and serves it as `SystemSettings.defaultCertificateId`.
 
 ### CLI-applied config (`configure-stalwart.yml` + `plan.json`)
 - **Blob store** → s3-hot versitygw S3 (`http://10.0.0.200:7070`, bucket `stalwart`; `secretKey` via typed `EnvironmentVariable` object, `accessKey` = the `stalwart` username). Verified: inbound mail lands a blob in the bucket.
 - **Listeners** smtp 25 / submissions 465 / submission 587 / imaps 993 / http 8080 — the four mail listeners carry `overrideProxyTrustedNetworks: 10.0.0.0/8` so they parse HAProxy's PROXY v2 header.
 - **Domains** `grizzly-endeavors.com` (primary; DKIM management = Automatic — keys generated/rotated by the server; DNS record is Phase 5) and `bearflinn.com` (secondary, receive-only — hosts the `bearflinn@bearflinn.com` alias; `MX 10 mail.grizzly-endeavors.com`, reuses the same host + cert). The secondary domain exists both because the address is nice to keep and to satisfy SMTP2GO's >3-day domain-age gate at signup (bearflinn.com predates grizzly-endeavors.com) — sign up with `bearflinn@bearflinn.com`, then add grizzly-endeavors.com as a sending domain.
-- **Bootstrap mailbox** `bearflinn@grizzly-endeavors.com` (password from OpenBao `platform/stalwart account_password`). **TEMPORARY** — accounts move to an Authentik-backed directory later. Aliases on it: `postmaster@`/`abuse@` (grizzly-endeavors.com) and `bearflinn@bearflinn.com` (cross-domain — one inbox).
+- **Bootstrap mailbox** `bearflinn@grizzly-endeavors.com` (password from 1Password `platform-stalwart/account_password`). **TEMPORARY** — accounts move to an Authentik-backed directory later. Aliases on it: `postmaster@`/`abuse@` (grizzly-endeavors.com) and `bearflinn@bearflinn.com` (cross-domain — one inbox).
+- **Claude agent mailbox** `claude@grizzly-endeavors.com` (password from 1Password `platform-stalwart/claude_password`, no aliases) — send + IMAP receive for the grizzly-mail Claude Code plugin (test/automation use). Provisioned check-then-create by `configure-stalwart.yml`, independent of fresh-config detection.
 - **Ban allowlist** `AllowedIp 10.0.0.0/8` — see "the ingress-ban trap" gotcha.
 - **Logging** a `Stdout` tracer at info (container-runtime logs); the default file tracer is disabled.
 
@@ -46,13 +47,13 @@ The interim Cloudflare Email Routing inbound (ADR-054) was retired and MX cut to
 
 ## Phase 5 Part B — SMTP2GO signup (human gate) — ✅ DONE (2026-07-06)
 
-**The blocker was domain age.** `grizzly-endeavors.com` was registered **2026-07-05 19:32 UTC** and **SMTP2GO requires the signup domain >3 days old** — so a 2026-07-06 retry failed. **Fix: signed up with `bearflinn@bearflinn.com`** (bearflinn.com is years old → passes the gate; a domain *alias* qualifies — free/consumer addresses are rejected). Then added `grizzly-endeavors.com` as a sending domain in SMTP2GO, which auto-added the DKIM/return-path/tracking CNAMEs to the zone. The activation email landed in **Junk Mail** (spam filter; see Webmail section). SMTP2GO SMTP creds now in OpenBao `stores/smtp2go`.
+**The blocker was domain age.** `grizzly-endeavors.com` was registered **2026-07-05 19:32 UTC** and **SMTP2GO requires the signup domain >3 days old** — so a 2026-07-06 retry failed. **Fix: signed up with `bearflinn@bearflinn.com`** (bearflinn.com is years old → passes the gate; a domain *alias* qualifies — free/consumer addresses are rejected). Then added `grizzly-endeavors.com` as a sending domain in SMTP2GO, which auto-added the DKIM/return-path/tracking CNAMEs to the zone. The activation email landed in **Junk Mail** (spam filter; see Webmail section). SMTP2GO SMTP creds now in 1Password `stores-smtp2go`.
 
 ## Phase 5 Part C — outbound smarthost + sender auth — ✅ DONE (2026-07-06)
 
 Outbound relays through SMTP2GO and passes sender auth. What was done:
 
-- **Smarthost:** `MtaRoute/Relay` `smtp2go` → `mail.smtp2go.com:587` (STARTTLS), `authUsername` from OpenBao `stores/smtp2go` (injected by `configure-stalwart.yml`), `authSecret` = pod env `SMTP2GO_PASSWORD` (from `stalwart-secrets` ExternalSecret ← `stores/smtp2go`). `MtaOutboundStrategy.route` now sends all non-local mail via `'smtp2go'` (was `'mx'`). Home ISP blocks :25, so direct MX was never an option; cluster egress to SMTP2GO on 587/2525/465/8025 is open.
+- **Smarthost:** `MtaRoute/Relay` `smtp2go` → `mail.smtp2go.com:587` (STARTTLS), `authUsername` from 1Password `stores-smtp2go` (injected by `configure-stalwart.yml`), `authSecret` = pod env `SMTP2GO_PASSWORD` (from `stalwart-secrets` ExternalSecret ← `stores-smtp2go`). `MtaOutboundStrategy.route` now sends all non-local mail via `'smtp2go'` (was `'mx'`). Home ISP blocks :25, so direct MX was never an option; cluster egress to SMTP2GO on 587/2525/465/8025 is open.
 - **DNS:** SPF flipped to `v=spf1 include:spf.smtp2go.com ~all`; SMTP2GO's DKIM (`s646324._domainkey` CNAME → `dkim.smtp2go.net`) + return-path (`em646324` CNAME) already present; DMARC added: `_dmarc` TXT `v=DMARC1; p=quarantine; rua=mailto:postmaster@grizzly-endeavors.com; ruf=...; adkim=r; aspf=r; fo=1`. (No stale CF DKIM remained to retire — Email Routing removed it in Part A.)
 - **DKIM ownership = SMTP2GO only.** Stalwart's own domains were set to `dkimManagement: Manual` and their auto-generated `DkimSignature` objects deleted, so Stalwart no longer double-signs with unpublished, auto-rotating keys (those showed as `dkim=permerror` at Gmail). SMTP2GO signs with the aligned, CNAME-managed `s646324` selector — stable, no rotation burden. Encoded in `plan.json` (Domain `dkimManagement` Manual).
 - **Verified:** real send `bearflinn@grizzly-endeavors.com` → `bearflinn@gmail.com` delivered via `mail.smtp2go.com` (`250 OK`); Gmail `Authentication-Results`: **spf=pass** (mailfrom `em646324.grizzly-endeavors.com`, aligned relaxed), **dkim=pass** (`d=grizzly-endeavors.com s=s646324`, aligned), DMARC passes on that alignment.
@@ -65,9 +66,9 @@ Stalwart 0.16 ships no mailbox UI (the `mail.grizzly-endeavors.com` surface is t
 
 - **State:** foundation Postgres db/role `roundcube` (schema auto-created by the image's initdb on first start); no PVC. Secrets: `stores/roundcube` db_password + `platform/roundcube` des_key (24-char), via `ExternalSecret/roundcube-secrets`.
 - **Mail path:** dials the **public** `mail.grizzly-endeavors.com:993` (IMAPS) / `:465` (submissions), not the in-cluster Service — the mail listeners' `overrideProxyTrustedNetworks 10.0.0.0/8` covers the pod net, so a direct in-cluster connection is treated as PROXY-protocol and reset (errno 104). The public path rides the VPS HAProxy (which adds the PROXY header) and the cert matches, so no TLS kludge. Hairpins out to the VPS and back; a PROXY-free internal listener (the "narrower PROXY trust" follow-up) would bring it back in-cluster.
-- **Login:** after the Authentik gate, Roundcube does its own mailbox login — user `bearflinn@grizzly-endeavors.com`, password = OpenBao `platform/stalwart account_password`. (Full OIDC SSO / no mailbox password is deferred to the Stalwart↔Authentik directory work.)
+- **Login:** after the Authentik gate, Roundcube does its own mailbox login — user `bearflinn@grizzly-endeavors.com`, password = 1Password `platform-stalwart/account_password`. (Full OIDC SSO / no mailbox password is deferred to the Stalwart↔Authentik directory work.)
 - **Forward-auth:** blueprint `authentik/blueprints/grizzly-webmail.yaml` (proxy provider + app + grizzly-admins policy + the embedded-outpost provider list, which now owns BOTH the webmail and invite providers). Mirrors the grizzly-invite admin gate. Adding another forward-auth app = append its provider to the outpost list in that file.
-- **Reading a message by hand (no UI needed):** IMAPS `mail.grizzly-endeavors.com:993`, user `bearflinn@grizzly-endeavors.com`, password from OpenBao `platform/stalwart account_password`. Note Stalwart's spam filter files some legit mail under **`Junk Mail`** (folder names have spaces → quote them in IMAP SELECT).
+- **Reading a message by hand (no UI needed):** IMAPS `mail.grizzly-endeavors.com:993`, user `bearflinn@grizzly-endeavors.com`, password from 1Password `platform-stalwart/account_password`. Note Stalwart's spam filter files some legit mail under **`Junk Mail`** (folder names have spaces → quote them in IMAP SELECT).
 
 ## Operating the CLI
 
@@ -76,7 +77,7 @@ Stalwart 0.16 ships no mailbox UI (the `mail.grizzly-endeavors.com` surface is t
 The CLI authenticates as the recovery admin. From the control node:
 
 ```
-ADMIN_PW=$(bao kv get -format=json secret/grizzly-platform/platform/stalwart | jq -r .data.data.admin_password)
+ADMIN_PW=$(OP_SERVICE_ACCOUNT_TOKEN="$(cat ~/.config/op-tokens/operator)" op read 'op://grizzly-platform/platform-stalwart/admin_password')
 docker run --rm -e STALWART_URL=https://mail.grizzly-endeavors.com -e STALWART_USER=admin \
   -e STALWART_PASSWORD="$ADMIN_PW" ghcr.io/stalwartlabs/cli:1.0.10 -k <describe|get|query|apply ...>
 ```
@@ -91,7 +92,7 @@ ansible-playbook ansible/playbooks/configure-stalwart.yml --vault-password-file 
 
 ## Gotchas already solved (don't rediscover)
 
-- **No `%{env:...}%` macros in 0.16.** Macros are NOT expanded anywhere (config settings *or* directory credentials — both store the literal string). Secrets use typed `{"@type":"EnvironmentVariable","variableName":"X"}` objects (blob-store `secretKey`, data-store `authSecret`); the mailbox password is injected as a literal from OpenBao by the playbook. `SecretKey`/`SecretText`/`PublicText` also support `{"@type":"File","filePath":"..."}` (used for the TLS cert) and `{"@type":"Value","secret":"..."}`.
+- **No `%{env:...}%` macros in 0.16.** Macros are NOT expanded anywhere (config settings *or* directory credentials — both store the literal string). Secrets use typed `{"@type":"EnvironmentVariable","variableName":"X"}` objects (blob-store `secretKey`, data-store `authSecret`); the mailbox passwords are injected as literals from 1Password by the playbook. `SecretKey`/`SecretText`/`PublicText` also support `{"@type":"File","filePath":"..."}` (used for the TLS cert) and `{"@type":"Value","secret":"..."}`.
 - **Blob-store and listener changes need a POD RESTART, not `ReloadSettings`.** The S3 client and listener sockets are built at startup; `ReloadSettings` reloads other settings but not these. The playbook restarts on first config; use `-e stalwart_force_restart=true` otherwise. (TLS cert reloads DO take via `Action/ReloadTlsCertificates` once the mounted file is updated.)
 - **The ingress-ban trap.** Stalwart's `Security` auto-ban bans by source IP. All HTTP/JMAP/webadmin/CLI traffic arrives from the single ingress-nginx pod IP (no real client IP on the HTTP path), so a few failed logins ban that one IP and take down the **entire** HTTP surface → 502 everywhere. Fixed with `AllowedIp 10.0.0.0/8` (internal infra is never banned). To recover if it recurs: reach the pod directly, bypassing the banned ingress — `kubectl -n stalwart port-forward pod/<pod> 18080:8080`, then `docker run --network host -e STALWART_URL=http://localhost:18080 ... query BlockedIp` and `delete BlockedIp --ids <id>`.
 - **PROXY trusted-networks is per-listener** (`overrideProxyTrustedNetworks`), NOT global (`SystemSettings.proxyTrustedNetworks`) — global would make the http listener expect PROXY from ingress-nginx (which sends none) and break it.
@@ -117,7 +118,7 @@ ansible-playbook ansible/playbooks/configure-stalwart.yml --vault-password-file 
 
 ## Key facts for resuming
 
-- OpenBao (control-node root session; see [openbao-add-secret.md](openbao-add-secret.md)): `stores/stalwart` (db_password, s3_access_key, s3_secret_key), `platform/stalwart` (admin_password, account_password), `platform/cloudflare-certmanager` (api_token). Part C adds `stores/smtp2go`.
+- 1Password vault `grizzly-platform` (see [onepassword-quickref.md](onepassword-quickref.md)): `stores-stalwart` (db_password, s3_access_key, s3_secret_key), `platform-stalwart` (admin_password, account_password, claude_password), `platform-cloudflare-certmanager` (api_token), `stores-smtp2go` (username, password).
 - Foundation: Postgres `10.0.0.200:5432` db/user `stalwart`; s3-hot versitygw S3 `http://10.0.0.200:7070` bucket `stalwart`.
 - **DNS (hand-managed via cloudflare-api MCP):**
   - `grizzly-endeavors.com` zone `e748f8927854bbf3e8d6a91a345d1842`: `mail` A `133307cf1f603655b77fbeb9a1ea151c` → 178.156.217.91 grey; MX `69dcc3b46ebe2455d4052dc8d9ce69f8` → mail; SPF TXT `f10af94070358437c817b82b3cb99a68` (`v=spf1 -all`, interim). CF DKIM `cf2024-1._domainkey` `90525406a6d7a7926cd67a249e84573c` (retire in Part C). Stalwart domain id `b`, mailbox account id `b`.

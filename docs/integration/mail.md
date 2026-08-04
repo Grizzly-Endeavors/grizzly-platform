@@ -28,12 +28,21 @@ Stalwart relays all outbound through **SMTP2GO** as the smarthost; DKIM/SPF/DMAR
 
 ## 1 — Provision a submission account
 
-Stalwart accounts are declared in its config plan and applied by the CLI, not created ad-hoc. Add a dedicated account for your app to `ansible/files/stalwart/plan.json` (an `Account` with a `credentials` entry, alongside the existing bootstrap mailbox), give it a password sourced from OpenBao, and apply with `configure-stalwart.yml`. Store the password at `secret/grizzly-platform/stores/<app>` (or reuse your app's existing stores path) under e.g. `smtp_password`:
+Stalwart accounts are provisioned by imperative task blocks in `ansible/playbooks/configure-stalwart.yml` (detect → create-if-absent → look up id → inject password via the config CLI), **not** declared in `plan.json` — a directory credential must be a literal value at apply time, so it can't sit in the committed plan. To add an account for your app:
+
+1. Store a password in the 1Password `grizzly-platform` vault — a `smtp_password` field on your app's `stores-<app>` item — generated so the value never echoes:
 
 ```bash
-bao kv patch secret/grizzly-platform/stores/<app> \
-  smtp_password="$(openssl rand -base64 36)"
-# then add the account to plan.json and:
+OP_SERVICE_ACCOUNT_TOKEN="$(cat ~/.config/op-tokens/operator)" \
+  op item edit stores-<app> --vault grizzly-platform \
+  "smtp_password[password]=$(openssl rand -base64 36)" > /dev/null
+```
+
+2. Add a lookup for it in `ansible/vars/onepassword_secrets.yml`, then clone the `claude` agent-mailbox task block in `configure-stalwart.yml` for your account name.
+
+3. Apply:
+
+```bash
 ansible-playbook -i ansible/inventory ansible/playbooks/configure-stalwart.yml \
   --vault-password-file .vault_pass -e stalwart_force_restart=true -v
 ```
@@ -47,7 +56,7 @@ Land the SMTP password with an `ExternalSecret` ([secrets.md](secrets.md)):
 ```yaml
 data:
   - secretKey: SMTP_PASSWORD
-    remoteRef: { key: grizzly-platform/stores/<app>, property: smtp_password }
+    remoteRef: { key: stores-<app>/smtp_password }
 ```
 
 Then configure your mailer — host, port 587 (STARTTLS) or 465 (implicit TLS), your account username + the synced password, and an aligned `From:`:
@@ -77,7 +86,7 @@ In the delivered message's `Authentication-Results`, confirm **spf=pass**, **dki
 
 - **Connection reset (`errno 104`) right after TCP connect** — you dialed an in-cluster Service or IP instead of `mail.grizzly-endeavors.com`. The listener expected a PROXY header. Use the public host.
 - **Mail sends but lands in spam / dmarc=fail** — `From:` isn't `@grizzly-endeavors.com`, so DKIM/SPF don't align. Fix the sender address.
-- **`535` auth failed** — wrong account username or the password drifted from OpenBao. Re-apply the plan; confirm the `ExternalSecret` synced the current value.
+- **`535` auth failed** — wrong account username or the password drifted from 1Password. Re-run `configure-stalwart.yml` with a restart; confirm the `ExternalSecret` synced the current value.
 - **Nothing sends and no error in-app** — verify the pod actually has egress to the VPS path and that `configure-stalwart.yml` was re-run with a restart after adding the account.
 
 ## See also
