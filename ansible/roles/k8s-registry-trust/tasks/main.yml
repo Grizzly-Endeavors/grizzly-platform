@@ -4,31 +4,10 @@
 # uses a ClusterDNS name that containerd can't resolve from the host, so we
 # rewrite it at pull time.
 #
-# Changes here require a containerd restart (only the first time, to pick up
-# `config_path`). Subsequent hosts.toml changes are re-read live.
-
-# ==========================================================================
-# Enable containerd's hosts.toml config directory
-# ==========================================================================
-
-- name: Check current containerd config_path setting
-  ansible.builtin.command: grep -E '^\s*config_path\s*=' /etc/containerd/config.toml
-  register: containerd_config_path_check
-  changed_when: false
-  failed_when: false
-  become: yes
-
-- name: Enable hosts.toml config_path in containerd config.toml
-  # The default Debian config.toml contains an empty config_path = "" line
-  # inside [plugins."io.containerd.grpc.v1.cri".registry]. Replace it with
-  # the directory we want containerd to read per-host settings from.
-  ansible.builtin.replace:
-    path: /etc/containerd/config.toml
-    regexp: '^(\s*)config_path\s*=\s*""'
-    replace: '\1config_path = "/etc/containerd/certs.d"'
-  when: '"/etc/containerd/certs.d" not in containerd_config_path_check.stdout'
-  become: yes
-  notify: Restart containerd
+# This role owns only the certs.d hosts.toml contents, which containerd
+# re-reads live on every pull. The `config_path` setting that points
+# containerd at certs.d lives in the k8s-containerd role — the sole owner of
+# /etc/containerd/config.toml.
 
 # ==========================================================================
 # Write the registry-mirror hosts.toml
@@ -108,9 +87,6 @@
 # Verify
 # ==========================================================================
 
-- name: Flush handlers so containerd restarts before probe
-  ansible.builtin.meta: flush_handlers
-
 - name: Verify containerd is running after config change
   ansible.builtin.systemd:
     name: containerd
@@ -125,5 +101,4 @@
       - "Image ref host:  {{ k8s_registry_host }}"
       - "Mirror target:   http://localhost:{{ k8s_registry_nodeport }}"
       - "hosts.toml:      /etc/containerd/certs.d/{{ k8s_registry_host }}/hosts.toml"
-      - "Note: new hosts.toml files are re-read on every pull. Changing the"
-      - "      containerd main config.toml (e.g. config_path) requires restart."
+      - "Note: hosts.toml files are re-read on every pull — no restart needed."

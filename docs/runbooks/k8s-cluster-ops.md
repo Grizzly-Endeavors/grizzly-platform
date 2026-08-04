@@ -58,4 +58,10 @@ Only apply it to a node you have confirmed is actually down. On a node that is m
 
 ## Upgrading the cluster version
 
-`ansible-playbook ansible/playbooks/upgrade-k8s-cluster.yml` — control plane first, then workers one at a time (`serial: 1`). Update `kubernetes_version` in `ansible/inventory/group_vars/k8s_cluster/k8s.yml` and `cilium_version` in `ansible/roles/k8s-cilium/defaults/main.yml` first; see the playbook's own header for the full prerequisite/verification list. Single control plane means brief API downtime during the control-plane play.
+Three playbooks cover the version stack, each self-documenting in its header. None of them skip minor versions — K8s (kubeadm), Cilium, and containerd all move one step per run, so a multi-minor catch-up is several runs in sequence ([ADR-068](../decisions/068-k8s-135-stepped-upgrade.md) records a full example, including the component-compatibility checks to make before picking a target).
+
+- **K8s:** `ansible-playbook ansible/playbooks/upgrade-k8s-cluster.yml` — control plane first, then workers one at a time (`serial: 1`). Update `kubernetes_version` in `ansible/inventory/group_vars/k8s_cluster/k8s.yml` first. Single control plane means brief API downtime during the control-plane play.
+- **Cilium:** `ansible-playbook ansible/playbooks/upgrade-cilium.yml` — runs the upstream-required pre-flight chart, then the Helm upgrade. Update `cilium_version` in `ansible/roles/k8s-cilium/defaults/main.yml` first and check the target's K8s compatibility matrix.
+- **containerd:** `ansible-playbook ansible/playbooks/upgrade-containerd.yml` — drains each node and swaps the pinned package ([ADR-067](../decisions/067-containerd-from-docker-repo.md)). Update `containerd_version` in `ansible/roles/k8s-containerd/defaults/main.yml` first and check the [K8s support matrix](https://github.com/containerd/containerd/blob/main/RELEASES.md).
+
+Before any node-draining run: take an etcd snapshot (`etcdctl snapshot save` inside the etcd pod, copy off-node), and shut down any running game servers through the gameservers bot — their `safe-to-evict: false` PDB blocks drains by design.

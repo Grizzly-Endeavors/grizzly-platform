@@ -1,0 +1,96 @@
+---
+# Cilium CNI Version Upgrade
+#
+# Upgrades Cilium to the version specified by `cilium_version` in
+# roles/k8s-cilium/defaults/main.yml, without touching K8s node packages.
+# Runs the upstream-required pre-flight check (image pre-pull + config
+# validation) before the Helm upgrade, then applies the k8s-cilium role.
+#
+# Cilium supports upgrading one minor version at a time — bump
+# `cilium_version` by at most one minor per run, and verify the target
+# version's K8s compatibility matrix covers the running cluster version.
+#
+# Prerequisites:
+#   - Update `cilium_version` in ansible/roles/k8s-cilium/defaults/main.yml
+#   - Read the target version's upgrade notes for breaking Helm values
+#
+# Usage:
+#   ansible-playbook ansible/playbooks/upgrade-cilium.yml
+#
+# Verification:
+#   cilium status
+#   kubectl get pods -n kube-system
+#   flux check
+
+# ============================================================
+# Play 1: Pre-flight check, then upgrade via the k8s-cilium role
+# ============================================================
+# The pre-flight tasks live as pre_tasks of the role play so the role's
+# defaults (cilium_version) are in scope for them.
+- name: Upgrade Cilium CNI
+  hosts: k8s_control_plane
+  gather_facts: no
+
+  vars:
+    kubectl_env:
+      KUBECONFIG: "/home/{{ ansible_user }}/.kube/config"
+
+  pre_tasks:
+    - name: Update Helm repositories
+      ansible.builtin.command: helm repo update
+      changed_when: false
+      environment: "{{ kubectl_env }}"
+
+    - name: Install Cilium pre-flight chart
+      ansible.builtin.command: >
+        helm install cilium-preflight cilium/cilium
+        --version {{ cilium_version }}
+        --namespace kube-system
+        --set preflight.enabled=true
+        --set agent=false
+        --set operator.enabled=false
+      environment: "{{ kubectl_env }}"
+
+    - name: Wait for pre-flight daemonset rollout (pre-pulls agent image on every node)
+      ansible.builtin.command: >
+        kubectl -n kube-system rollout status ds/cilium-pre-flight-check
+        --timeout=300s
+      environment: "{{ kubectl_env }}"
+      changed_when: false
+
+    - name: Wait for pre-flight validation deployment
+      ansible.builtin.command: >
+        kubectl -n kube-system wait --for=condition=Available
+        deploy/cilium-pre-flight-check --timeout=300s
+      environment: "{{ kubectl_env }}"
+      changed_when: false
+
+    - name: Remove pre-flight chart
+      ansible.builtin.command: helm uninstall cilium-preflight --namespace kube-system
+      environment: "{{ kubectl_env }}"
+
+  roles:
+    - k8s-cilium
+
+# ============================================================
+# Play 2: Post-upgrade verification from the control node
+# ============================================================
+- name: Verify Cilium upgrade
+  hosts: localhost
+  gather_facts: no
+  connection: local
+
+  vars:
+    kubectl_env:
+      KUBECONFIG: "{{ lookup('env', 'HOME') }}/.kube/config"
+
+  tasks:
+    - name: Wait for Cilium to report ready
+      ansible.builtin.command: cilium status --wait --wait-duration 5m
+      environment: "{{ kubectl_env }}"
+      changed_when: false
+      register: cilium_final_status
+
+    - name: Display Cilium status
+      ansible.builtin.debug:
+        var: cilium_final_status.stdout_lines

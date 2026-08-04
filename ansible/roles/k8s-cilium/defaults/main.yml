@@ -4,7 +4,9 @@
 # Replaces kube-proxy with Cilium's eBPF datapath (ADR-014).
 
 # Cilium version — check https://github.com/cilium/cilium/releases
-cilium_version: "1.18.8"
+# Upgrades move one minor at a time (ansible/playbooks/upgrade-cilium.yml);
+# verify the target's K8s compatibility matrix before bumping.
+cilium_version: "1.20.0"
 cilium_helm_repo: "https://helm.cilium.io/"
 
 # Hubble flow observability
