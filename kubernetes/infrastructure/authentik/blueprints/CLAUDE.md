@@ -19,6 +19,34 @@ Never leave a removed object orphaned in the running instance. A blueprint disap
 
 **Order matters within a file:** `!KeyOf` resolves to an *already-applied* entry, so the target entry must appear **above** every entry that references it. Entries are applied top-to-bottom in one transaction; a forward reference fails with `KeyOf: failed to find entry with id ...` and rolls the whole blueprint back. Arrange dependencies-first (e.g. flow + stages → sources that reference the flow → bindings that reference both). Beware: if file A `!Find`s an object that file B creates, and B hasn't applied yet, the `!Find` returns null that pass and only converges on a later reconcile (up to 60 min). When two objects reference each other (e.g. a source's `enrollment_flow` and that flow's stages referencing the source), keep them in **one file** so every link is `!KeyOf` and resolves in a single atomic transaction. This is why `social-login.yaml` is one file rather than split.
 
+## `attrs` is a partial update, but validation is not
+
+An entry only writes the attrs it lists — but the serializer validates **only what the entry supplies**, never merged with the stored object. So on any model whose serializer has a cross-field rule, a single-attr patch fails even though the stored object would satisfy the rule.
+
+The one that has already bitten: `default-authentication-identification` enforces *"When no user fields are selected, at least one source must be selected"*. An entry setting just `enrollment_flow` is rejected, and because the whole blueprint applies in one transaction, that one bad entry rolls back everything else in the file. Hence `social-login.yaml` owns that stage whole — `sources` and `enrollment_flow` together — rather than letting `email-otp.yaml` patch one attr of it.
+
+So: two files may each own a *disjoint* attr of the same object only when the serializer has no cross-field validator. When in doubt, give the object a single owning file.
+
+## Debugging a failed blueprint
+
+`BlueprintInstance.status == "error"` with nothing useful in the worker logs. The real serializer error is **masked**: `KeyOf.__repr__` resolves against an empty `Blueprint()`, so it raises while structlog is serializing the failing entry, and what surfaces is a misleading `KeyOf: failed to find entry with id ...` naming the file's *first* entry. Chasing that leads nowhere.
+
+Get the actual error by running the importer directly — `transaction_rollback()` makes this safe to do against production:
+
+```
+kubectl -n authentik exec deploy/authentik-worker -- ak shell -c "
+from authentik.blueprints.v1.importer import Importer, transaction_rollback
+imp = Importer.from_string(open('/blueprints/mounted/cm-authentik-blueprints/<file>.yaml').read())
+try:
+    with transaction_rollback():
+        print('OK' if imp._apply_models(raise_errors=True) else 'FALSE')
+except Exception as exc:
+    print('FAILED:', exc)
+"
+```
+
+Note the mounted file lags the ConfigMap by up to a minute or two after Flux applies — check the file in the pod, not just `kubectl get cm`, before concluding a fix didn't work.
+
 ## User identity & access (`social-login.yaml`, `email-otp.yaml`)
 
 Human users are **not** declared as blueprint objects — there are no `authentik_core.user` entries, by design, so no human PII (emails/names) ever lands in this public repo or in the secret store. Identity comes from the social provider (Discord/GitHub/Google) at first login, or from the address the person types into the email sign-up flow.
