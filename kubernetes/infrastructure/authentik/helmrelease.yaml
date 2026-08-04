@@ -45,6 +45,28 @@ spec:
         name: authentik
         user: authentik
         port: 5432
+      # --- Outbound mail (Stalwart submission) ------------------------------
+      # Sends enrollment and sign-in one-time codes (ADR-066). Two rules from
+      # docs/integration/mail.md are load-bearing here:
+      #   1. Dial the PUBLIC host even from in-cluster. The mail listeners trust
+      #      PROXY protocol from 10.0.0.0/8, which covers the pod network, so a
+      #      direct connection to the in-cluster Service is parsed as a PROXY
+      #      header and reset (errno 104). This hairpins out to the VPS HAProxy
+      #      and back, which is also what makes the TLS SAN match.
+      #   2. `from` must be @grizzly-endeavors.com — SMTP2GO signs DKIM for that
+      #      domain, and DMARC alignment fails for anything else.
+      # The password is NOT here: values land in the chart-generated config
+      # secret in plaintext, so it is injected via global.env instead.
+      email:
+        host: mail.grizzly-endeavors.com
+        port: 465
+        username: noreply@grizzly-endeavors.com
+        use_ssl: true
+        use_tls: false
+        # Generous relative to the chart default: every send crosses the
+        # hairpin to Hetzner and back.
+        timeout: 30
+        from: "Grizzly Endeavors <noreply@grizzly-endeavors.com>"
     # This chart version bundles no Redis subchart — the cache is configured
     # purely via AUTHENTIK_REDIS__* env (authentik's own config keys, RESP wire
     # protocol). We point at the shared foundation kv-cache (Valkey backend) on a
@@ -80,6 +102,14 @@ spec:
             secretKeyRef:
               name: authentik-secrets
               key: kv_cache_password
+        # SMTP AUTH password for the noreply@ Stalwart account (see the email
+        # block above). Kept out of values so it never reaches the chart's
+        # config secret; env overrides that secret on name collision.
+        - name: AUTHENTIK_EMAIL__PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: authentik-secrets
+              key: email_password
         # Initial akadmin bootstrap — only consumed on first migration when no
         # users exist. Safe to leave wired afterward (ignored once seeded).
         - name: AUTHENTIK_BOOTSTRAP_PASSWORD

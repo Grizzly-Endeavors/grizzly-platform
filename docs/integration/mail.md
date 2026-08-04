@@ -30,15 +30,17 @@ Stalwart relays all outbound through **SMTP2GO** as the smarthost; DKIM/SPF/DMAR
 
 Stalwart accounts are provisioned by imperative task blocks in `ansible/playbooks/configure-stalwart.yml` (detect → create-if-absent → look up id → inject password via the config CLI), **not** declared in `plan.json` — a directory credential must be a literal value at apply time, so it can't sit in the committed plan. To add an account for your app:
 
-1. Store a password in the 1Password `grizzly-platform` vault — a `smtp_password` field on your app's `stores-<app>` item — generated so the value never echoes:
+1. Store a password in the 1Password `grizzly-platform` vault as a `<name>_password` field on the **`platform-stalwart`** item, generated so the value never echoes:
 
 ```bash
 OP_SERVICE_ACCOUNT_TOKEN="$(cat ~/.config/op-tokens/operator)" \
-  op item edit stores-<app> --vault grizzly-platform \
-  "smtp_password[password]=$(openssl rand -base64 36)" > /dev/null
+  op item edit platform-stalwart --vault grizzly-platform \
+  "<name>_password[password]=$(openssl rand -hex 32)" > /dev/null
 ```
 
-2. Add a lookup for it in `ansible/vars/onepassword_secrets.yml`, then clone the `claude` agent-mailbox task block in `configure-stalwart.yml` for your account name.
+Mailbox passwords live on `platform-stalwart` alongside `admin_password`, not on your app's own item: the same value has to be readable by `configure-stalwart.yml` (to write it into Stalwart's directory) and by your app (to authenticate with it), and keeping it with the mail plant means one owner for every mailbox credential. Your app reads it cross-item — that is what `authentik/externalsecret.yaml` does for `platform-stalwart/noreply_password`.
+
+2. Add a lookup for it in `ansible/vars/onepassword_secrets.yml`, then clone the `noreply` submission-account task block in `configure-stalwart.yml` for your account name.
 
 3. Apply:
 
@@ -56,7 +58,7 @@ Land the SMTP password with an `ExternalSecret` ([secrets.md](secrets.md)):
 ```yaml
 data:
   - secretKey: SMTP_PASSWORD
-    remoteRef: { key: stores-<app>/smtp_password }
+    remoteRef: { key: platform-stalwart/<name>_password }
 ```
 
 Then configure your mailer — host, port 587 (STARTTLS) or 465 (implicit TLS), your account username + the synced password, and an aligned `From:`:
@@ -86,7 +88,7 @@ In the delivered message's `Authentication-Results`, confirm **spf=pass**, **dki
 
 - **Connection reset (`errno 104`) right after TCP connect** — you dialed an in-cluster Service or IP instead of `mail.grizzly-endeavors.com`. The listener expected a PROXY header. Use the public host.
 - **Mail sends but lands in spam / dmarc=fail** — `From:` isn't `@grizzly-endeavors.com`, so DKIM/SPF don't align. Fix the sender address.
-- **`535` auth failed** — wrong account username or the password drifted from 1Password. Re-run `configure-stalwart.yml` with a restart; confirm the `ExternalSecret` synced the current value.
+- **`535` auth failed** — wrong account username or the password drifted from 1Password. Re-run `configure-stalwart.yml` with a restart; confirm the `ExternalSecret` synced the current value. **Do not let your app retry into this.** Submission hairpins out to the VPS, so HAProxy presents the household's *public* WAN IP to Stalwart's per-IP auto-ban — the `10.0.0.0/8` allowlist in `plan.json` does not cover it. A mailer that retries a bad credential will ban mail for the whole house. Fail closed on `535`, and if it already happened, unban with `stw query BlockedIp --json` then `stw delete BlockedIp --ids <id>` ([stalwart-cli.md](../runbooks/stalwart-cli.md)).
 - **Nothing sends and no error in-app** — verify the pod actually has egress to the VPS path and that `configure-stalwart.yml` was re-run with a restart after adding the account.
 
 ## See also

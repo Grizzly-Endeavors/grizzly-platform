@@ -18,7 +18,8 @@
 #   - stdout logging (Stalwart defaults to a file tracer inside the container).
 #   - the mailboxes + their passwords (a directory secret can't be an env
 #     reference or committed to this public repo — they are injected here from
-#     1Password): the bootstrap mailbox and the claude agent mailbox.
+#     1Password): the bootstrap mailbox, the claude agent mailbox, and the
+#     noreply submission account Authentik sends one-time codes through.
 #     TEMPORARY: accounts move to an Authentik-backed directory later.
 #
 # Gotchas baked in (learned the hard way):
@@ -34,7 +35,7 @@
 #     STALWART_RECOVERY_ADMIN (PR #109). Verify: kubectl -n stalwart get secret
 #     stalwart-secrets -o jsonpath='{.data.STALWART_RECOVERY_ADMIN}' | base64 -d
 #   - 1Password platform-stalwart holds admin_password + account_password
-#     + claude_password.
+#     + claude_password + noreply_password.
 #   - docker + kubeconfig (~/.kube/config) on the control node (the jumpbox has both).
 #   - Vault decrypted (--vault-password-file or .vault_pass).
 #
@@ -64,6 +65,11 @@
     # sends and receives). Provisioned check-then-create — independent of
     # stalwart_fresh_config, so it lands on re-runs against a live server.
     stalwart_claude_local: "claude"
+    # Submission account Authentik authenticates as to send enrollment and
+    # sign-in one-time codes (ADR-066). Send-only: nothing delivers here, but it
+    # is a real mailbox because Stalwart's directory has no send-only principal.
+    # Provisioned check-then-create, same as the claude mailbox below.
+    stalwart_noreply_local: "noreply"
     # SMTP2GO outbound smarthost (ADR-050 Part C). Home ISP blocks :25, so all
     # outbound relays through SMTP2GO; 587/STARTTLS is reachable from the cluster.
     # authUsername is injected from 1Password (vault_smtp2go_username); the password
@@ -506,6 +512,107 @@
       environment: *cli_env
       register: stalwart_claude_pw
       changed_when: "'Updated' in stalwart_claude_pw.stdout"
+      no_log: true
+
+    # --- noreply submission account (Authentik one-time codes) ---------------
+    # Authentik authenticates as noreply@grizzly-endeavors.com on :465 to send
+    # enrollment and sign-in codes (ADR-066). Same check-then-create shape as the
+    # claude mailbox: it must land on re-runs against a live server, and the
+    # password re-applies every run so a 1Password rotation converges here.
+    - name: Detect whether the noreply submission account already exists
+      ansible.builtin.command:
+        argv:
+          - docker
+          - run
+          - --rm
+          - -e
+          - STALWART_URL
+          - -e
+          - STALWART_USER
+          - -e
+          - STALWART_PASSWORD
+          - "{{ stalwart_cli_image }}"
+          - -k
+          - query
+          - Account
+          - --where
+          - "name={{ stalwart_noreply_local }}"
+          - --json
+      environment: *cli_env
+      register: stalwart_noreply_q_before
+      changed_when: false
+      no_log: true
+
+    - name: Create the noreply submission account if absent
+      ansible.builtin.command:
+        argv:
+          - docker
+          - run
+          - --rm
+          - -e
+          - STALWART_URL
+          - -e
+          - STALWART_USER
+          - -e
+          - STALWART_PASSWORD
+          - "{{ stalwart_cli_image }}"
+          - -k
+          - create
+          - Account/User
+          - --json
+          - "{{ {'name': stalwart_noreply_local, 'domainId': stalwart_domain_id, 'description': 'Authentik transactional sender (one-time codes; send-only)'} | to_json }}"
+      environment: *cli_env
+      register: stalwart_noreply_create
+      when: stalwart_noreply_local not in stalwart_noreply_q_before.stdout
+      changed_when: "'Created' in stalwart_noreply_create.stdout"
+      no_log: true
+
+    - name: Look up the noreply submission account id
+      ansible.builtin.command:
+        argv:
+          - docker
+          - run
+          - --rm
+          - -e
+          - STALWART_URL
+          - -e
+          - STALWART_USER
+          - -e
+          - STALWART_PASSWORD
+          - "{{ stalwart_cli_image }}"
+          - -k
+          - query
+          - Account
+          - --where
+          - "name={{ stalwart_noreply_local }}"
+          - --json
+      environment: *cli_env
+      register: stalwart_noreply_q
+      changed_when: false
+      no_log: true
+
+    - name: Inject the noreply account password from 1Password (directory secret)
+      ansible.builtin.command:
+        argv:
+          - docker
+          - run
+          - --rm
+          - -e
+          - STALWART_URL
+          - -e
+          - STALWART_USER
+          - -e
+          - STALWART_PASSWORD
+          - "{{ stalwart_cli_image }}"
+          - -k
+          - update
+          - Account
+          - "{{ (stalwart_noreply_q.stdout_lines | select('match', '.+') | first | from_json).id }}"
+          - --field
+          - "credentials/0={{ {'@type': 'Password', 'secret': vault_stalwart_noreply_password} | to_json }}"
+      environment: *cli_env
+      register: stalwart_noreply_pw
+      changed_when: "'Updated' in stalwart_noreply_pw.stdout"
       no_log: true
 
     # --- outbound smarthost (SMTP2GO relay, ADR-050 Part C) -------------------

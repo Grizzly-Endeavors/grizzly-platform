@@ -36,6 +36,7 @@ One line per runbook. See [`README.md`](README.md) for what runbooks are and whe
 ## Identity / invites
 
 - [invite-authentik-reader.md](invite-authentik-reader.md) — the Authentik read-only group reader backing the invite console.
+- [authentik-email-otp.md](authentik-email-otp.md) — email one-time-code sign-up and passwordless sign-in (health, delivery failures, the auto-ban trap).
 
 ## Notifications
 

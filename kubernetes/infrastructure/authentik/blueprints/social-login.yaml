@@ -21,12 +21,14 @@ metadata:
 #
 # Per-user onboarding = mint an invite in the broker and send the link; the
 # person clicks it, signs in with any provider, and is enrolled — no code to
-# paste. No user object is pre-provisioned, so no human PII lives in git/OpenBao.
+# paste. No user object is pre-provisioned, so no human PII lives in git or in
+# the secret store. An invitee who has none of these three accounts can instead
+# sign up with an email one-time code — see email-otp.yaml.
 #
 # Source client_id/client_secret are NOT in git: injected into the worker (which
 # applies blueprints) via global.env as AUTHENTIK_{DISCORD,GITHUB}_CLIENT_{ID,
-# SECRET}, sourced from OpenBao secret/grizzly-platform/platform/authentik by the
-# authentik ExternalSecret. See docs/decisions/039-...-invitation-enrollment.md.
+# SECRET}, sourced from the 1Password platform-authentik item by the authentik
+# ExternalSecret. See docs/decisions/039-...-invitation-enrollment.md.
 #
 # ENTRY ORDER MATTERS: `!KeyOf` resolves to an already-applied entry, so every
 # target must appear *above* its references. Order here is therefore:
@@ -202,6 +204,8 @@ entries:
   # --- Show the source buttons on the main login page -----------------------
   # Authoritative on this stage's `sources` list: keep the built-in source so
   # local username/password still works, plus the two OAuth sources.
+  # email-otp.yaml patches this same stage's `enrollment_flow` (the sign-up
+  # link) — blueprint attrs are partial upserts, so each file owns its own attr.
   - model: authentik_stages_identification.identificationstage
     identifiers:
       name: default-authentication-identification

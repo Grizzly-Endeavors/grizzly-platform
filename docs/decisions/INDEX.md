@@ -80,6 +80,7 @@ One line per decision, grouped by domain. See [`README.md`](README.md) for what 
 - [042-multi-use-invites](042-multi-use-invites.md) — multi-use invites via a per-redemption nonce ledger.
 - [043-invite-admin-ui-forward-auth](043-invite-admin-ui-forward-auth.md) — invite admin UI gated by Authentik forward-auth.
 - [049-app-visibility-scoped-via-group-policy-bindings](049-app-visibility-scoped-via-group-policy-bindings.md) — app-library visibility via group policy bindings.
+- [066-email-otp-passwordless-signin](066-email-otp-passwordless-signin.md) — email one-time-code enrollment; the code is the credential (no password).
 
 ## Apps & services
 
