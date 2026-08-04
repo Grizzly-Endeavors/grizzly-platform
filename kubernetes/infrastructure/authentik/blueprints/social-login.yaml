@@ -202,10 +202,18 @@ entries:
       enrollment_flow: !KeyOf invite-enrollment-flow
 
   # --- Show the source buttons on the main login page -----------------------
-  # Authoritative on this stage's `sources` list: keep the built-in source so
-  # local username/password still works, plus the two OAuth sources.
-  # email-otp.yaml patches this same stage's `enrollment_flow` (the sign-up
-  # link) — blueprint attrs are partial upserts, so each file owns its own attr.
+  # Authoritative on this stage as a WHOLE, not just on `sources`. The stage's
+  # serializer rejects any payload with neither `user_fields` nor `sources`
+  # ("When no user fields are selected, at least one source must be selected"),
+  # and validation sees only the attrs an entry supplies — never the stored
+  # object. So a second blueprint cannot patch one attr of this stage in
+  # isolation; every attr has to be set together, here.
+  #
+  # `sources`: the built-in source so local username/password still works, plus
+  # the three OAuth sources.
+  # `enrollment_flow`: the "Sign up" link, pointing at the email one-time-code
+  # flow that email-otp.yaml creates. Cross-file, so !Find — if that blueprint
+  # has not applied yet this resolves to null and converges on a later reconcile.
   - model: authentik_stages_identification.identificationstage
     identifiers:
       name: default-authentication-identification
@@ -215,6 +223,7 @@ entries:
         - !KeyOf discord-source
         - !KeyOf github-source
         - !KeyOf google-source
+      enrollment_flow: !Find [authentik_flows.flow, [slug, grizzly-email-enrollment]]
 
   # --- Flow stage bindings: user write -> login -----------------------------
   # The flow has no interactive steps after OAuth: it writes the user and logs
