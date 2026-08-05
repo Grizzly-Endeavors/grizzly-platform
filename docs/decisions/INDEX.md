@@ -63,6 +63,7 @@ One line per decision, grouped by domain. See [`README.md`](README.md) for what 
 - [032-registry-pullthrough-cache](032-registry-pullthrough-cache.md) — transparent pull-through cache on the zot registry.
 - [057-container-builds-buildkit](057-container-builds-buildkit.md) — Kaniko → BuildKit for image builds.
 - [063-gate-runs-in-cluster](063-gate-runs-in-cluster.md) — the CI gate runs as a K8s Job (containerd-cached image, cosign key off the runners).
+- [069-kyverno-failurepolicy-tracks-failureaction](069-kyverno-failurepolicy-tracks-failureaction.md) — an Audit policy uses `failurePolicy: Ignore` so a webhook timeout can't block admission.
 
 ## Secrets
 

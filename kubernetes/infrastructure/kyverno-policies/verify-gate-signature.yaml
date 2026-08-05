@@ -20,6 +20,7 @@ spec:
   # gated namespace, which is the opposite of what Audit means. The real deploy
   # boundary is enforce-gameservers-bot-signature, which keeps failurePolicy:
   # Fail. Flip this to Fail in the same change that flips failureAction: Enforce.
+  # See docs/decisions/069-kyverno-failurepolicy-tracks-failureaction.md.
   failurePolicy: Ignore
   webhookTimeoutSeconds: 30
   rules:
