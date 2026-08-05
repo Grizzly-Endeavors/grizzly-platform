@@ -60,5 +60,6 @@ entries:
         - !KeyOf webmail-provider
         - !Find [authentik_providers_proxy.proxyprovider, [name, grizzly-invite-admin]]
         - !Find [authentik_providers_proxy.proxyprovider, [name, metabase]]
+        - !Find [authentik_providers_proxy.proxyprovider, [name, gameservers-admin]]
       config:
         authentik_host: https://sso.grizzly-endeavors.com/
