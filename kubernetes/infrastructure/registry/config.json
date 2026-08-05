@@ -1,0 +1,61 @@
+{
+  "distSpecVersion": "1.1.0",
+  "storage": {
+    "rootDirectory": "/var/lib/zot",
+    "dedupe": false,
+    "fastRestart": true,
+    "storageDriver": {
+      "name": "s3",
+      "region": "us-east-1",
+      "regionendpoint": "http://10.0.0.200:7072",
+      "bucket": "lab-registry",
+      "forcepathstyle": true,
+      "secure": false,
+      "rootdirectory": "/lab-registry-v2"
+    }
+  },
+  "http": {
+    "address": "0.0.0.0",
+    "port": "5000"
+  },
+  "log": {
+    "level": "info"
+  },
+  "extensions": {
+    "search": {
+      "enable": true
+    },
+    "metrics": {
+      "enable": true,
+      "prometheus": {
+        "path": "/metrics"
+      }
+    },
+    "sync": {
+      "enable": true,
+      "downloadDir": "/var/lib/zot/.sync",
+      "registries": [
+        {
+          "urls": ["https://registry-1.docker.io"],
+          "onDemand": true,
+          "tlsVerify": true,
+          "maxRetries": 3,
+          "retryDelay": "5m",
+          "content": [
+            { "prefix": "**" }
+          ]
+        },
+        {
+          "urls": ["https://gcr.io"],
+          "onDemand": true,
+          "tlsVerify": true,
+          "maxRetries": 3,
+          "retryDelay": "5m",
+          "content": [
+            { "prefix": "**" }
+          ]
+        }
+      ]
+    }
+  }
+}
