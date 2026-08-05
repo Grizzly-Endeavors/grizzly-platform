@@ -14,7 +14,13 @@ spec:
   # background:false — image verification needs the admission-time context and
   # must not run as a background scan over existing pods.
   background: false
-  failurePolicy: Fail
+  # failurePolicy MUST track failureAction below. This rule is report-only
+  # (failureAction: Audit), so a webhook that errors or times out must not block
+  # admission — Fail here would let any registry slowness reject every pod in a
+  # gated namespace, which is the opposite of what Audit means. The real deploy
+  # boundary is enforce-gameservers-bot-signature, which keeps failurePolicy:
+  # Fail. Flip this to Fail in the same change that flips failureAction: Enforce.
+  failurePolicy: Ignore
   webhookTimeoutSeconds: 30
   rules:
     - name: verify-first-party-images
