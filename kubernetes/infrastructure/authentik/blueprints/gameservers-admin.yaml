@@ -4,7 +4,7 @@ metadata:
 entries:
   # Forward-auth (single application) proxy provider fronting the grizzly-
   # gameservers super-admin panel at gameservers-admin.grizzly-endeavors.com
-  # (gameservers ADR-025). Fourth proxy provider in the homelab, after
+  # (gameservers ADR-026). Fourth proxy provider in the homelab, after
   # grizzly-invite-admin, grizzly-webmail, and metabase.
   - model: authentik_providers_proxy.proxyprovider
     id: gameservers-admin-provider
