@@ -6,3 +6,8 @@ resources:
   - pvc.yaml
   - deployment.yaml
   - service.yaml
+configMapGenerator:
+  - name: zot-config
+    namespace: registry
+    files:
+      - config.json
