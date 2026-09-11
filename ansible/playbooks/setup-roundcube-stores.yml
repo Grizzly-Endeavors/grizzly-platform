@@ -9,10 +9,8 @@
 # other stores playbooks this one provisions only a database + login role, no S3.
 #
 # The roundcube role password lives in 1Password
-# secret/grizzly-platform/stores/roundcube (db_password) — provisioned here and
-# read cross-domain by Roundcube's K8s ExternalSecret. Kept under
-# grizzly-platform/ (not a lab-apps/ path) because the ansible-platform-read
-# AppRole policy is scoped to grizzly-platform/* — mirrors stalwart / nextcloud.
+# stores-roundcube (db_password) — provisioned here and
+# read cross-domain by Roundcube's K8s ExternalSecret.
 #
 # The schema itself is created by the Roundcube container on first start (the
 # image runs initdb against the empty database), so this playbook only lays down

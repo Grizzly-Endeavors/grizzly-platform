@@ -9,9 +9,9 @@
 # the first call creates the account + observability-loki, the second reuses the
 # account and adds observability-tempo.
 #
-# Credentials: secret/grizzly-platform/observability/s3-client (access_key,
+# Credentials: 1Password observability-s3-client (access_key,
 # secret_key) — reused as the versitygw account creds so only the Loki/Tempo
-# endpoints change at cutover. s3-hot root creds (admin) from stores/s3-hot.
+# endpoints change at cutover. s3-hot root creds (admin) from stores-s3-hot.
 #
 # Telemetry is disposable, so no data migration — the buckets start fresh.
 #
@@ -41,7 +41,7 @@
           - vault_s3_hot_root_access_key | default('') | length > 0
           - vault_s3_hot_root_secret_key | default('') | length > 0
         fail_msg: >
-          observability/s3-client (access_key, secret_key) and stores/s3-hot
+          observability-s3-client (access_key, secret_key) and stores-s3-hot
           (root_access_key, root_secret_key) must be seeded in 1Password.
         success_msg: "observability + s3-hot credentials are set"
 

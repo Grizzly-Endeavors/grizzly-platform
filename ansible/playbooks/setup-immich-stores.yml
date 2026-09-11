@@ -17,9 +17,7 @@
 #      that back (ADR-072).
 #
 # Credentials come from 1Password `stores-immich` (db_password), provisioned
-# here and read cross-domain by Immich's K8s ExternalSecret. Kept under
-# grizzly-platform/ rather than lab-apps/ because the ansible-platform-read
-# AppRole policy only grants grizzly-platform/* (mirrors Nextcloud).
+# here and read cross-domain by Immich's K8s ExternalSecret.
 #
 # Prerequisites:
 #   - Foundation Postgres running with pgvector + VectorChord in the image and

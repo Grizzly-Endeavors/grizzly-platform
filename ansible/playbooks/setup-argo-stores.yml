@@ -1,17 +1,16 @@
 ---
 # setup-argo-stores.yml — foundation-side provisioning for the Argo Workflows
-# artifact repository (ADR-018, ADR-055 cutover).
+# artifact repository (ADR-018, ADR-055).
 #
-# Extracted from setup-k8s-cicd.yml (which now only deploys the ARC/Argo Flux
-# stack). One scoped `userplus` account + an `argo-artifacts` bucket it owns, on
-# the s3-bulk versitygw gateway. Argo reads the same keys via the ESO-managed
+# One scoped `userplus` account + an `argo-artifacts` bucket it owns, on the
+# s3-bulk versitygw gateway. Argo reads the same keys via the ESO-managed
 # `argo-s3-credentials` secret (external-secrets-stores/argo-workflows.yaml →
-# cicd/argo-s3). Provisioning runs in-container on the r730xd via the shared
-# versitygw admin task; there is no Postgres side for Argo.
+# cicd-argo-s3). Provisioning runs in-container on the r730xd via the shared
+# versitygw admin task; there is no Postgres side for Argo. The ARC/Argo Flux
+# stack itself is deployed by setup-k8s-cicd.yml.
 #
-# Credentials: secret/grizzly-platform/cicd/argo-s3 (access_key, secret_key)
-# — reused as the versitygw account creds so only the consumer endpoint changes
-# at cutover. s3-bulk root creds (admin) from secret/grizzly-platform/stores/s3-bulk.
+# Credentials: 1Password cicd-argo-s3 (access_key, secret_key), used directly as
+# the versitygw account creds. s3-bulk root creds (admin) from stores-s3-bulk.
 #
 # Prerequisites:
 #   - s3-bulk versitygw gateway running (deploy-foundation-stores.yml --tags s3-bulk).
@@ -39,7 +38,7 @@
           - vault_s3_bulk_root_access_key | default('') | length > 0
           - vault_s3_bulk_root_secret_key | default('') | length > 0
         fail_msg: >
-          cicd/argo-s3 (access_key, secret_key) and stores/s3-bulk
+          cicd-argo-s3 (access_key, secret_key) and stores-s3-bulk
           (root_access_key, root_secret_key) must be seeded in 1Password.
         success_msg: "Argo + s3-bulk credentials are set"
 

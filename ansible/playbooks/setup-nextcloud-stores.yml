@@ -13,14 +13,12 @@
 #
 # Credentials come from 1Password stores-nextcloud
 # (db_password, s3_access_key, s3_secret_key) — provisioned here, and read
-# cross-domain by Nextcloud's K8s ExternalSecret. Kept under grizzly-platform/
-# rather than lab-apps/ because the ansible-platform-read AppRole policy only
-# grants grizzly-platform/* (mirrors the authentik foundation role).
+# cross-domain by Nextcloud's K8s ExternalSecret.
 #
 # Prerequisites:
 #   - Foundation Postgres + s3-bulk versitygw running (deploy-foundation-stores.yml).
 #   - 1Password seeded: stores-nextcloud with keys
-#     db_password, s3_access_key, s3_secret_key (+ stores/s3-bulk root creds).
+#     db_password, s3_access_key, s3_secret_key (+ stores-s3-bulk root creds).
 #     Generate db_password WITHOUT single quotes (e.g. `openssl rand -base64 36`).
 #
 # Usage (both plays run on the r730xd host):
@@ -122,8 +120,8 @@
           - vault_s3_bulk_root_access_key | default('') | length > 0
           - vault_s3_bulk_root_secret_key | default('') | length > 0
         fail_msg: >
-          secret/grizzly-platform/stores/nextcloud (s3_access_key, s3_secret_key)
-          and stores/s3-bulk (root_access_key, root_secret_key) must be seeded in
+          stores-nextcloud (s3_access_key, s3_secret_key)
+          and stores-s3-bulk (root_access_key, root_secret_key) must be seeded in
           1Password.
         success_msg: "Nextcloud + s3-bulk credentials are set"
 
