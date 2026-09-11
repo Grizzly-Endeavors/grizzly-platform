@@ -36,8 +36,7 @@ Land the password with an `ExternalSecret`:
 data:
   - secretKey: REDIS_PASSWORD
     remoteRef:
-      key: grizzly-platform/stores/kv-cache
-      property: password
+      key: stores-kv-cache/password
 ```
 
 Then point your client at it (any Redis client works — Valkey is wire-compatible):

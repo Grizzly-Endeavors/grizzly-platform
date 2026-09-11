@@ -24,6 +24,7 @@ configMapGenerator:
       - blueprints/nextcloud.yaml
       - blueprints/career-scanner.yaml
       - blueprints/immich.yaml
+      - blueprints/vikunja.yaml
       - blueprints/langfuse.yaml
       - blueprints/metabase.yaml
       - blueprints/gameservers-admin.yaml

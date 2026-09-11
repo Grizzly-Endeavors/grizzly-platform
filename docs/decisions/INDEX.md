@@ -99,6 +99,7 @@ One line per decision, grouped by domain. See [`README.md`](README.md) for what 
 - [064-langfuse-llm-observability](064-langfuse-llm-observability.md) — Langfuse as the shared LLM-observability service, on foundation stores with ClickHouse added as a fifth.
 - [065-metabase-analytics-service](065-metabase-analytics-service.md) — Metabase as the analytics front-end, reading every data source through read-only store accounts.
 - [072-immich-on-foundation-stores-and-sso](072-immich-on-foundation-stores-and-sso.md) — Immich on foundation stores + Authentik SSO; pgvector/VectorChord added to the shared Postgres, library on NFS.
+- [076-vikunja-on-foundation-stores-sso-only](076-vikunja-on-foundation-stores-sso-only.md) — Vikunja on foundation Postgres with attachments on s3-bulk and no cluster volume; Authentik is the only login; its own Stalwart sender.
 
 ## Mail (Stalwart)
 

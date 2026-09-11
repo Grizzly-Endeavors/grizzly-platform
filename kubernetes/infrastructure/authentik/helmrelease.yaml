@@ -160,6 +160,17 @@ spec:
             secretKeyRef:
               name: authentik-secrets
               key: oidc_immich_client_secret
+        # Vikunja OIDC pair, consumed by blueprints/vikunja.yaml via !Env.
+        - name: AUTHENTIK_VIKUNJA_CLIENT_ID
+          valueFrom:
+            secretKeyRef:
+              name: authentik-secrets
+              key: oidc_vikunja_client_id
+        - name: AUTHENTIK_VIKUNJA_CLIENT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: authentik-secrets
+              key: oidc_vikunja_client_secret
         # Langfuse OIDC pair, consumed by blueprints/langfuse.yaml via !Env.
         - name: AUTHENTIK_LANGFUSE_CLIENT_ID
           valueFrom:
