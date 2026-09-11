@@ -15,14 +15,12 @@
 #
 # Credentials come from 1Password stores-stalwart
 # (db_password, s3_access_key, s3_secret_key) — provisioned here, and read
-# cross-domain by Stalwart's K8s ExternalSecret. Kept under grizzly-platform/
-# rather than a lab-apps/ path because the ansible-platform-read AppRole policy
-# only grants grizzly-platform/* (mirrors nextcloud / career-scanner).
+# cross-domain by Stalwart's K8s ExternalSecret.
 #
 # Prerequisites:
 #   - Foundation Postgres + s3-hot versitygw running (deploy-foundation-stores.yml).
 #   - 1Password seeded: stores-stalwart with keys
-#     db_password, s3_access_key, s3_secret_key (+ stores/s3-hot root creds).
+#     db_password, s3_access_key, s3_secret_key (+ stores-s3-hot root creds).
 #     Generate db_password WITHOUT single quotes (e.g. `openssl rand -base64 36`).
 #
 # Usage:
@@ -124,8 +122,8 @@
           - vault_s3_hot_root_access_key | default('') | length > 0
           - vault_s3_hot_root_secret_key | default('') | length > 0
         fail_msg: >
-          secret/grizzly-platform/stores/stalwart (s3_access_key, s3_secret_key)
-          and stores/s3-hot (root_access_key, root_secret_key) must be seeded in
+          stores-stalwart (s3_access_key, s3_secret_key)
+          and stores-s3-hot (root_access_key, root_secret_key) must be seeded in
           1Password.
         success_msg: "Stalwart + s3-hot credentials are set"
 
