@@ -1,0 +1,59 @@
+version: 1
+metadata:
+  name: grizzly-vikunja-oidc
+# Registers Vikunja as an OIDC client of Authentik: a confidential OAuth2
+# provider and the application bound to it. Vikunja's local login is disabled,
+# so this provider is the only way into todo.grizzly-endeavors.com (ADR-076).
+#
+# The client_id/client_secret are NOT in git: they are injected into the worker
+# (which applies blueprints) via global.env as AUTHENTIK_VIKUNJA_CLIENT_ID /
+# AUTHENTIK_VIKUNJA_CLIENT_SECRET, sourced from 1Password platform-authentik
+# (oidc_vikunja_client_id, oidc_vikunja_client_secret) by the authentik
+# ExternalSecret. The same two fields feed Vikunja's own ExternalSecret in
+# lab-apps, so both sides of the OIDC contract share one source of truth.
+#
+# No policy bindings: any enrolled grizzly-users member may sign in, and people
+# share projects with each other inside Vikunja.
+entries:
+  - model: authentik_providers_oauth2.oauth2provider
+    id: vikunja-provider
+    identifiers:
+      name: vikunja
+    attrs:
+      client_type: confidential
+      client_id: !Env [AUTHENTIK_VIKUNJA_CLIENT_ID, ""]
+      client_secret: !Env [AUTHENTIK_VIKUNJA_CLIENT_SECRET, ""]
+      # Required since Authentik 2026.x made grant types explicit: without this
+      # grant_types is [] and the authorize endpoint rejects every code request
+      # as "invalid_request" (SSO never completes).
+      grant_types:
+        - authorization_code
+        - refresh_token
+      # Vikunja's callback is /auth/openid/<provider key>, and the provider key
+      # is `authentik` in the lab-apps Deployment env — the two must match. The
+      # loopback regex serves the desktop app, which finishes sign-in on a random
+      # local port.
+      redirect_uris:
+        - matching_mode: strict
+          url: https://todo.grizzly-endeavors.com/auth/openid/authentik
+        - matching_mode: regex
+          url: '^http://127\.0\.0\.1:[0-9]+/auth/openid/authentik$'
+      sub_mode: hashed_user_id
+      include_claims_in_id_token: true
+      authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-explicit-consent]]
+      invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
+      signing_key: !Find [authentik_crypto.certificatekeypair, [name, "authentik Self-signed Certificate"]]
+      property_mappings:
+        - !Find [authentik_providers_oauth2.scopemapping, [scope_name, openid]]
+        - !Find [authentik_providers_oauth2.scopemapping, [scope_name, email]]
+        - !Find [authentik_providers_oauth2.scopemapping, [scope_name, profile]]
+
+  - model: authentik_core.application
+    identifiers:
+      slug: vikunja
+    attrs:
+      name: Vikunja
+      provider: !KeyOf vikunja-provider
+      meta_launch_url: https://todo.grizzly-endeavors.com
+      meta_description: "Tasks and to-do lists"
+      policy_engine_mode: any

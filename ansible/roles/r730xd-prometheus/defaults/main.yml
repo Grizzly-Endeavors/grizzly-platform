@@ -95,6 +95,11 @@ prometheus_blackbox_targets:
   # the gateway is down, so probe the gateway's own health endpoint directly.
   - "http://{{ r730xd_ip }}:7070/health"
   - "http://{{ r730xd_ip }}:7072/health"
+  # Lab apps, probed on their public hostnames so each check exercises the whole
+  # path: VPS Caddy, the WireGuard tunnel, ingress-nginx and the app itself.
+  - "https://nextcloud.grizzly-endeavors.com/status.php"
+  - "https://photos.grizzly-endeavors.com/api/server/ping"
+  - "https://todo.grizzly-endeavors.com/health"
 
 prometheus_blackbox_exporter: "{{ r730xd_ip }}:9115"
 

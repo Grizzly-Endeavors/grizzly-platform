@@ -1,0 +1,134 @@
+---
+# setup-vikunja-stores.yml — foundation-side provisioning for the Vikunja lab app
+# (manifests live in the lab-apps repo, applied by Flux).
+#
+# Vikunja keeps all of its durable state on the foundation stores, so it has no
+# volume in the cluster at all (ADR-076):
+#
+#   Play 1  The `vikunja` database + login role on the foundation PostgreSQL. The
+#           role owns its database and nothing else; Vikunja runs its own schema
+#           migrations at startup and needs no extensions.
+#   Play 2  The `vikunja` bucket + a scoped userplus account on the s3-bulk
+#           versitygw gateway, holding task attachments and project backgrounds.
+#
+# Credentials come from 1Password stores-vikunja (db_password, s3_access_key,
+# s3_secret_key), provisioned here and read by Vikunja's K8s ExternalSecret.
+#
+# Prerequisites:
+#   - Foundation Postgres + s3-bulk versitygw running (deploy-foundation-stores.yml).
+#   - 1Password seeded: stores-vikunja with db_password, s3_access_key and
+#     s3_secret_key (plus the stores-s3-bulk root creds). Generate db_password
+#     WITHOUT single quotes (e.g. `openssl rand -base64 36`) — the SQL below
+#     passes it through psql's :'pw' literal and a `'` breaks the quoting.
+#
+# Usage:
+#   ansible-playbook -i ansible/inventory ansible/playbooks/setup-vikunja-stores.yml \
+#     --vault-password-file .vault_pass -v
+#
+# Run just one half:
+#   ... --tags db
+#   ... --tags s3
+
+- name: Provision Vikunja database on foundation Postgres
+  hosts: r730xd
+  become: yes
+  gather_facts: no
+  tags: [db]
+
+  pre_tasks:
+    - name: Load 1Password-sourced platform secrets
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/../vars/onepassword_secrets.yml"
+
+    - name: Verify foundation Postgres container is running
+      ansible.builtin.command: docker exec foundation-postgres pg_isready -U postgres
+      changed_when: false
+
+  tasks:
+    # psql -U postgres connects over the container's local socket (trust auth) —
+    # no superuser password needed. The role password is passed via psql's
+    # :'pw' literal (safe quoting); the SQL is fed on stdin (docker exec -i),
+    # because psql only interpolates variables for stdin/-f input, NOT for -c.
+    - name: Check whether the vikunja role exists
+      ansible.builtin.command: >-
+        docker exec foundation-postgres
+        psql -U postgres -tAc
+        "SELECT 1 FROM pg_roles WHERE rolname='vikunja'"
+      register: vikunja_role
+      changed_when: false
+
+    - name: Create the vikunja login role
+      ansible.builtin.shell:
+        cmd: >-
+          set -o pipefail;
+          printf "CREATE ROLE vikunja LOGIN PASSWORD :'pw';\n"
+          | docker exec -i foundation-postgres
+          psql -U postgres -v ON_ERROR_STOP=1 -v pw="$PGPW"
+        executable: /bin/bash
+      environment:
+        PGPW: "{{ vault_vikunja_db_password }}"
+      when: vikunja_role.stdout != "1"
+      no_log: true
+
+    - name: Keep the vikunja role password in sync with 1Password
+      ansible.builtin.shell:
+        cmd: >-
+          set -o pipefail;
+          printf "ALTER ROLE vikunja LOGIN PASSWORD :'pw';\n"
+          | docker exec -i foundation-postgres
+          psql -U postgres -v ON_ERROR_STOP=1 -v pw="$PGPW"
+        executable: /bin/bash
+      environment:
+        PGPW: "{{ vault_vikunja_db_password }}"
+      no_log: true
+      changed_when: false
+
+    - name: Check whether the vikunja database exists
+      ansible.builtin.command: >-
+        docker exec foundation-postgres
+        psql -U postgres -tAc
+        "SELECT 1 FROM pg_database WHERE datname='vikunja'"
+      register: vikunja_db
+      changed_when: false
+
+    - name: Create the vikunja database owned by the vikunja role
+      ansible.builtin.command: >-
+        docker exec foundation-postgres
+        psql -U postgres -v ON_ERROR_STOP=1
+        -c "CREATE DATABASE vikunja OWNER vikunja"
+      when: vikunja_db.stdout != "1"
+
+- name: Provision Vikunja S3 bucket and scoped account on s3-bulk
+  hosts: r730xd
+  become: yes
+  gather_facts: no
+  tags: [s3]
+
+  pre_tasks:
+    - name: Load 1Password-sourced platform secrets
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/../vars/onepassword_secrets.yml"
+
+    - name: Verify vikunja + s3-bulk credentials are present in 1Password
+      ansible.builtin.assert:
+        that:
+          - vault_vikunja_s3_access_key | default('') | length > 0
+          - vault_vikunja_s3_secret_key | default('') | length > 0
+          - vault_s3_bulk_root_access_key | default('') | length > 0
+          - vault_s3_bulk_root_secret_key | default('') | length > 0
+        fail_msg: >
+          1Password stores-vikunja (s3_access_key, s3_secret_key) and
+          stores-s3-bulk (root_access_key, root_secret_key) must be seeded.
+        success_msg: "vikunja + s3-bulk credentials are set"
+      no_log: true
+
+  tasks:
+    - name: Provision the vikunja account + bucket on s3-bulk
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../tasks/versitygw-provision-account.yml"
+      vars:
+        vgw_instance: s3-bulk
+        vgw_root_access: "{{ vault_s3_bulk_root_access_key }}"
+        vgw_root_secret: "{{ vault_s3_bulk_root_secret_key }}"
+        vgw_access: "{{ vault_vikunja_s3_access_key }}"
+        vgw_secret: "{{ vault_vikunja_s3_secret_key }}"
+        vgw_bucket: vikunja
