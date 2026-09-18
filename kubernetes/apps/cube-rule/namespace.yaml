@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: cube-rule
+  labels:
+    app.kubernetes.io/name: cube-rule
+    app.kubernetes.io/managed-by: flux
