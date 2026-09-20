@@ -47,7 +47,6 @@ One line per runbook. See [`README.md`](README.md) for what runbooks are and whe
 
 ## Network / hardware
 
-- [garage-relocation-cutover.md](garage-relocation-cutover.md) — staged garage relocation + EX50 router cutover plan and checkpoints.
 - [ex50-console-access.md](ex50-console-access.md) — reaching the Digi EX50 CLI during bench bring-up.
 - [ex50-dal-cli.md](ex50-dal-cli.md) — driving the EX50 DAL config (Admin CLI + `/bin/config` mechanics, gotchas, scheduled-script recipe).
 - [aerohive-ap-setup.md](aerohive-ap-setup.md) — standalone WiFi setup for the AP630 + AP130.

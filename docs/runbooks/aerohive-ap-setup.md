@@ -1,6 +1,6 @@
 # Runbook: Aerohive AP standalone WiFi setup (AP630 + AP130)
 
-Stands up house WiFi on the Aerohive **AP630** (primary, WiFi 6) and one **AP130** (secondary) as a single roaming network, in **standalone mode** (no controller/cloud). This is Checkpoint B of the [garage relocation + EX50 cutover](garage-relocation-cutover.md) — the APs must be serving WiFi *before* the Xfinity gateway is bridged in Checkpoint C, so bridging doesn't black out the house.
+Stands up house WiFi on the Aerohive **AP630** (primary, WiFi 6) and one **AP130** (secondary) as a single roaming network, in **standalone mode** (no controller/cloud). The APs carry the downstream `trusted` and `restricted` WiFi segments, tagged onto the SR2024 trunk ([ADR-060](../decisions/060-downstream-wifi-segmentation.md)).
 
 The committed configs are `ansible/files/aerohive/ap630.hiveos` and `ap130.hiveos`. They carry `__PLACEHOLDER__` tokens (SSID, PSK, hive secret) that are rendered in at paste time and never committed. HiveOS is order-sensitive and driven over legacy-SSH, so these are applied by paste (not a full Ansible role) — see [ADR-009](../decisions/009-start-with-ap230-only.md) context, though note this deployment uses AP630 + AP130 rather than the AP230.
 

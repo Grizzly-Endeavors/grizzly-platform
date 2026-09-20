@@ -1,7 +1,7 @@
 # ADR-047: Relocate the Ingress Tunnel to the EX50
 
 **Date:** 2026-07-02
-**Status:** Accepted (implementation pending — sequenced after the router cutover in `docs/runbooks/garage-relocation-cutover.md`)
+**Status:** Accepted — implementation pending. The router cutover it was sequenced behind is done (ADR-044); ingress still terminates on the R730xd.
 **Relates to:** [ADR-019](019-ingress-and-tls-termination.md), [ADR-044](044-digi-ex50-as-off-the-shelf-router.md)
 
 ## Context
@@ -41,4 +41,4 @@ That host now exists. The EX50 ([ADR-044](044-digi-ex50-as-off-the-shelf-router.
 - ADR-044 — Digi EX50 router (scriptable DAL; WireGuard + DNAT support).
 - `ansible/roles/ingress-tunnel/` — role retargeted from R730xd to the EX50.
 - `ansible/group_vars/all/network.yml` — `k8s_ingress_ip` repointed to the EX50 tunnel IP.
-- `docs/runbooks/garage-relocation-cutover.md` — Checkpoint E.
+- `archive/garage-ex50-cutover.md` — Checkpoint E, the originally staged form of this work.

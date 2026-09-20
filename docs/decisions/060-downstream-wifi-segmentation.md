@@ -35,7 +35,7 @@ Replace ADR-046's single home subnet with **two tagged downstream WiFi VLANs**, 
 - **Two-repo firewall boundary.** This repo owns everything up to and including the zones, the isolation (free under default-deny), and the trusted-internet rule; it deliberately writes no restricted-egress rule. The index reservation plus the non-asserting apply make it safe for a separate layer to own the restricted segment's egress.
 - **Non-disruptive rollout.** The EX50 VLAN interfaces and the trusted SSID came up without moving any existing device; moving the house SSID onto the restricted VLAN was held as a separate step until the out-of-band egress layer existed, so nothing was cut over early.
 - **Both APs must carry identical SSID→VLAN mappings.** An AP missing the VLAN-20 binding puts house-SSID clients on untagged native VLAN 1 — the platform segment — with ungoverned internet. Re-provisioning one AP is therefore a two-AP verification, called out in [aerohive-ap-setup.md](../runbooks/aerohive-ap-setup.md).
-- Reclaims VLAN ID **20** from the (superseded) storage-sub-VLAN sketch in `docs/exploration/network-vlans.md`.
+- Reclaims VLAN ID **20** from the (superseded) storage-sub-VLAN sketch in `archive/network-vlans-design.md`.
 - **Operational note:** enabling the EX50's root shell adds an SSH access menu that breaks the non-interactive `configure-ex50.yml` apply (it pipes straight to the Admin CLI). Leave shell access disabled (its default) outside of interactive debugging.
 
 ## Alternatives Considered
@@ -47,5 +47,5 @@ Replace ADR-046's single home subnet with **two tagged downstream WiFi VLANs**, 
 
 ## References
 
-- [ADR-046](046-platform-network-segmentation-via-home-eviction.md) (home-eviction — this refines it), [ADR-044](044-digi-ex50-as-off-the-shelf-router.md) (EX50 as router), [ADR-021](021-off-the-shelf-router-tower-pc-as-worker.md) / [network-vlans.md](../exploration/network-vlans.md) (original VLAN sketch, superseded).
+- [ADR-046](046-platform-network-segmentation-via-home-eviction.md) (home-eviction — this refines it), [ADR-044](044-digi-ex50-as-off-the-shelf-router.md) (EX50 as router), [ADR-021](021-off-the-shelf-router-tower-pc-as-worker.md) / [network-vlans-design.md](../../archive/network-vlans-design.md) (original VLAN sketch, superseded).
 - Runbooks: [sr2024-vlan-trunks.md](../runbooks/sr2024-vlan-trunks.md), [aerohive-ap-setup.md](../runbooks/aerohive-ap-setup.md). EX50 config: `ansible/files/ex50/config.dal.j2` via `ansible/playbooks/configure-ex50.yml`. DAL reference: [ex50-dal-interface.md](../ex50-dal-interface.md).

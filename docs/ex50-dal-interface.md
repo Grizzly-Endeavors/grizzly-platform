@@ -1,6 +1,6 @@
 # Digi EX50 DAL Admin CLI — interface map
 
-A map of the EX50's scriptable surface (Digi Accelerated Linux, DAL), captured live over SSH during bench bring-up. This is the automation reference behind [ADR-044](decisions/044-digi-ex50-as-off-the-shelf-router.md) ("its configuration stays in IaC") and the future EX50 Ansible role. For *how to reach* the CLI, see [runbooks/ex50-console-access.md](runbooks/ex50-console-access.md); for the cutover it feeds, see [runbooks/garage-relocation-cutover.md](runbooks/garage-relocation-cutover.md).
+A map of the EX50's scriptable surface (Digi Accelerated Linux, DAL), captured live over SSH during bench bring-up. This is the automation reference behind [ADR-044](decisions/044-digi-ex50-as-off-the-shelf-router.md) ("its configuration stays in IaC") and the future EX50 Ansible role. For *how to reach* the CLI, see [runbooks/ex50-console-access.md](runbooks/ex50-console-access.md); The cutover it fed is complete ([ADR-044](decisions/044-digi-ex50-as-off-the-shelf-router.md)).
 
 Last updated: 2026-07-03 · Captured from firmware **25.11.10.42** (schema version 1276) over SSH key auth. Bench unit, WAN down.
 

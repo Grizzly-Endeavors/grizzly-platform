@@ -1,14 +1,14 @@
-# VLAN Redesign (exploration)
+# VLAN Redesign (Archived Exploration)
 
-> **Status: not implemented, but no longer gated on hardware.** The router has been acquired (Digi EX50, [ADR-044](../decisions/044-digi-ex50-as-off-the-shelf-router.md)) and segmentation is now scheduled as part of the garage cutover. The authoritative plan is [../runbooks/garage-relocation-cutover.md](../runbooks/garage-relocation-cutover.md) (Checkpoint D) and [ADR-046](../decisions/046-platform-network-segmentation-via-home-eviction.md), which **supersedes the dual-homing scheme** originally sketched below. For the live topology, see [../network.md](../network.md).
+**Archived — superseded and realized.** The dual-homing scheme sketched below was retired by [ADR-046](../docs/decisions/046-platform-network-segmentation-via-home-eviction.md), and downstream segmentation went live in refined form as [ADR-060](../docs/decisions/060-downstream-wifi-segmentation.md): `trusted` (VLAN 30) and `restricted` (VLAN 20) tagged on the WiFi path, platform alone on native VLAN 1. VLAN ID 20 was reclaimed from the storage-sub-VLAN idea here, which was never built.
 
-Last updated: 2026-04-17 (revised 2026-07-02 for the EX50 + evict-home approach)
+Kept because several ADRs cite this as the original design. For the live topology see [docs/network.md](../docs/network.md).
 
 ## Why this isn't live yet
 
 The lab runs on a **flat SR2024 network** today with the Xfinity gateway upstream. Segmentation was gated on an off-the-shelf router; that router (Digi EX50) is now in hand, and the VLAN work rides the garage relocation window rather than a separate effort.
 
-The key refinement since this doc was first written ([ADR-046](../decisions/046-platform-network-segmentation-via-home-eviction.md)): rather than renumber the platform or dual-home every machine, **the platform stays on `10.0.0.0/24` and home devices are evicted to their own subnet.** Same L3 boundary, none of the cluster-PKI / PV-rebinding cost. A full platform renumber (onto a non-default range for a future multi-home mesh) is deferred to its own project.
+The key refinement since this doc was first written ([ADR-046](../docs/decisions/046-platform-network-segmentation-via-home-eviction.md)): rather than renumber the platform or dual-home every machine, **the platform stays on `10.0.0.0/24` and home devices are evicted to their own subnet.** Same L3 boundary, none of the cluster-PKI / PV-rebinding cost. A full platform renumber (onto a non-default range for a future multi-home mesh) is deferred to its own project.
 
 Nothing below is time-pressured — everything still operates on the current flat network until the cutover.
 
@@ -24,7 +24,7 @@ All lab machines are in the closet:
 - Dell Inspiron 15 (K8s control plane)
 - Tower PC (pending K8s worker — ADR-021)
 
-Home drops (bedroom, garage, workshop) stay on the legacy consumer switch chain ([ADR-008](../decisions/008-keep-existing-switch-chain-for-home.md)) — they're fine as they are.
+Home drops (bedroom, garage, workshop) stay on the legacy consumer switch chain ([ADR-008](../docs/decisions/008-keep-existing-switch-chain-for-home.md)) — they're fine as they are.
 
 ## Target Topology (post-router)
 
@@ -76,7 +76,7 @@ Start with 2 VLANs, expand only if warranted. **The platform keeps `10.0.0.0/24`
 | Platform | `10.0.0.0/24`, gw `10.0.0.1` (EX50) | Platform-internal — K8s, storage, observability, foundation stores | Inspiron, Quanta, Intel NUC, Optiplex, Tower PC (once joined), R730xd, jumpbox |
 | Home | `10.20.0.0/24`, gw `10.20.0.1` (EX50) | Home network — DHCP, personal devices, internet | Home/guest WiFi SSIDs (via APs), bedroom + other home drops, legacy consumer switch chain |
 
-The EX50 routes and firewalls between the two: **default-deny `home → platform`**, with only the specific flows the platform needs; `platform → internet` allowed. Because the EX50 stays in IaC ([ADR-044](../decisions/044-digi-ex50-as-off-the-shelf-router.md)), those firewall rules are version-controlled.
+The EX50 routes and firewalls between the two: **default-deny `home → platform`**, with only the specific flows the platform needs; `platform → internet` allowed. Because the EX50 stays in IaC ([ADR-044](../docs/decisions/044-digi-ex50-as-off-the-shelf-router.md)), those firewall rules are version-controlled.
 
 ### Optional: Storage Sub-VLAN
 
@@ -88,7 +88,7 @@ Worth doing **if** storage I/O noticeably contends with other lab traffic on the
 
 ### How platform machines connect (dual-homing retired)
 
-The original sketch dual-homed every machine on both the home and lab subnets (two IPs each) to get internet + lab access on a *flat* network. With real L3 routing on the EX50 that is unnecessary and is **retired** ([ADR-046](../decisions/046-platform-network-segmentation-via-home-eviction.md)):
+The original sketch dual-homed every machine on both the home and lab subnets (two IPs each) to get internet + lab access on a *flat* network. With real L3 routing on the EX50 that is unnecessary and is **retired** ([ADR-046](../docs/decisions/046-platform-network-segmentation-via-home-eviction.md)):
 
 - Each platform machine sits on the **platform VLAN only** (single IP, its existing `10.0.0.x`), on an SR2024 access port.
 - It reaches the internet via the platform subnet's gateway on the EX50 — no second interface, no VLAN tagging on the host.
@@ -99,8 +99,8 @@ The SR2024 carries the platform VLAN as access ports to the machines and trunks 
 
 | AP | Location | Notes |
 |----|----------|-------|
-| AP630 (primary) | Central location (living room or hallway) | Highest performance (4×4:4 MU-MIMO, 802.11ac Wave 2). Restored to stock HiveOS 2026-04-03 ([ADR-011](../decisions/011-ap630-restored-to-stock-wifi-ap.md)). |
-| AP230 (secondary) | Secondary coverage zone | 3×3:3 MIMO. Starting point per [ADR-009](../decisions/009-start-with-ap230-only.md). |
+| AP630 (primary) | Central location (living room or hallway) | Highest performance (4×4:4 MU-MIMO, 802.11ac Wave 2). Restored to stock HiveOS 2026-04-03 ([ADR-011](../docs/decisions/011-ap630-restored-to-stock-wifi-ap.md)). |
+| AP230 (secondary) | Secondary coverage zone | 3×3:3 MIMO. Starting point per [ADR-009](../docs/decisions/009-start-with-ap230-only.md). |
 | AP130 #1 | Garage/workshop | Workshop coverage. |
 | AP130 #2 | Far side of house or closet area | Dead-spot coverage if needed. |
 
@@ -113,12 +113,12 @@ The SR2024 carries the platform VLAN as access ports to the machines and trunks 
 Unchanged by the router purchase:
 
 - Admin-group operator access to the self-hosted infrastructure (jumpbox, R730xd, K8s nodes as needed).
-- Hetzner VPS is deliberately *not* in the admin group — see [ADR-019](../decisions/019-ingress-and-tls-termination.md) and `feedback_netbird_scope.md` in memory.
+- Hetzner VPS is deliberately *not* in the admin group — see [ADR-019](../docs/decisions/019-ingress-and-tls-termination.md) and `feedback_netbird_scope.md` in memory.
 - Peer-to-peer; doesn't depend on the local router.
 
 ## DNS
 
-Superseded by [ADR-036](../decisions/036-internal-dns-zone.md): the internal naming scheme is a private `.internal` zone (`grizzly-platform.internal`), records managed declaratively (external-dns for cluster Services/Ingresses, Ansible zone files for bare-metal hosts), LAN clients pointed at the internal resolver via DHCP. ADR-036 also fixes the resolver's **long-term home as the off-the-shelf router** — i.e. the EX50 — running interim on R730xd until the EX50 lands. So the EX50 cutover unblocks moving the resolver to the router; the `.internal` naming and `/etc/hosts` retirement are the same decision, tracked in ADR-036, not here.
+Superseded by [ADR-036](../docs/decisions/036-internal-dns-zone.md): the internal naming scheme is a private `.internal` zone (`grizzly-platform.internal`), records managed declaratively (external-dns for cluster Services/Ingresses, Ansible zone files for bare-metal hosts), LAN clients pointed at the internal resolver via DHCP. ADR-036 also fixes the resolver's **long-term home as the off-the-shelf router** — i.e. the EX50 — running interim on R730xd until the EX50 lands. So the EX50 cutover unblocks moving the resolver to the router; the `.internal` naming and `/etc/hosts` retirement are the same decision, tracked in ADR-036, not here.
 
 ## Cable Runs
 
@@ -133,8 +133,8 @@ Superseded by [ADR-036](../decisions/036-internal-dns-zone.md): the internal nam
 - [x] ~~SR2024 VLAN capability~~ — confirmed (802.1Q, LACP, trunks).
 - [x] ~~SR2024 PoE~~ — confirmed (802.3at, powers all APs without injectors).
 - [x] ~~Aerohive standalone mode~~ — confirmed (`no capwap client enable`).
-- [x] ~~Custom router vs. off-the-shelf~~ — decided off-the-shelf ([ADR-021](../decisions/021-off-the-shelf-router-tower-pc-as-worker.md)).
-- [x] ~~Router model selection~~ — Digi EX50 ([ADR-044](../decisions/044-digi-ex50-as-off-the-shelf-router.md)).
+- [x] ~~Custom router vs. off-the-shelf~~ — decided off-the-shelf ([ADR-021](../docs/decisions/021-off-the-shelf-router-tower-pc-as-worker.md)).
+- [x] ~~Router model selection~~ — Digi EX50 ([ADR-044](../docs/decisions/044-digi-ex50-as-off-the-shelf-router.md)).
 - [x] ~~Xfinity gateway bridge-mode compatibility~~ — confirmed on the same gateway model at another location.
 - [ ] **DAL feature-verify (bench, before cutover)** — confirm the EX50 does multi-VLAN interfaces + inter-VLAN firewall, DHCP reservations, WireGuard peer + DNAT (firmware ≥ 24.3.28.88), and optional local DNS records. See the cutover runbook prerequisites.
 - [ ] **Home subnet range** — `10.20.0.0/24` proposed; confirm no collision with the planned multi-home mesh.
