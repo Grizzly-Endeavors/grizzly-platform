@@ -47,6 +47,8 @@ Rollout plans and one-off notes for finished, self-contained work — kept for t
 
 - **ap630-debian-project.md** — the AP630 Debian port; project moved to its own repo and archived (ADR-011).
 - **residuum-feedback-plan.md**, **residuum-feedback-schema.md** — the feedback-ingest service's rollout plan and DB schema design; the service has been live since 2026-04-17.
+- **garage-ex50-cutover.md** — the staged procedure for relocating the platform to the garage and cutting the Digi EX50 in as the router; completed 2026-07-08 (ADR-044, ADR-045). Checkpoint E, moving the ingress tunnel off the R730xd, was not done and stays live under ADR-047.
+- **network-vlans-design.md** — the original VLAN redesign sketch; its dual-homing scheme was retired by ADR-046 and downstream segmentation went live in refined form as ADR-060.
 
 ## Skills Demonstrated
 

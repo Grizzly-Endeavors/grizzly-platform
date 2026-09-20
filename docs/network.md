@@ -88,7 +88,7 @@ Out-of-band management (iDRAC, BMC/IPMI) lives on the lab subnet and is reachabl
 
 | Equipment | Location | Notes |
 |-----------|----------|-------|
-| SR2024 (24-port managed GbE + 2 SFP) | Garage (live) | VLAN-capable; flat today, VLANs deferred per [ADR-021](decisions/021-off-the-shelf-router-tower-pc-as-worker.md). |
+| SR2024 (24-port managed GbE + 2 SFP) | Garage (live) | Lab backbone. Uplink and AP ports are trunks (native VLAN 1 + tagged 20/30); all other ports untagged VLAN 1 ([ADR-060](decisions/060-downstream-wifi-segmentation.md)). |
 | 1× Aerohive AP130 (#1) | Live, PoE injector | Secondary AP in the standalone roaming hive — see above. |
 | 1× Aerohive AP130 (#2) | Spare (mount pending) | PoE, standalone-mode confirmed. Older firmware, 1 bad NAND block. |
 | 1× Aerohive AP230 | Spare (mount pending) | PoE, standalone-mode confirmed. Higher performance than AP130s. |

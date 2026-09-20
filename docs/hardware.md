@@ -193,7 +193,7 @@ Tracked here rather than in the active sections so the active tables stay truthf
 | Ports | 2× 2.5 GbE (one WAN, one LAN — no built-in switch fabric), WiFi 6, dual-SIM 5G/LTE |
 | Power | DC barrel adapter (the SR2024's PoE is dead — [#84](https://github.com/Grizzly-Endeavors/grizzly-platform/issues/84)) |
 | Role | The router/gateway at `10.0.0.1` — NAT, DHCP, DNS forwarding, firewall. Routes the platform (native VLAN 1) plus the downstream `restricted` (VLAN 20) and `trusted` (VLAN 30) WiFi segments ([ADR-060](decisions/060-downstream-wifi-segmentation.md)). Xfinity gateway in bridge mode. Own WiFi off (Aerohive serves WiFi). 5G not enabled (no cellular plan). Config in IaC via the DAL Admin CLI (`configure-ex50.yml`). |
-| Status | **Live** — flat cutover (Checkpoint C) done 2026-07-08. See [ADR-044](decisions/044-digi-ex50-as-off-the-shelf-router.md) and [runbooks/garage-relocation-cutover.md](runbooks/garage-relocation-cutover.md). |
+| Status | **Live** — router cutover done 2026-07-08. See [ADR-044](decisions/044-digi-ex50-as-off-the-shelf-router.md). |
 | Still to come | Evicting the *wired* home drops off VLAN 1 ([ADR-046](decisions/046-platform-network-segmentation-via-home-eviction.md); the WiFi segments are done per [ADR-060](decisions/060-downstream-wifi-segmentation.md)), ingress-tunnel relocation off R730xd ([ADR-047](decisions/047-ingress-tunnel-relocation-to-ex50.md), Ckpt E), internal DNS resolver move ([ADR-036](decisions/036-internal-dns-zone.md)). |
 | Firmware gate | WireGuard needs DAL ≥ 24.3.28.88 (required before ingress relocation). |
 
@@ -251,7 +251,7 @@ Not infrastructure: the operator's on-the-go dev laptop (GS66 Stealth) is a pers
 - [ ] UPS: replace batteries, wire NUT.
 - [ ] Finish GPU inference host build; assign IP + hostname and write its ADR.
 - [x] Relocate the platform to the garage — done 2026-07-05 (physical move during a power outage; SR2024 + all machines came back on the same flat 10.0.0.x network). See [ADR-045](decisions/045-platform-relocation-to-garage.md).
-- [ ] Deploy the Digi EX50 as router (was originally planned as one staged window with the relocation above, but the move happened on its own; the router cutover is still outstanding). See [runbooks/garage-relocation-cutover.md](runbooks/garage-relocation-cutover.md), [ADR-044](decisions/044-digi-ex50-as-off-the-shelf-router.md).
-- [ ] Configure L3 segmentation on the EX50/SR2024 (evict home to its own subnet — [ADR-046](decisions/046-platform-network-segmentation-via-home-eviction.md)).
+- [x] Deploy the Digi EX50 as router — done 2026-07-08; it is the gateway at `10.0.0.1` with the Xfinity gateway bridged. See [ADR-044](decisions/044-digi-ex50-as-off-the-shelf-router.md).
+- [ ] Evict the *wired* home drops off VLAN 1 ([ADR-046](decisions/046-platform-network-segmentation-via-home-eviction.md)) — the downstream WiFi segments are already live ([ADR-060](decisions/060-downstream-wifi-segmentation.md)).
 - [ ] Mount remaining APs; verify coverage.
 - [ ] Join Tower PC to the cluster (see [ADR-021](decisions/021-off-the-shelf-router-tower-pc-as-worker.md)).

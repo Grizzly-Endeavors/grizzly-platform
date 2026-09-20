@@ -1,15 +1,17 @@
-# Runbook: Garage Relocation + EX50 Router Cutover
+# Garage Relocation + EX50 Router Cutover (Archived Procedure)
+
+**Archived — this cutover completed 2026-07-08.** Checkpoints A (relocate, 2026-07-05), B (APs, 2026-07-07) and C (EX50 router swap, 2026-07-08) all landed. Checkpoint D (segmentation) was realized in a refined form: [ADR-060](../docs/decisions/060-downstream-wifi-segmentation.md) split the downstream network into `trusted` (VLAN 30) and `restricted` (VLAN 20) segments instead of the single evicted-home subnet sketched here, and the *wired* home drops remain on VLAN 1 ([ADR-046](../docs/decisions/046-platform-network-segmentation-via-home-eviction.md)). Checkpoint E (moving the ingress tunnel off the R730xd) was **not** done and remains live work under [ADR-047](../docs/decisions/047-ingress-tunnel-relocation-to-ex50.md).
+
+Kept as the record of the procedure as executed. Treat all checkboxes and "pending"/"remaining" language below as historical. For the live topology see [docs/network.md](../docs/network.md) and [docs/hardware.md](../docs/hardware.md).
 
 Staged procedure for two interlocked jobs done in one maintenance window:
 
-1. **Physically relocate** the platform (machines + SR2024 + Xfinity gateway) from the closet to the garage — [ADR-045](../decisions/045-platform-relocation-to-garage.md).
-2. **Cut the Digi EX50 in** as the router, replacing the Xfinity gateway's routing role — [ADR-044](../decisions/044-digi-ex50-as-off-the-shelf-router.md).
+1. **Physically relocate** the platform (machines + SR2024 + Xfinity gateway) from the closet to the garage — [ADR-045](../docs/decisions/045-platform-relocation-to-garage.md).
+2. **Cut the Digi EX50 in** as the router, replacing the Xfinity gateway's routing role — [ADR-044](../docs/decisions/044-digi-ex50-as-off-the-shelf-router.md).
 
-Segmentation ([ADR-046](../decisions/046-platform-network-segmentation-via-home-eviction.md)) and the ingress-tunnel relocation ([ADR-047](../decisions/047-ingress-tunnel-relocation-to-ex50.md)) layer on top as later checkpoints.
+Segmentation ([ADR-046](../docs/decisions/046-platform-network-segmentation-via-home-eviction.md)) and the ingress-tunnel relocation ([ADR-047](../docs/decisions/047-ingress-tunnel-relocation-to-ex50.md)) layer on top as later checkpoints.
 
 > **Design principle: one variable at a time.** The work is one window because of hard dependencies (APs need switch PoE; the switch moves to the garage; bridge cutover wants APs live). But it is *staged* into checkpoints A–E, each independently verifiable and reversible. A failure at any checkpoint rolls back to the previous known-good state without touching the others.
-
-Last updated: 2026-07-07 · Status: **Checkpoints A–B complete; C pre-staged, physical swap remaining (see [in-progress tracker](../in-progress/garage-ex50-cutover.md)); D–E not started.**
 
 ---
 
@@ -41,26 +43,26 @@ Last updated: 2026-07-07 · Status: **Checkpoints A–B complete; C pre-staged, 
 
 - **Platform stays `10.0.0.0/24`** — every static IP unchanged. EX50 takes `10.0.0.1` (the address the Xfinity gateway holds today).
 - **Home moves to `10.20.0.0/24`** (proposed) — DHCP from the EX50.
-- **Internal DNS resolver** (`.internal`, [ADR-036](../decisions/036-internal-dns-zone.md)) can move off R730xd to the EX50 as an additive follow-up — not required by this cutover.
+- **Internal DNS resolver** (`.internal`, [ADR-036](../docs/decisions/036-internal-dns-zone.md)) can move off R730xd to the EX50 as an additive follow-up — not required by this cutover.
 
 ---
 
 ## Prerequisites (do ahead — zero downtime)
 
 - [ ] **EX50 firmware ≥ 24.3.28.88** (required for WireGuard, Checkpoint E). Update if lower.
-- [x] **EX50 config validated on-device + hardening pre-staged** (2026-07-07). The flat-cutover delta (`ansible/files/ex50/config.dal.j2`: LAN `10.0.0.1/24`, DHCP pool `10.0.0.50–10.0.0.150` off the platform statics per issue #80, drop the "allow all" rule, disable modem + built-in WiFi, NTP on) passes the on-device `validate` verb. It is **not pre-applied** — the LAN/DHCP change would collide with Xfinity's live `10.0.0.1` + serve rogue DHCP, so it lands *at* Checkpoint C once Xfinity is bridged. Already done ahead: SSH-ACL `wan` zone removed, factory DHCP server disabled, and the SR2024 mgmt made static `10.0.0.153`. Getting onto the Admin CLI: [ex50-console-access.md](ex50-console-access.md).
+- [x] **EX50 config validated on-device + hardening pre-staged** (2026-07-07). The flat-cutover delta (`ansible/files/ex50/config.dal.j2`: LAN `10.0.0.1/24`, DHCP pool `10.0.0.50–10.0.0.150` off the platform statics per issue #80, drop the "allow all" rule, disable modem + built-in WiFi, NTP on) passes the on-device `validate` verb. It is **not pre-applied** — the LAN/DHCP change would collide with Xfinity's live `10.0.0.1` + serve rogue DHCP, so it lands *at* Checkpoint C once Xfinity is bridged. Already done ahead: SSH-ACL `wan` zone removed, factory DHCP server disabled, and the SR2024 mgmt made static `10.0.0.153`. Getting onto the Admin CLI: [ex50-console-access.md](../docs/runbooks/ex50-console-access.md).
 - [ ] **Verify on the bench** that DAL supports what later steps rely on: a WireGuard peer + DNAT from the wg interface to a LAN host (E), multiple VLAN interfaces + inter-VLAN firewall (D), DHCP reservations, and (optionally) local DNS records. Capture the DAL shell config commands into the IaC now.
 - [ ] **Garage physical prep — operator-handled:** sturdy shelving is already in place (gear sits off the slab); the garage dehumidifier (hosed outside) holds ~43% RH year-round, with a closet-specific unit as contingency; 20 A circuit near the panel with headroom to add another. **These environmental logistics are settled (ADR-045) — do not relitigate.** Remaining prep for the window: PDU sizing, confirm ventilation, small UPS for the network core (Xfinity + EX50 + SR2024 + APs), and place humidity + leak sensors (as verification signals, not gating decisions).
 - [ ] **Extend the coax** to the garage (available slack).
 - [ ] **Pre-pull AP cable runs** from the garage SR2024 location to AP mount points (the only long runs; can be fully done in advance).
-- [ ] **Pre-configure the Aerohive APs** (AP630 + AP130) — standalone SSID, CAPWAP disabled — per [aerohive-ap-setup.md](aerohive-ap-setup.md). Recommend matching the existing house SSID + PSK so clients roam over seamlessly when Xfinity is bridged.
+- [ ] **Pre-configure the Aerohive APs** (AP630 + AP130) — standalone SSID, CAPWAP disabled — per [aerohive-ap-setup.md](../docs/runbooks/aerohive-ap-setup.md). Recommend matching the existing house SSID + PSK so clients roam over seamlessly when Xfinity is bridged.
 - [ ] **Snapshot current state** for rollback reference: `wg show`, iptables counters on R730xd, `kubectl get nodes -o wide`, `kubectl get pv`, and confirm `*.bearflinn.com` is green from an external host.
 
 ---
 
 ## Checkpoint A — Relocate on Xfinity (no logical change)
 
-**Done — 2026-07-05,** ahead of this staged plan: an extended power outage forced the physical move (SR2024 + all machines) from the closet to the garage in one go, coming back up on the same flat `10.0.0.x` network. See [docs/network.md](../network.md) and [ADR-045](../decisions/045-platform-relocation-to-garage.md). The steps below are the plan as originally staged; kept for reference and rollback context.
+**Done — 2026-07-05,** ahead of this staged plan: an extended power outage forced the physical move (SR2024 + all machines) from the closet to the garage in one go, coming back up on the same flat `10.0.0.x` network. See [docs/network.md](../docs/network.md) and [ADR-045](../docs/decisions/045-platform-relocation-to-garage.md). The steps below are the plan as originally staged; kept for reference and rollback context.
 
 Goal: platform physically in the garage, still routed by the Xfinity gateway in **router** mode. Nothing about IPs or routing changes.
 
@@ -85,11 +87,11 @@ curl -I https://<some>.bearflinn.com   # external ingress still green (tunnel re
 
 ## Checkpoint B — APs up on the garage switch
 
-**Done — 2026-07-07.** APs are live and roaming on the standalone house SSID (shared hive secret + 802.11r/k/v), powered via PoE injectors (SR2024's own PoE is not delivering — [#84](https://github.com/Grizzly-Endeavors/grizzly-platform/issues/84)). See [aerohive-ap-setup.md](aerohive-ap-setup.md).
+**Done — 2026-07-07.** APs are live and roaming on the standalone house SSID (shared hive secret + 802.11r/k/v), powered via PoE injectors (SR2024's own PoE is not delivering — [#84](https://github.com/Grizzly-Endeavors/grizzly-platform/issues/84)). See [aerohive-ap-setup.md](../docs/runbooks/aerohive-ap-setup.md).
 
 Goal: house WiFi served by the Aerohive APs, independent of the Xfinity gateway, so bridging Xfinity in C doesn't black out WiFi.
 
-1. Mount/connect APs to the SR2024 (PoE); bring up the standalone SSID per [aerohive-ap-setup.md](aerohive-ap-setup.md).
+1. Mount/connect APs to the SR2024 (PoE); bring up the standalone SSID per [aerohive-ap-setup.md](../docs/runbooks/aerohive-ap-setup.md).
 2. Verify coverage on the Aerohive SSID from around the house.
 
 **Verify:** clients associate to the Aerohive SSID, get internet (still via Xfinity→SR2024), and roam acceptably.
@@ -142,7 +144,7 @@ curl -I https://<some>.grizzly-endeavors.com   # ingress still green (tunnel sti
 
 ## Checkpoint D — Segment (evict home)
 
-Goal: platform alone on `10.0.0.0/24`; home devices on `10.20.0.0/24`. See [ADR-046](../decisions/046-platform-network-segmentation-via-home-eviction.md). **The platform does not move** — this only relocates home devices.
+Goal: platform alone on `10.0.0.0/24`; home devices on `10.20.0.0/24`. See [ADR-046](../docs/decisions/046-platform-network-segmentation-via-home-eviction.md). **The platform does not move** — this only relocates home devices.
 
 1. Enable the home VLAN + `10.20.0.0/24` subnet on the EX50 (DHCP, gateway `10.20.0.1`).
 2. On the SR2024: platform machine ports stay access on the platform VLAN; trunk the home/guest SSIDs to the APs; move the legacy consumer switch chain uplink onto the home VLAN.
@@ -165,7 +167,7 @@ curl -I https://<some>.bearflinn.com    # ingress still green
 
 ## Checkpoint E — Move the ingress tunnel to the EX50
 
-Goal: WireGuard endpoint + DNAT move from R730xd to the EX50. See [ADR-047](../decisions/047-ingress-tunnel-relocation-to-ex50.md). Keep R730xd's path live until the EX50 path is proven.
+Goal: WireGuard endpoint + DNAT move from R730xd to the EX50. See [ADR-047](../docs/decisions/047-ingress-tunnel-relocation-to-ex50.md). Keep R730xd's path live until the EX50 path is proven.
 
 1. Retarget the `ingress-tunnel` role at the EX50 (DAL shell): bring up the wg interface, initiate outbound to the VPS, `PersistentKeepalive` on.
 2. On the VPS: repoint the WireGuard peer to the EX50's public key; move the home-side `/30` address to the EX50. **Caddy config unchanged.**
@@ -188,7 +190,7 @@ curl -I https://<some>.bearflinn.com    # green via the new path
 ## Post-cutover — update the record
 
 - [ ] `docs/network.md`, `docs/hardware.md` — move the EX50 into the live tables; reflect the garage location and the two subnets.
-- [ ] `docs/exploration/network-vlans.md` — fold the realized design back in (or retire it if fully realized).
+- [ ] `archive/network-vlans-design.md` — fold the realized design back in (or retire it if fully realized).
 - [ ] `home_public_ip` in `network.yml` if it changed under bridge mode.
 - [ ] Confirm humidity/leak/temp sensors are reporting into the observability stack with alert thresholds (ADR-045 readiness items).
 - [ ] Log the completion date and any deviations here.
