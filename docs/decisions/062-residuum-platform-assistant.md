@@ -1,7 +1,7 @@
 # ADR-062: Residuum as the Platform Assistant, on the R730xd with a Stock Image
 
 **Date:** 2026-07-20
-**Status:** Accepted
+**Status:** Superseded by [ADR-077](077-decommission-residuum-assistant.md)
 **Relates to:** [ADR-003](003-foundation-stores-on-r730xd.md) (stateful workloads live on the R730xd), [ADR-024](024-platform-secrets-on-openbao.md) (OpenBao → Ansible → host secret pattern), [ADR-055](055-s3-object-store-versitygw.md) (the systemd-wrapped compose + ZFS mount-guard role shape this copies)
 
 ## Context
@@ -50,5 +50,5 @@ Holding the "stock image" line surfaced two genuine upstream gaps, both fixed in
 
 ## References
 
-- Deploy: `ansible/playbooks/deploy-residuum.yml`, role `ansible/roles/r730xd-residuum/`. Operate: [runbooks/residuum.md](../runbooks/residuum.md).
+- Deploy was `ansible/playbooks/deploy-residuum.yml` + role `ansible/roles/r730xd-residuum/`, operated via `docs/runbooks/residuum.md`; all three were removed with the deployment — see [ADR-077](077-decommission-residuum-assistant.md).
 - Upstream: residuum [#111](https://github.com/Grizzly-Endeavors/residuum/issues/111) (tool PATH), [#112](https://github.com/Grizzly-Endeavors/residuum/issues/112) (CA certs + git), and `docs/systems-usage/tools.md` in that repo.

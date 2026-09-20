@@ -40,7 +40,6 @@ One line per runbook. See [`README.md`](README.md) for what runbooks are and whe
 
 ## Assistant
 
-- [residuum.md](residuum.md) — Residuum platform assistant on the R730xd: deploy/upgrade, health, adding CLI tools, recovery.
 
 ## Cluster
 
