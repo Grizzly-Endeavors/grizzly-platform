@@ -2,7 +2,7 @@
 
 How to quiesce everything that touches `tank` on the R730xd so the pool can be exported, and how to bring it all back. Needed for any operation requiring an idle pool — export/import, vdev path changes, controller work.
 
-**This is a platform-wide outage.** `tank` backs foundation Postgres, kv-cache, ClickHouse, s3-hot, the versitygw IAM store for *both* gateways, Residuum, the entire observability stack, and 35 zvols serving K8s PVCs. Authentik depends on Postgres and kv-cache, so **SSO goes down** — confirm `kubectl` and host SSH work without it before starting.
+**This is a platform-wide outage.** `tank` backs foundation Postgres, kv-cache, ClickHouse, s3-hot, the versitygw IAM store for *both* gateways, the entire observability stack, and 35 zvols serving K8s PVCs. Authentik depends on Postgres and kv-cache, so **SSO goes down** — confirm `kubectl` and host SSH work without it before starting.
 
 Related: [ADR-070](../decisions/070-zfs-pool-stable-device-paths.md) (stable device paths), [ADR-003](../decisions/003-foundation-stores-on-r730xd.md) (foundation stores).
 
@@ -69,7 +69,6 @@ Leave the `nfs-controller` / `nfs-node` alone — they serve MergerFS, not `tank
 for s in alloy grafana tempo loki prometheus exporters; do
   sudo docker compose -f /opt/observability/$s/docker-compose.yml down
 done
-sudo systemctl stop foundation-residuum
 for s in clickhouse kv-cache postgres; do
   sudo docker compose -f /opt/foundation/$s/docker-compose.yml down
 done
@@ -125,9 +124,7 @@ ls /mnt/zfs/foundation/versitygw-iam/{s3-hot,s3-bulk}/users.json
 
 Grafana's database is foundation Postgres, and Loki and Tempo use s3-hot as their object store — starting either ahead of its dependency produces a crash loop.
 
-**5. Residuum:** `sudo systemctl start foundation-residuum`.
-
-**7. CSI, node before controller:**
+**5. CSI, node before controller:**
 
 ```bash
 kubectl -n democratic-csi patch ds/democratic-csi-iscsi-node --type=json \
@@ -136,7 +133,7 @@ kubectl -n democratic-csi patch ds/democratic-csi-iscsi-node --type=json \
 kubectl -n democratic-csi scale deploy/democratic-csi-iscsi-controller --replicas=1
 ```
 
-**8. Resume Flux**, which restores the application Deployments to their declared replicas:
+**6. Resume Flux**, which restores the application Deployments to their declared replicas:
 
 ```bash
 flux resume kustomization --all -n flux-system
