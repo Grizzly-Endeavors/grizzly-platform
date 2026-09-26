@@ -1,6 +1,10 @@
 # cert-manager controller metrics — exposed via NodePort for R730xd Prometheus
 # (same pattern as argo-workflows/metrics-services.yaml).
 # Scrape target: <control-plane-ip>:30888
+#
+# targetPort is the controller container port number (9402). The chart's
+# metrics Service names that port http-metrics; this Service does not, and
+# Prometheus scrapes the NodePort, so the chart's port name is unused here.
 apiVersion: v1
 kind: Service
 metadata:
