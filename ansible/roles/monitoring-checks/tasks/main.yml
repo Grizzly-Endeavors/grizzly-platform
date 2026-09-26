@@ -32,6 +32,7 @@
     dest: "{{ monitoring_lib_dir }}/checks/{{ item }}.sh"
     mode: "0755"
   loop:
+    - check-boot
     - check-smart
     - check-disks
     - check-services

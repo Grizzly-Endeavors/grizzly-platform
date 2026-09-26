@@ -79,6 +79,37 @@ groups:
             CPU at {{ '{{' }} $value {{ '}}' }}°C
             on {{ '{{' }} $labels.instance {{ '}}' }}
 
+      # Previous boot had no graceful shutdown. The check caches that verdict
+      # on the kernel boot id and publishes uptime from /proc/uptime, so a
+      # clock step cannot look like a reboot.
+      - alert: UncleanReboot
+        expr: monitoring_boot_unclean == 1
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: >-
+            {{ '{{' }} $labels.instance {{ '}}' }} booted after an unclean shutdown
+          description: >-
+            The previous boot's journal has no graceful shutdown
+            (systemd-shutdown, Power-Off, or Reboot). This stays firing
+            until a later boot follows a clean shutdown.
+
+      # Several hosts with monotonic uptime under 15 minutes at once: a
+      # shared reboot window, which is the fleet-wide power-cut case.
+      # One host rebooting does not match.
+      - alert: FleetPowerCut
+        expr: count(monitoring_uptime_seconds < 900) >= 2
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: >-
+            {{ '{{' }} $value | printf "%.0f" {{ '}}' }} hosts booted within the last 15 minutes
+          description: >-
+            That many hosts report uptime under 15 minutes at the same time.
+            Uptime comes from /proc/uptime, so a clock step cannot raise this.
+
       - alert: ECCMemoryErrors
         expr: monitoring_ipmi_memory_errors_sel > 0
         for: 0m
