@@ -1,10 +1,19 @@
-# Systemd override for Caddy service
+# Systemd drop-in for the Caddy service
 # Managed by Ansible - DO NOT EDIT MANUALLY
 #
-# This file provides environment variables for DNS-01 ACME challenge
-# The API token is stored securely in Ansible vault
+# The service runs {{ caddy_custom_binary }}, which carries the DNS provider
+# module. Empty Exec* lines clear the packaged commands first — systemd
+# appends drop-in settings instead of replacing them — and the following
+# lines repeat the packaged arguments with that binary and config path.
 
 [Service]
+ExecStart=
+ExecReload=
+ExecStartPre=
+{% for line in caddy_packaged_unit_text.splitlines() if line.startswith('ExecStart=') or line.startswith('ExecReload=') or line.startswith('ExecStartPre=') -%}
+{{ line | replace('/usr/bin/caddy', caddy_custom_binary) | replace('/etc/caddy/Caddyfile', caddy_config_dir ~ '/Caddyfile') }}
+{% endfor %}
+
 # Environment variable for {{ caddy_dns_provider | upper }} DNS provider
 Environment="{% if caddy_dns_provider == 'cloudflare' %}CLOUDFLARE_API_TOKEN={{ cloudflare_api_token }}{% elif caddy_dns_provider == 'route53' %}AWS_ACCESS_KEY_ID={{ aws_access_key_id }} AWS_SECRET_ACCESS_KEY={{ aws_secret_access_key }}{% elif caddy_dns_provider == 'digitalocean' %}DO_AUTH_TOKEN={{ digitalocean_api_token }}{% endif %}"
 

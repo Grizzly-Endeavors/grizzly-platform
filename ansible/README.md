@@ -20,7 +20,7 @@ Configuration management for active infrastructure. Previous K8s cluster and tow
 
 | Role | Used by | Purpose |
 |------|---------|---------|
-| `caddy` | setup-proxy-vps.yml | Install Caddy with xcaddy DNS provider plugins |
+| `caddy` | setup-proxy-vps.yml | Caddy reverse proxy; DNS-plugin binary at `/usr/local/bin/caddy` |
 | `r730xd-storage-prep` | r730xd-storage.yml | Discover HDDs via iDRAC, partition GPT, format ext4, mount by bay |
 | `r730xd-mergerfs` | r730xd-storage.yml | Pool data drives into unified mount at `/mnt/pool` |
 | `r730xd-snapraid` | r730xd-storage.yml | Parity protection + automated sync/scrub via systemd timers |
