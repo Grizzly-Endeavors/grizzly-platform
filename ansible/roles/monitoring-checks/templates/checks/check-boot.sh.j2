@@ -1,0 +1,91 @@
+#!/usr/bin/env bash
+# Managed by Ansible — monitoring-checks role
+# Record monotonic uptime and whether the previous boot ended without a
+# graceful shutdown. The verdict is cached against the kernel boot id, and
+# uptime comes from /proc/uptime, so a wall-clock step cannot look like a reboot.
+set -euo pipefail
+
+source "{{ monitoring_lib_dir }}/lib/alert.sh"
+init_metrics "check_boot"
+
+CHECK="check-boot"
+BOOT_ID_FILE="/proc/sys/kernel/random/boot_id"
+UPTIME_FILE="/proc/uptime"
+# Graceful shutdown, as logged in the previous boot's journal.
+GRACEFUL_RE='systemd-shutdown|Reached target Power-Off|Reached target Reboot'
+
+write_metric "monitoring_boot_check_time" "$(date +%s)" "Timestamp of last boot check" "gauge"
+
+uptime_s=$(awk '{printf "%d", $1}' "$UPTIME_FILE")
+write_metric "monitoring_uptime_seconds" "$uptime_s" "Seconds since boot from /proc/uptime (monotonic)" "gauge"
+
+boot_id=$(tr -d '[:space:]' < "$BOOT_ID_FILE")
+boot_id=${boot_id//[^A-Za-z0-9-]/}
+if [[ -z "$boot_id" ]]; then
+    boot_id="unknown"
+fi
+
+# 0 when journalctl can show the previous boot. A missing previous boot is
+# not itself an unclean shutdown (first boot, or no journal for it).
+previous_boot_present() {
+    local err
+    err=$(journalctl -b -1 -n 1 --no-pager 2>&1 >/dev/null || true)
+    [[ "$err" != *"No journal"* ]]
+}
+
+# 0 when the named boot's journal contains pattern. journalctl exits 1 on
+# systemd 255 when nothing matches, and other versions exit 0 with no output,
+# so require an actual matching line.
+journal_has_match() {
+    local boot="$1"
+    local pattern="$2"
+    journalctl -b "$boot" --no-pager --grep="$pattern" -n 1 --output=cat 2>/dev/null | grep -q .
+}
+
+# 1 when this boot follows a shutdown that was not graceful.
+# A previous boot that reached Power-Off, Reboot, or systemd-shutdown is clean
+# even if the current boot also mentions an unsealed journal. With no previous
+# boot to read, the journald "uncleanly shut down" line is the remaining signal.
+compute_unclean() {
+    if ! command -v journalctl >/dev/null 2>&1; then
+        echo 0
+        return 0
+    fi
+    if previous_boot_present; then
+        if journal_has_match -1 "$GRACEFUL_RE"; then
+            echo 0
+        else
+            echo 1
+        fi
+        return 0
+    fi
+    if journal_has_match 0 'uncleanly shut down'; then
+        echo 1
+        return 0
+    fi
+    echo 0
+}
+
+verdict_file="${STATE_DIR}/check-boot.verdict"
+mkdir -p "$STATE_DIR"
+cached_id=""
+cached_unclean=""
+if [[ -f "$verdict_file" ]]; then
+    read -r cached_id cached_unclean < "$verdict_file" || true
+fi
+
+if [[ "$cached_id" == "$boot_id" && "$cached_unclean" =~ ^[01]$ ]]; then
+    unclean="$cached_unclean"
+else
+    unclean=$(compute_unclean)
+    printf '%s %s\n' "$boot_id" "$unclean" > "$verdict_file"
+    if [[ "$unclean" == "1" ]]; then
+        logger -t "monitoring" -p "user.warning" \
+            "[WARNING] ${CHECK}: previous shutdown was not graceful (boot ${boot_id})"
+    fi
+fi
+
+write_metric "monitoring_boot_unclean" "$unclean" "1 when the previous shutdown was not graceful" "gauge"
+write_metric_labeled "monitoring_boot_id_info" "boot_id=\"${boot_id}\"" "1"
+
+flush_metrics

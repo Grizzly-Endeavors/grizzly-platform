@@ -16,6 +16,7 @@ TIER="${1:-all}"
 
 # Tier 1 checks (critical — every 5 minutes)
 TIER1_CHECKS=(
+    check-boot
     check-smart
     check-disks
     check-services
