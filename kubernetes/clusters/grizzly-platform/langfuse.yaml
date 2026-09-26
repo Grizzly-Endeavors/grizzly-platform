@@ -1,0 +1,24 @@
+# langfuse — platform LLM-observability service. Its own Flux Kustomization
+# (like ntfy/roundcube/stalwart) so a transiently-unhealthy pod never blocks
+# core infrastructure from reaching Ready. dependsOn infrastructure so
+# ingress-nginx and the onepassword ClusterSecretStore exist before this
+# applies.
+#
+# All state is external: foundation Postgres, kv-cache, ClickHouse and the
+# s3-hot versitygw gateway, all on the R730xd. Nothing here provisions a PVC.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: langfuse
+  namespace: flux-system
+spec:
+  dependsOn:
+    - name: infrastructure
+  interval: 5m
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  path: ./kubernetes/infrastructure/langfuse
+  prune: true
+  wait: true
+  timeout: 10m

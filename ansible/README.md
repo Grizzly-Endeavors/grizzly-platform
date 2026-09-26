@@ -208,10 +208,10 @@ Secrets are in `group_vars/all/vault.yml` (encrypted). See `vault.yml.example` f
 
 ```bash
 # View vault contents
-ansible-vault view ansible/group_vars/all/vault.yml --vault-password-file .vault_pass
+ansible-vault view ansible/inventory/group_vars/all/vault.yml --vault-password-file .vault_pass
 
 # Edit vault
-ansible-vault edit ansible/group_vars/all/vault.yml --vault-password-file .vault_pass
+ansible-vault edit ansible/inventory/group_vars/all/vault.yml --vault-password-file .vault_pass
 ```
 
 ## Running playbooks

@@ -18,7 +18,8 @@ Not blocking day-to-day operations; tracked in ADRs and `docs/hardware.md`:
 
 - Tower PC joins the cluster as a plain worker ([ADR-021](docs/decisions/021-off-the-shelf-router-tower-pc-as-worker.md))
 - GPU inference host (standalone, off-cluster — see `docs/hardware.md`)
-- Off-the-shelf router to replace Xfinity gateway — unblocks VLANs ([docs/exploration/network-vlans.md](docs/exploration/network-vlans.md))
+- Evict the *wired* home drops off VLAN 1 ([ADR-046](docs/decisions/046-platform-network-segmentation-via-home-eviction.md)); the downstream WiFi segments are live ([ADR-060](docs/decisions/060-downstream-wifi-segmentation.md))
+- Move the ingress tunnel off the R730xd onto the EX50 ([ADR-047](docs/decisions/047-ingress-tunnel-relocation-to-ex50.md))
 - Jumpbox imaging (AMD C60 mini PC)
 - UPS battery replacement ([ADR-006](docs/decisions/006-proceed-without-ups.md))
 

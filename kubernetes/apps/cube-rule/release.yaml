@@ -1,0 +1,23 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: cube-rule
+  namespace: flux-system
+spec:
+  interval: 5m
+  releaseName: cube-rule
+  targetNamespace: cube-rule
+  chart:
+    spec:
+      chart: ./deploy
+      sourceRef:
+        kind: GitRepository
+        name: cube-rule
+        namespace: flux-system
+      reconcileStrategy: Revision
+  install:
+    remediation:
+      retries: 2
+  upgrade:
+    remediation:
+      retries: 2

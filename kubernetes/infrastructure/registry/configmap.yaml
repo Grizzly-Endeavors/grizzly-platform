@@ -26,6 +26,16 @@ data:
   # local dir before the S3 push) — pointed at the cache PVC. Nodes route
   # docker.io/gcr.io pulls here via containerd certs.d (k8s-registry-trust) and
   # CI DinD via --registry-mirror. See docs/decisions/032-registry-pullthrough-cache.md.
+  #
+  # maxRetries/retryDelay MUST stay small. On-demand sync runs INSIDE the
+  # client's request, so the retry budget lands directly on manifest GET
+  # latency, and every concurrent reader of that repo blocks behind the same
+  # in-flight sync ("image already demanded, waiting on channel"). Because
+  # prefix is "**", first-party repos get probed upstream too and always miss
+  # (Docker Hub answers 401 for repos it doesn't host), so this cost is paid on
+  # ordinary first-party pulls. Kyverno's image-verification webhook allows 30s,
+  # so a retry budget above that stalls admission cluster-wide rather than
+  # merely slowing one pull.
   config.json: |
     {
       "distSpecVersion": "1.1.0",
@@ -68,8 +78,8 @@ data:
               "urls": ["https://registry-1.docker.io"],
               "onDemand": true,
               "tlsVerify": true,
-              "maxRetries": 3,
-              "retryDelay": "5m",
+              "maxRetries": 1,
+              "retryDelay": "2s",
               "content": [
                 { "prefix": "**" }
               ]
@@ -78,8 +88,8 @@ data:
               "urls": ["https://gcr.io"],
               "onDemand": true,
               "tlsVerify": true,
-              "maxRetries": 3,
-              "retryDelay": "5m",
+              "maxRetries": 1,
+              "retryDelay": "2s",
               "content": [
                 { "prefix": "**" }
               ]

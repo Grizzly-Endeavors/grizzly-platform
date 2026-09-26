@@ -1,0 +1,54 @@
+version: 1
+metadata:
+  name: grizzly-langfuse-oidc
+# Registers Langfuse (platform LLM observability, kubernetes/infrastructure/langfuse/)
+# as a confidential OIDC client of Authentik: an OAuth2 provider + a bound
+# application. Langfuse runs with password login disabled, so this is the only
+# way in.
+#
+# The client_id/client_secret are NOT in git: they are injected into the worker
+# (which applies blueprints) via global.env as AUTHENTIK_LANGFUSE_CLIENT_ID /
+# AUTHENTIK_LANGFUSE_CLIENT_SECRET, sourced from 1Password
+# platform-authentik (oidc_langfuse_client_id, oidc_langfuse_client_secret) by
+# the authentik ExternalSecret. The same two keys feed Langfuse's own
+# ExternalSecret, so both sides of the OIDC contract share one source of truth.
+entries:
+  - model: authentik_providers_oauth2.oauth2provider
+    id: langfuse-provider
+    identifiers:
+      name: langfuse
+    attrs:
+      client_type: confidential
+      client_id: !Env [AUTHENTIK_LANGFUSE_CLIENT_ID, ""]
+      client_secret: !Env [AUTHENTIK_LANGFUSE_CLIENT_SECRET, ""]
+      # Required since Authentik 2026.x made grant types explicit: without this
+      # the provider's grant_types is [] and the authorize endpoint rejects every
+      # code request as "invalid_request" (SSO never completes).
+      grant_types:
+        - authorization_code
+        - refresh_token
+      # Langfuse is a Next.js app using Auth.js. The final path segment is the
+      # provider id Auth.js assigns to an AUTH_CUSTOM_* provider — it is fixed
+      # as `custom`, not a name chosen here.
+      redirect_uris:
+        - matching_mode: strict
+          url: https://langfuse.grizzly-endeavors.com/api/auth/callback/custom
+      sub_mode: hashed_user_id
+      include_claims_in_id_token: true
+      authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-explicit-consent]]
+      invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
+      signing_key: !Find [authentik_crypto.certificatekeypair, [name, "authentik Self-signed Certificate"]]
+      property_mappings:
+        - !Find [authentik_providers_oauth2.scopemapping, [scope_name, openid]]
+        - !Find [authentik_providers_oauth2.scopemapping, [scope_name, email]]
+        - !Find [authentik_providers_oauth2.scopemapping, [scope_name, profile]]
+
+  - model: authentik_core.application
+    identifiers:
+      slug: langfuse
+    attrs:
+      name: langfuse
+      provider: !KeyOf langfuse-provider
+      meta_launch_url: https://langfuse.grizzly-endeavors.com
+      meta_description: "Traces, cost and evals for the platform's LLM agents"
+      policy_engine_mode: any

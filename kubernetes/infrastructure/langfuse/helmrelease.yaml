@@ -1,0 +1,218 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: langfuse
+  namespace: flux-system
+spec:
+  interval: 30m
+  releaseName: langfuse
+  chart:
+    spec:
+      chart: langfuse
+      # Verified current at pin time against the langfuse-k8s chart index.
+      # Upstream ships weekly, so re-check when bumping.
+      version: "1.5.41"
+      sourceRef:
+        kind: HelmRepository
+        name: langfuse
+  targetNamespace: langfuse
+  install:
+    createNamespace: false
+  values:
+    langfuse:
+      # The chart's appVersion still tracks the v3 line, so running v4 requires
+      # this override. v4 needs a newer ClickHouse than the chart's bundled
+      # sub-chart ships, which is one more reason the store is external.
+      #
+      # Pin against the published *image* tags, not the GitHub release list —
+      # the two are not in step. Verify with:
+      #   curl -sI https://hub.docker.com/v2/repositories/langfuse/langfuse/tags/<tag>
+      # and check langfuse-worker too; both must carry the tag.
+      image:
+        tag: "4.1.0"
+
+      nextauth:
+        url: https://langfuse.grizzly-endeavors.com
+        secret:
+          secretKeyRef:
+            name: langfuse-secrets
+            key: nextauth-secret
+      salt:
+        secretKeyRef:
+          name: langfuse-secrets
+          key: salt
+      encryptionKey:
+        secretKeyRef:
+          name: langfuse-secrets
+          key: encryption-key
+
+      # TLS terminates upstream at the VPS Caddy (wildcard
+      # *.grizzly-endeavors.com), which reverse-proxies to this nginx ingress
+      # over the WireGuard tunnel — so no cert-manager issuer here and no DNS
+      # change (the wildcard already resolves).
+      ingress:
+        enabled: true
+        className: nginx
+        hosts:
+          - host: langfuse.grizzly-endeavors.com
+            paths:
+              - path: /
+                pathType: Prefix
+
+      features:
+        # Signup stays enabled because Authentik is the gate, not Langfuse.
+        # Enrollment into Authentik is invitation-gated and closed (ADR-040),
+        # and password login here is off — so the only way to reach this form
+        # is to already hold an invited Authentik account. Disabling signup
+        # would mean provisioning every person twice, and it also makes the
+        # instance unbootstrappable: the first login has no account yet, so it
+        # fails with adapter_error_createUser and there is no way in at all.
+        #
+        # This does mean any grizzly-users member can create their own org
+        # here. To narrow that, bind a group policy to the application in
+        # blueprints/langfuse.yaml — nextcloud.yaml is the worked example
+        # (ADR-049).
+        signUpDisabled: false
+
+      # Login is Authentik-only. The provider key `custom` is what Auth.js
+      # names a generic OIDC provider: the chart renders each option as
+      # AUTH_<PROVIDER>_<OPTION>, so this becomes AUTH_CUSTOM_ISSUER and
+      # friends, and it is also what fixes the callback path at
+      # /api/auth/callback/custom (see the Authentik blueprint).
+      auth:
+        disableUsernamePassword: true
+        providers:
+          custom:
+            name: "Authentik"
+            # NO trailing slash, even though Authentik's own issuer value and
+            # docs/integration/sso.md both carry one. NextAuth builds the
+            # discovery URL by concatenating `issuer + "/.well-known/..."`, so a
+            # trailing slash yields `langfuse//.well-known/...`; Authentik
+            # answers that with a 301 and openid-client refuses to follow
+            # redirects, throwing before the browser is ever redirected. The
+            # symptom is a bare SIGNIN_OAUTH_ERROR with nothing at all in
+            # Authentik's logs.
+            issuer: "https://sso.grizzly-endeavors.com/application/o/langfuse"
+            clientId:
+              secretKeyRef:
+                name: langfuse-secrets
+                key: oidc-client-id
+            clientSecret:
+              secretKeyRef:
+                name: langfuse-secrets
+                key: oidc-client-secret
+
+      web:
+        # The web container applies the Prisma migrations before it serves, and
+        # on a cold database that is 400+ of them — far longer than the chart's
+        # default liveness budget of 20s + 3x10s. Exceeding it gets the
+        # container killed mid-migration, which leaves a half-applied row in
+        # _prisma_migrations and puts Langfuse into a permanent P3009 crash
+        # loop that no restart can clear.
+        #
+        # A startupProbe is the right tool here, but the chart renders only
+        # liveness and readiness — so the runway has to come from a generous
+        # liveness budget instead: 3 min before the first check, then 2 more
+        # before it gives up.
+        livenessProbe:
+          initialDelaySeconds: 180
+          periodSeconds: 10
+          failureThreshold: 12
+        readinessProbe:
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          failureThreshold: 30
+        resources:
+          requests:
+            cpu: 500m
+            memory: 1Gi
+          limits:
+            cpu: "4"
+            memory: 6Gi
+      worker:
+        resources:
+          requests:
+            cpu: 500m
+            memory: 1Gi
+          limits:
+            cpu: "4"
+            memory: 6Gi
+
+    # --- Data stores --------------------------------------------------------
+    # Every one of the chart's four bundled sub-charts is disabled. They are all
+    # Bitnami, and since 2025-08-28 they default to `bitnamilegacy/*` images
+    # that no longer receive updates. Each points at a foundation store on the
+    # R730xd instead (ADR-003), which is where durable state belongs anyway.
+    postgresql:
+      deploy: false
+      host: "10.0.0.200"
+      port: 5432
+      auth:
+        username: langfuse
+        database: langfuse
+        existingSecret: langfuse-secrets
+        secretKeys:
+          userPasswordKey: postgres-password
+          adminPasswordKey: postgres-password
+
+    redis:
+      deploy: false
+      host: "10.0.0.200"
+      port: 6379
+      auth:
+        # MUST be null. kv-cache is a plain `requirepass` Valkey with no ACL
+        # users, so the connection string has to be redis://:<password>@host —
+        # the chart's default of "default" would send a username the server
+        # does not know and every auth fails.
+        username: null
+        existingSecret: langfuse-secrets
+        existingSecretPasswordKey: redis-password
+        # Logical DB 2. Authentik holds 1. A courtesy boundary, not a security
+        # one — the password is shared, so keys are also namespaced by prefix.
+        database: 2
+
+    clickhouse:
+      deploy: false
+      host: "10.0.0.200"
+      httpPort: 8123
+      nativePort: 9000
+      database: langfuse
+      auth:
+        username: langfuse
+        existingSecret: langfuse-secrets
+        existingSecretKey: clickhouse-password
+      migration:
+        url: "clickhouse://10.0.0.200:9000"
+        autoMigrate: true
+      # MUST be false. The chart defaults this to true, which issues `ON
+      # CLUSTER` DDL — and the foundation ClickHouse is a single node with no
+      # Keeper, so every migration statement would fail.
+      clusterEnabled: false
+
+    s3:
+      deploy: false
+      storageProvider: "s3"
+      # versitygw s3-hot (ADR-055). Path-style addressing is required against a
+      # non-AWS gateway.
+      endpoint: "http://10.0.0.200:7070"
+      bucket: langfuse
+      # MUST be us-east-1, not the chart's "auto" default. Ordinary SigV4
+      # requests pass with any region string, but versitygw validates the
+      # region embedded in a presigned URL's X-Amz-Credential and rejects
+      # anything else — so "auto" breaks media uploads specifically while
+      # leaving event ingestion looking healthy.
+      region: "us-east-1"
+      forcePathStyle: true
+      # `s3.auth.*` is the bundled Bitnami MinIO subchart's credential path and is
+      # read only when `deploy: true`. With the subchart off, the app's own
+      # credentials come from these two keys — set them and nothing reaches blob
+      # storage, which fails at ingestion ("Could not load credentials from any
+      # providers") while the UI and API stay up, so the instance looks healthy.
+      accessKeyId:
+        secretKeyRef:
+          name: langfuse-secrets
+          key: s3-access-key
+      secretAccessKey:
+        secretKeyRef:
+          name: langfuse-secrets
+          key: s3-secret-key

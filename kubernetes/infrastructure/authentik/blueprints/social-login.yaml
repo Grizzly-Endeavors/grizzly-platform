@@ -21,12 +21,21 @@ metadata:
 #
 # Per-user onboarding = mint an invite in the broker and send the link; the
 # person clicks it, signs in with any provider, and is enrolled — no code to
-# paste. No user object is pre-provisioned, so no human PII lives in git/OpenBao.
+# paste. No user object is pre-provisioned, so no human PII lives in git or in
+# the secret store. An invitee who has none of these three accounts can instead
+# sign up with an email one-time code — see email-otp.yaml.
 #
 # Source client_id/client_secret are NOT in git: injected into the worker (which
 # applies blueprints) via global.env as AUTHENTIK_{DISCORD,GITHUB}_CLIENT_{ID,
-# SECRET}, sourced from OpenBao secret/grizzly-platform/platform/authentik by the
-# authentik ExternalSecret. See docs/decisions/039-...-invitation-enrollment.md.
+# SECRET}, sourced from the 1Password platform-authentik item by the authentik
+# ExternalSecret. See docs/decisions/039-...-invitation-enrollment.md.
+#
+# `icon` on each source points at a mark we serve ourselves from the
+# authentik-brand-assets nginx deployment, drawn for the dark login chip: white
+# Discord/GitHub marks, full-colour Google G. Like the brand image fields, this
+# field takes an external http(s):// URL. authentik's own bundled marks are flat
+# monochrome and are inverted by its dark theme, which is wrong on our chip —
+# see the source-button block in brand.yaml and ADR-075.
 #
 # ENTRY ORDER MATTERS: `!KeyOf` resolves to an already-applied entry, so every
 # target must appear *above* its references. Order here is therefore:
@@ -156,6 +165,7 @@ entries:
       name: Discord
       provider_type: discord
       enabled: true
+      icon: "https://sso.grizzly-endeavors.com/brand/discord.svg"
       consumer_key: !Env [AUTHENTIK_DISCORD_CLIENT_ID, ""]
       consumer_secret: !Env [AUTHENTIK_DISCORD_CLIENT_SECRET, ""]
       # Link a new provider login to an existing user with the same (verified)
@@ -175,6 +185,7 @@ entries:
       name: GitHub
       provider_type: github
       enabled: true
+      icon: "https://sso.grizzly-endeavors.com/brand/github.svg"
       consumer_key: !Env [AUTHENTIK_GITHUB_CLIENT_ID, ""]
       consumer_secret: !Env [AUTHENTIK_GITHUB_CLIENT_SECRET, ""]
       # See the Discord source above: link-by-verified-email so both providers
@@ -191,6 +202,7 @@ entries:
       name: Google
       provider_type: google
       enabled: true
+      icon: "https://sso.grizzly-endeavors.com/brand/google.svg"
       consumer_key: !Env [AUTHENTIK_GOOGLE_CLIENT_ID, ""]
       consumer_secret: !Env [AUTHENTIK_GOOGLE_CLIENT_SECRET, ""]
       # Link-by-verified-email, same as the other sources. Google emails are
@@ -200,8 +212,18 @@ entries:
       enrollment_flow: !KeyOf invite-enrollment-flow
 
   # --- Show the source buttons on the main login page -----------------------
-  # Authoritative on this stage's `sources` list: keep the built-in source so
-  # local username/password still works, plus the two OAuth sources.
+  # Authoritative on this stage as a WHOLE, not just on `sources`. The stage's
+  # serializer rejects any payload with neither `user_fields` nor `sources`
+  # ("When no user fields are selected, at least one source must be selected"),
+  # and validation sees only the attrs an entry supplies — never the stored
+  # object. So a second blueprint cannot patch one attr of this stage in
+  # isolation; every attr has to be set together, here.
+  #
+  # `sources`: the built-in source so local username/password still works, plus
+  # the three OAuth sources.
+  # `enrollment_flow`: the "Sign up" link, pointing at the email one-time-code
+  # flow that email-otp.yaml creates. Cross-file, so !Find — if that blueprint
+  # has not applied yet this resolves to null and converges on a later reconcile.
   - model: authentik_stages_identification.identificationstage
     identifiers:
       name: default-authentication-identification
@@ -211,6 +233,7 @@ entries:
         - !KeyOf discord-source
         - !KeyOf github-source
         - !KeyOf google-source
+      enrollment_flow: !Find [authentik_flows.flow, [slug, grizzly-email-enrollment]]
 
   # --- Flow stage bindings: user write -> login -----------------------------
   # The flow has no interactive steps after OAuth: it writes the user and logs

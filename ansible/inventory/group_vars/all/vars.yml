@@ -14,16 +14,20 @@ claude_ssh_public_key: "{{ vault_claude_ssh_public_key }}"
 # Foundation data stores (R730xd)
 postgres_password: "{{ vault_postgres_password }}"
 kv_cache_password: "{{ vault_kv_cache_password }}"
+clickhouse_password: "{{ vault_clickhouse_password }}"
+# ClickHouse's server-wide memory ceiling, in bytes. Lives here rather than in
+# the r730xd-clickhouse role because the Prometheus alert rules compare against
+# it too, and those render from a different playbook — a role default would be
+# out of scope there and the threshold would silently evaluate against nothing.
+clickhouse_max_server_memory_bytes: 8589934592  # 8 GiB
 
-# versitygw stores (ADR-055). Root creds per gateway
-# + the shared OpenBao AppRole the gateways use for their Vault-IAM account
-# store. Provisioned into OpenBao by setup-versitygw-iam.yml.
+# versitygw stores (ADR-055). Root creds per gateway — the bootstrap admin
+# each gateway boots with. All other S3 accounts live in the gateway's own
+# file IAM store (ADR-072) and are managed through its admin API.
 s3_hot_root_access_key: "{{ vault_s3_hot_root_access_key }}"
 s3_hot_root_secret_key: "{{ vault_s3_hot_root_secret_key }}"
 s3_bulk_root_access_key: "{{ vault_s3_bulk_root_access_key }}"
 s3_bulk_root_secret_key: "{{ vault_s3_bulk_root_secret_key }}"
-versitygw_iam_role_id: "{{ vault_versitygw_iam_role_id }}"
-versitygw_iam_role_secret: "{{ vault_versitygw_iam_secret_id }}"
 
 # Observability stack (R730xd)
 grafana_admin_password: "{{ vault_grafana_admin_password }}"
@@ -32,6 +36,9 @@ obs_s3_secret_key: "{{ vault_obs_s3_secret_key }}"
 
 # Alerting — Discord webhook for Alertmanager notifications
 monitoring_discord_webhook_url: "{{ vault_monitoring_discord_webhook_url }}"
+
+# Alerting — ntfy publish token for severity=critical phone pushes
+monitoring_ntfy_critical_token: "{{ vault_monitoring_ntfy_critical_token }}"
 
 # Flux CD — Discord webhook for GitOps reconciliation alerts (separate channel)
 flux_discord_webhook_url: "{{ vault_flux_discord_webhook_url }}"
@@ -63,53 +70,25 @@ trusted_wifi_psk: "{{ vault_trusted_wifi_psk }}"
 wg_vps_public_key: "{{ vault_wg_vps_public_key }}"
 wg_r730xd_public_key: "{{ vault_wg_r730xd_public_key }}"
 
-# OpenBao (R730xd) — Infisical universal-auth credentials for the
-# bootstrap machine identity. Surface encrypted values as the plain
-# variables the r730xd-openbao role expects.
-# See docs/decisions/023-self-hosted-openbao-on-r730xd.md
-infisical_openbao_client_id: "{{ vault_infisical_openbao_client_id }}"
-infisical_openbao_client_secret: "{{ vault_infisical_openbao_client_secret }}"
-
-# OpenBao Infisical project ID — pulled from .infisical.json at the repo
-# root so there's one source of truth for the workspace identifier.
-# Safe to commit: the client_id/secret pair is what grants access, not
-# the project ID. $PWD is the CWD ansible was launched from, which is
-# always the repo root per README / ansible.cfg conventions.
-openbao_infisical_project_id: >-
-  {{ (lookup('file', lookup('env', 'PWD') ~ '/.infisical.json') | from_json).workspaceId }}
-
 # -----------------------------------------------------------------------
-# Platform secrets via OpenBao (Phase C migration — ADR-024)
+# Platform secrets via 1Password
 # -----------------------------------------------------------------------
-# Consuming playbooks opt into OpenBao reads by loading
-# ansible/vars/openbao_secrets.yml (conditional on this flag via
-# include_vars in each play's pre_tasks). When true, vault_* are
-# redefined as vault_kv2_get lookups against OpenBao; when false,
-# values come from the decrypted vault.yml as before.
+# The vault holding every platform secret. Consuming playbooks load
+# ansible/vars/onepassword_secrets.yml in their pre_tasks, which redefines
+# each vault_* as an `op` lookup against this vault. Lookups are lazy, so a
+# play only spends API calls on the variables it actually references.
+onepassword_vault: "grizzly-platform"
+
+# Date the eso-reader / ansible-reader service account tokens were minted,
+# YYYY-MM-DD. This is recorded by hand because a token's expiry is not
+# readable from the token: `op whoami`, `op account get` and
+# `op service-account` all omit it, and the token itself carries no exp
+# claim. 1Password caps service account lifetime at 90 days (the CLI rejects
+# --expires-in >= 2160h), so age since minting is a sound proxy for "running
+# out of time" without needing the exact --expires-in value.
 #
-# Flipped to true 2026-04-17 after Phase B seed verified clean (all
-# 14 paths matched vault.yml source via read-back). Rollback knob:
-# set to false (or run rollback-openbao-migration.yml).
-openbao_read_enabled: true
+# Prometheus turns this into onepassword_token_minted_timestamp_seconds and
+# alerts on age (see the external-secrets rule group). Update this whenever a
+# token is re-minted, and re-run setup-1password-eso.yml.
+onepassword_tokens_minted: "2026-08-01"
 
-# OpenBao API endpoint — LAN-only, served on r730xd. Surfaced here (not
-# just in the role defaults) because consumer plays that don't apply the
-# r730xd-openbao role need it to configure community.hashi_vault
-# lookups. Port from the role defaults.
-openbao_api_port: 8200
-openbao_api_addr: "https://{{ r730xd_ip }}:{{ openbao_api_port }}"
-
-# OpenBao CA bundle on the controller. The r730xd-openbao role installs
-# the CA into the host trust store during deploy-openbao.yml; for the
-# jumpbox/bear-desktop controller, fetch it via:
-#   scripts/fetch-openbao-ca.sh
-# Override via `-e openbao_tls_ca_path=/alt/path/ca.crt`.
-openbao_tls_ca_path: "/usr/local/share/ca-certificates/grizzly-platform-openbao-ca.crt"
-
-# OpenBao Agent that mints the Prometheus sys/metrics scrape token (issue #41).
-# Shared here (not just in the r730xd-openbao-agent role defaults) because the
-# r730xd-prometheus role bind-mounts the sink dir to read the token. The sink
-# token is short-TTL and read-only on sys/metrics, so a host-local 0644 file is
-# acceptable; the secret_id that authenticates the agent is CIDR-bound + 0600.
-openbao_agent_base_dir: "/opt/observability/openbao-agent"
-openbao_agent_sink_dir: "{{ openbao_agent_base_dir }}/sink"

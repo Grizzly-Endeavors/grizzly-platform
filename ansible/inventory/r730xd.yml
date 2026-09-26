@@ -1,7 +1,7 @@
 ---
 # Dell R730xd — Standalone Storage Server
 # Use this inventory for R730xd-specific playbooks
-# IP addresses: see ansible/group_vars/all/network.yml (single source of truth)
+# IP addresses: see ansible/inventory/group_vars/all/network.yml (single source of truth)
 #
 # Usage:
 #   ansible-playbook -i ansible/inventory/r730xd.yml ansible/playbooks/setup-r730xd.yml -v

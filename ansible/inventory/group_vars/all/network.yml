@@ -11,11 +11,10 @@ lab_dns:
   - "8.8.8.8"
   - "8.8.4.4"
 
-# Digi EX50 border router (ADR-044) — becomes the platform gateway at
-# 10.0.0.1 at the garage cutover (replaces the Xfinity gateway's routing;
-# Xfinity → bridge mode). Config is IaC via the DAL Admin CLI, applied by
-# ansible/playbooks/configure-ex50.yml. See docs/ex50-dal-interface.md and
-# docs/runbooks/garage-relocation-cutover.md (Checkpoint C).
+# Digi EX50 border router (ADR-044) — the platform gateway at 10.0.0.1
+# (the Xfinity gateway is in bridge mode). Config is IaC via the DAL Admin
+# CLI, applied by ansible/playbooks/configure-ex50.yml.
+# See docs/ex50-dal-interface.md.
 ex50_lan_ip: "10.0.0.1"
 # CIDR prefix for the LAN — the EX50's ipv4 `address` leaf is a single CIDR
 # value (10.0.0.1/24); there is no separate netmask leaf (verified on-device).
@@ -114,4 +113,4 @@ k8s_ingress_ip: "{{ wg_r730xd_ip }}"
 # Game-server pods land on any worker via NodePort Services, no node-pinning
 # (grizzly-gameservers ADR-002) — kube-proxy routes regardless of which node
 # the pod is scheduled to. See grizzly-gameservers docs/design/00-overview.md.
-game_ingress_port_range: "7000:7010"
+game_ingress_port_range: "7000:7099"

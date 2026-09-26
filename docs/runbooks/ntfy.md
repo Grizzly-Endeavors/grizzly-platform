@@ -30,16 +30,39 @@ kubectl -n ntfy exec $POD -- ntfy access appname 'chores' rw
 kubectl -n ntfy exec $POD -- ntfy token add appname   # prints tk_... — copy it
 ```
 
-Store the app's token in OpenBao for the consumer to read (never commit it):
+Store the app's token in 1Password for the consumer to read (never commit it):
 
 ```fish
-bao kv put secret/grizzly-platform/platform/ntfy appname_token=tk_xxxxxxxx
+op item edit platform-ntfy --vault grizzly-platform appname_token=tk_xxxxxxxx
 ```
 
 Publish check (with the token):
 
 ```fish
 curl -H "Authorization: Bearer tk_xxxxxxxx" -d "hello" https://ntfy.grizzly-endeavors.com/chores
+```
+
+## Alertmanager → phone for critical alerts
+
+Discord carries every Alertmanager alert, but it is easy to miss, so `severity: critical` also pushes here. Alertmanager posts its own JSON schema, and ntfy renders it with the built-in **`alertmanager`** template (`?template=alertmanager`) so the push reads as a summary rather than raw JSON.
+
+The identity and topic:
+
+```fish
+set POD (kubectl -n ntfy get pod -l app.kubernetes.io/name=ntfy -o name)
+kubectl -n ntfy exec $POD -- ntfy user add alertmanager        # NTFY_PASSWORD=… for non-interactive
+kubectl -n ntfy exec $POD -- ntfy access alertmanager 'platform-critical' rw
+kubectl -n ntfy exec $POD -- ntfy token add alertmanager
+op item edit observability-ntfy-critical --vault grizzly-platform token=tk_xxxxxxxx
+```
+
+Alertmanager reads that token via `vault_monitoring_ntfy_critical_token` and renders the receiver in `r730xd-prometheus`. Critical alerts route to a receiver holding **both** Discord and ntfy — not `continue: true`, because once a child route matches, the parent's receiver never fires. An empty token disables the route, leaving Discord-only as a valid configuration.
+
+Verify routing without sending anything:
+
+```fish
+amtool config routes test --config.file=/opt/observability/prometheus/alertmanager.yml severity=critical alertname=ZFSPoolDegraded   # -> critical
+amtool config routes test --config.file=/opt/observability/prometheus/alertmanager.yml severity=warning alertname=ContainerMemoryHigh   # -> default
 ```
 
 ## Operational readiness

@@ -6,7 +6,7 @@
 # This playbook drives that CLI from the control node against the live server
 # (https://mail.grizzly-endeavors.com), authenticating as the deterministic
 # recovery admin (STALWART_RECOVERY_ADMIN, wired via the stalwart-secrets
-# ExternalSecret → OpenBao platform/stalwart admin_password).
+# ExternalSecret → 1Password platform-stalwart admin_password).
 #
 # It applies the committed declarative plan (files/stalwart/plan.json — blob
 # store, TLS certificate, domain, the four mail listeners with their PROXY
@@ -16,9 +16,13 @@
 #     by querying the live objects — the CLI's in-plan "#ref" resolution is
 #     unreliable for id<Certificate> fields).
 #   - stdout logging (Stalwart defaults to a file tracer inside the container).
-#   - the bootstrap mailbox + its password (a directory secret can't be an
-#     env reference or committed to this public repo — it is injected here from
-#     OpenBao). TEMPORARY: accounts move to an Authentik-backed directory later.
+#   - the mailboxes + their passwords (a directory secret can't be an env
+#     reference or committed to this public repo — they are injected here from
+#     1Password): the bootstrap mailbox, the claude agent mailbox, and the
+#     send-only submission accounts apps authenticate as — noreply (Authentik
+#     one-time codes), gary (grizzly-gameservers beta approvals) and vikunja
+#     (Vikunja reminders and notifications). Moving these onto an
+#     Authentik-backed directory is issue #239.
 #
 # Gotchas baked in (learned the hard way):
 #   - Stalwart 0.16 does NOT expand %{env:...}% macros anywhere; secrets use
@@ -32,7 +36,8 @@
 #   - Stalwart deployed and Running; stalwart-secrets carries a non-empty
 #     STALWART_RECOVERY_ADMIN (PR #109). Verify: kubectl -n stalwart get secret
 #     stalwart-secrets -o jsonpath='{.data.STALWART_RECOVERY_ADMIN}' | base64 -d
-#   - OpenBao platform/stalwart holds admin_password + account_password.
+#   - 1Password platform-stalwart holds admin_password + account_password
+#     + claude_password + noreply_password + gary_password.
 #   - docker + kubeconfig (~/.kube/config) on the control node (the jumpbox has both).
 #   - Vault decrypted (--vault-password-file or .vault_pass).
 #
@@ -49,7 +54,6 @@
 
   vars:
     kubeconfig: "{{ lookup('env', 'HOME') }}/.kube/config"
-    openbao_read_enabled: true
     stalwart_cli_image: "ghcr.io/stalwartlabs/cli:1.0.10"
     stalwart_url: "https://mail.grizzly-endeavors.com"
     stalwart_domain: "grizzly-endeavors.com"
@@ -59,9 +63,26 @@
     stalwart_domain_bearflinn: "bearflinn.com"
     stalwart_tls_san: "mail.grizzly-endeavors.com"
     stalwart_account_local: "bearflinn"
+    # Agent mailbox used by the grizzly-mail Claude Code plugin (test/automation
+    # sends and receives). Provisioned check-then-create — independent of
+    # stalwart_fresh_config, so it lands on re-runs against a live server.
+    stalwart_claude_local: "claude"
+    # Submission account Authentik authenticates as to send enrollment and
+    # sign-in one-time codes (ADR-066). Send-only: nothing delivers here, but it
+    # is a real mailbox because Stalwart's directory has no send-only principal.
+    # Provisioned check-then-create, same as the claude mailbox below.
+    stalwart_noreply_local: "noreply"
+    # Submission account grizzly-gameservers authenticates as to mail beta
+    # approvals from the signup queue. Send-only, same shape as noreply: a real
+    # mailbox because Stalwart's directory has no send-only principal, and named
+    # for the product rather than the repo because it is a From: a person reads.
+    stalwart_gary_local: "gary"
+    # Submission account Vikunja authenticates as to send due-date reminders and
+    # share/assignment notifications (ADR-076). Send-only, same shape as gary.
+    stalwart_vikunja_local: "vikunja"
     # SMTP2GO outbound smarthost (ADR-050 Part C). Home ISP blocks :25, so all
     # outbound relays through SMTP2GO; 587/STARTTLS is reachable from the cluster.
-    # authUsername is injected from OpenBao (vault_smtp2go_username); the password
+    # authUsername is injected from 1Password (vault_smtp2go_username); the password
     # is read by Stalwart from the pod env SMTP2GO_PASSWORD (via the ExternalSecret).
     stalwart_relay_name: "smtp2go"
     stalwart_relay_address: "mail.smtp2go.com"
@@ -78,14 +99,11 @@
   vars_files:
     - "{{ playbook_dir }}/../../ansible/inventory/group_vars/all/vault.yml"
     - "{{ playbook_dir }}/../../ansible/inventory/group_vars/all/vars.yml"
-    # OpenBao auth defaults — inert unless openbao_read_enabled is true.
-    - "{{ playbook_dir }}/../vars/openbao_auth.yml"
 
   pre_tasks:
-    - name: Load OpenBao-sourced platform secrets
+    - name: Load 1Password-sourced platform secrets
       ansible.builtin.include_vars:
-        file: "{{ playbook_dir }}/../vars/openbao_secrets.yml"
-      when: openbao_read_enabled | default(false) | bool
+        file: "{{ playbook_dir }}/../vars/onepassword_secrets.yml"
       tags: [always]
 
     - name: Assert docker is available on the control node
@@ -348,7 +366,7 @@
       changed_when: false
       no_log: true
 
-    - name: Inject the mailbox password from OpenBao (directory secret)
+    - name: Inject the mailbox password from 1Password (directory secret)
       ansible.builtin.command:
         argv:
           - docker
@@ -406,9 +424,411 @@
       changed_when: "'Updated' in stalwart_account_aliases.stdout"
       no_log: true
 
+    # --- claude agent mailbox (grizzly-mail plugin) ---------------------------
+    # Check-then-create rather than stalwart_fresh_config-gated: the account
+    # must land on re-runs against an already-configured server. The password
+    # re-applies every run, same as the bootstrap mailbox. No aliases.
+    - name: Detect whether the claude agent mailbox already exists
+      ansible.builtin.command:
+        argv:
+          - docker
+          - run
+          - --rm
+          - -e
+          - STALWART_URL
+          - -e
+          - STALWART_USER
+          - -e
+          - STALWART_PASSWORD
+          - "{{ stalwart_cli_image }}"
+          - -k
+          - query
+          - Account
+          - --where
+          - "name={{ stalwart_claude_local }}"
+          - --json
+      environment: *cli_env
+      register: stalwart_claude_q_before
+      changed_when: false
+      no_log: true
+
+    - name: Create the claude agent mailbox account if absent
+      ansible.builtin.command:
+        argv:
+          - docker
+          - run
+          - --rm
+          - -e
+          - STALWART_URL
+          - -e
+          - STALWART_USER
+          - -e
+          - STALWART_PASSWORD
+          - "{{ stalwart_cli_image }}"
+          - -k
+          - create
+          - Account/User
+          - --json
+          - "{{ {'name': stalwart_claude_local, 'domainId': stalwart_domain_id, 'description': 'Claude agent mailbox (grizzly-mail plugin; test/automation use)'} | to_json }}"
+      environment: *cli_env
+      register: stalwart_claude_create
+      when: stalwart_claude_local not in stalwart_claude_q_before.stdout
+      changed_when: "'Created' in stalwart_claude_create.stdout"
+      no_log: true
+
+    - name: Look up the claude agent mailbox account id
+      ansible.builtin.command:
+        argv:
+          - docker
+          - run
+          - --rm
+          - -e
+          - STALWART_URL
+          - -e
+          - STALWART_USER
+          - -e
+          - STALWART_PASSWORD
+          - "{{ stalwart_cli_image }}"
+          - -k
+          - query
+          - Account
+          - --where
+          - "name={{ stalwart_claude_local }}"
+          - --json
+      environment: *cli_env
+      register: stalwart_claude_q
+      changed_when: false
+      no_log: true
+
+    - name: Inject the claude mailbox password from 1Password (directory secret)
+      ansible.builtin.command:
+        argv:
+          - docker
+          - run
+          - --rm
+          - -e
+          - STALWART_URL
+          - -e
+          - STALWART_USER
+          - -e
+          - STALWART_PASSWORD
+          - "{{ stalwart_cli_image }}"
+          - -k
+          - update
+          - Account
+          - "{{ (stalwart_claude_q.stdout_lines | select('match', '.+') | first | from_json).id }}"
+          - --field
+          - "credentials/0={{ {'@type': 'Password', 'secret': vault_stalwart_claude_password} | to_json }}"
+      environment: *cli_env
+      register: stalwart_claude_pw
+      changed_when: "'Updated' in stalwart_claude_pw.stdout"
+      no_log: true
+
+    # --- noreply submission account (Authentik one-time codes) ---------------
+    # Authentik authenticates as noreply@grizzly-endeavors.com on :465 to send
+    # enrollment and sign-in codes (ADR-066). Same check-then-create shape as the
+    # claude mailbox: it must land on re-runs against a live server, and the
+    # password re-applies every run so a 1Password rotation converges here.
+    - name: Detect whether the noreply submission account already exists
+      ansible.builtin.command:
+        argv:
+          - docker
+          - run
+          - --rm
+          - -e
+          - STALWART_URL
+          - -e
+          - STALWART_USER
+          - -e
+          - STALWART_PASSWORD
+          - "{{ stalwart_cli_image }}"
+          - -k
+          - query
+          - Account
+          - --where
+          - "name={{ stalwart_noreply_local }}"
+          - --json
+      environment: *cli_env
+      register: stalwart_noreply_q_before
+      changed_when: false
+      no_log: true
+
+    - name: Create the noreply submission account if absent
+      ansible.builtin.command:
+        argv:
+          - docker
+          - run
+          - --rm
+          - -e
+          - STALWART_URL
+          - -e
+          - STALWART_USER
+          - -e
+          - STALWART_PASSWORD
+          - "{{ stalwart_cli_image }}"
+          - -k
+          - create
+          - Account/User
+          - --json
+          - "{{ {'name': stalwart_noreply_local, 'domainId': stalwart_domain_id, 'description': 'Authentik transactional sender (one-time codes; send-only)'} | to_json }}"
+      environment: *cli_env
+      register: stalwart_noreply_create
+      when: stalwart_noreply_local not in stalwart_noreply_q_before.stdout
+      changed_when: "'Created' in stalwart_noreply_create.stdout"
+      no_log: true
+
+    - name: Look up the noreply submission account id
+      ansible.builtin.command:
+        argv:
+          - docker
+          - run
+          - --rm
+          - -e
+          - STALWART_URL
+          - -e
+          - STALWART_USER
+          - -e
+          - STALWART_PASSWORD
+          - "{{ stalwart_cli_image }}"
+          - -k
+          - query
+          - Account
+          - --where
+          - "name={{ stalwart_noreply_local }}"
+          - --json
+      environment: *cli_env
+      register: stalwart_noreply_q
+      changed_when: false
+      no_log: true
+
+    - name: Inject the noreply account password from 1Password (directory secret)
+      ansible.builtin.command:
+        argv:
+          - docker
+          - run
+          - --rm
+          - -e
+          - STALWART_URL
+          - -e
+          - STALWART_USER
+          - -e
+          - STALWART_PASSWORD
+          - "{{ stalwart_cli_image }}"
+          - -k
+          - update
+          - Account
+          - "{{ (stalwart_noreply_q.stdout_lines | select('match', '.+') | first | from_json).id }}"
+          - --field
+          - "credentials/0={{ {'@type': 'Password', 'secret': vault_stalwart_noreply_password} | to_json }}"
+      environment: *cli_env
+      register: stalwart_noreply_pw
+      changed_when: "'Updated' in stalwart_noreply_pw.stdout"
+      no_log: true
+
+    # --- gary submission account (beta-approval mail) ------------------------
+    # grizzly-gameservers authenticates as gary@grizzly-endeavors.com on :587 to
+    # mail beta approvals from its signup queue. Same check-then-create shape as
+    # the noreply account above: it must land on re-runs against a live server,
+    # and the password re-applies every run so a 1Password rotation converges here.
+    - name: Detect whether the gary submission account already exists
+      ansible.builtin.command:
+        argv:
+          - docker
+          - run
+          - --rm
+          - -e
+          - STALWART_URL
+          - -e
+          - STALWART_USER
+          - -e
+          - STALWART_PASSWORD
+          - "{{ stalwart_cli_image }}"
+          - -k
+          - query
+          - Account
+          - --where
+          - "name={{ stalwart_gary_local }}"
+          - --json
+      environment: *cli_env
+      register: stalwart_gary_q_before
+      changed_when: false
+      no_log: true
+
+    - name: Create the gary submission account if absent
+      ansible.builtin.command:
+        argv:
+          - docker
+          - run
+          - --rm
+          - -e
+          - STALWART_URL
+          - -e
+          - STALWART_USER
+          - -e
+          - STALWART_PASSWORD
+          - "{{ stalwart_cli_image }}"
+          - -k
+          - create
+          - Account/User
+          - --json
+          - "{{ {'name': stalwart_gary_local, 'domainId': stalwart_domain_id, 'description': 'grizzly-gameservers beta-approval sender (send-only)'} | to_json }}"
+      environment: *cli_env
+      register: stalwart_gary_create
+      when: stalwart_gary_local not in stalwart_gary_q_before.stdout
+      changed_when: "'Created' in stalwart_gary_create.stdout"
+      no_log: true
+
+    - name: Look up the gary submission account id
+      ansible.builtin.command:
+        argv:
+          - docker
+          - run
+          - --rm
+          - -e
+          - STALWART_URL
+          - -e
+          - STALWART_USER
+          - -e
+          - STALWART_PASSWORD
+          - "{{ stalwart_cli_image }}"
+          - -k
+          - query
+          - Account
+          - --where
+          - "name={{ stalwart_gary_local }}"
+          - --json
+      environment: *cli_env
+      register: stalwart_gary_q
+      changed_when: false
+      no_log: true
+
+    - name: Inject the gary account password from 1Password (directory secret)
+      ansible.builtin.command:
+        argv:
+          - docker
+          - run
+          - --rm
+          - -e
+          - STALWART_URL
+          - -e
+          - STALWART_USER
+          - -e
+          - STALWART_PASSWORD
+          - "{{ stalwart_cli_image }}"
+          - -k
+          - update
+          - Account
+          - "{{ (stalwart_gary_q.stdout_lines | select('match', '.+') | first | from_json).id }}"
+          - --field
+          - "credentials/0={{ {'@type': 'Password', 'secret': vault_stalwart_gary_password} | to_json }}"
+      environment: *cli_env
+      register: stalwart_gary_pw
+      changed_when: "'Updated' in stalwart_gary_pw.stdout"
+      no_log: true
+
+    # --- vikunja submission account (reminders + notifications) -------------
+    # Vikunja authenticates as vikunja@grizzly-endeavors.com on :587 to send
+    # due-date reminders and share/assignment notifications (ADR-076). Same
+    # check-then-create shape as gary above.
+    - name: Detect whether the vikunja submission account already exists
+      ansible.builtin.command:
+        argv:
+          - docker
+          - run
+          - --rm
+          - -e
+          - STALWART_URL
+          - -e
+          - STALWART_USER
+          - -e
+          - STALWART_PASSWORD
+          - "{{ stalwart_cli_image }}"
+          - -k
+          - query
+          - Account
+          - --where
+          - "name={{ stalwart_vikunja_local }}"
+          - --json
+      environment: *cli_env
+      register: stalwart_vikunja_q_before
+      changed_when: false
+      no_log: true
+
+    - name: Create the vikunja submission account if absent
+      ansible.builtin.command:
+        argv:
+          - docker
+          - run
+          - --rm
+          - -e
+          - STALWART_URL
+          - -e
+          - STALWART_USER
+          - -e
+          - STALWART_PASSWORD
+          - "{{ stalwart_cli_image }}"
+          - -k
+          - create
+          - Account/User
+          - --json
+          - "{{ {'name': stalwart_vikunja_local, 'domainId': stalwart_domain_id, 'description': 'Vikunja reminder and notification sender (send-only)'} | to_json }}"
+      environment: *cli_env
+      register: stalwart_vikunja_create
+      when: stalwart_vikunja_local not in stalwart_vikunja_q_before.stdout
+      changed_when: "'Created' in stalwart_vikunja_create.stdout"
+      no_log: true
+
+    - name: Look up the vikunja submission account id
+      ansible.builtin.command:
+        argv:
+          - docker
+          - run
+          - --rm
+          - -e
+          - STALWART_URL
+          - -e
+          - STALWART_USER
+          - -e
+          - STALWART_PASSWORD
+          - "{{ stalwart_cli_image }}"
+          - -k
+          - query
+          - Account
+          - --where
+          - "name={{ stalwart_vikunja_local }}"
+          - --json
+      environment: *cli_env
+      register: stalwart_vikunja_q
+      changed_when: false
+      no_log: true
+
+    - name: Inject the vikunja account password from 1Password (directory secret)
+      ansible.builtin.command:
+        argv:
+          - docker
+          - run
+          - --rm
+          - -e
+          - STALWART_URL
+          - -e
+          - STALWART_USER
+          - -e
+          - STALWART_PASSWORD
+          - "{{ stalwart_cli_image }}"
+          - -k
+          - update
+          - Account
+          - "{{ (stalwart_vikunja_q.stdout_lines | select('match', '.+') | first | from_json).id }}"
+          - --field
+          - "credentials/0={{ {'@type': 'Password', 'secret': vault_stalwart_vikunja_password} | to_json }}"
+      environment: *cli_env
+      register: stalwart_vikunja_pw
+      changed_when: "'Updated' in stalwart_vikunja_pw.stdout"
+      no_log: true
+
     # --- outbound smarthost (SMTP2GO relay, ADR-050 Part C) -------------------
     # All non-local mail relays through SMTP2GO (home ISP blocks :25). The route
-    # carries the literal authUsername (injected from OpenBao — can't be an env
+    # carries the literal authUsername (injected from 1Password — can't be an env
     # ref) and an authSecret that points Stalwart at the pod env SMTP2GO_PASSWORD
     # (materialized by the stalwart-secrets ExternalSecret). The pod must be
     # restarted after the secret gains SMTP2GO_PASSWORD so the env is present —
@@ -486,7 +906,7 @@
       no_log: true
 
     # Keep the mutable fields (address/port/tls/auth) in sync with the vars +
-    # OpenBao username on every run — idempotent, and rotates auth if it changes.
+    # 1Password username on every run — idempotent, and rotates auth if it changes.
     - name: Sync the relay route's mutable fields
       ansible.builtin.command:
         argv:

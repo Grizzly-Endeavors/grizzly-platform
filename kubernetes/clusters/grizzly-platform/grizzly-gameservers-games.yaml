@@ -1,7 +1,7 @@
 # Per-game catalog (Agones GameServer/Fleet templates + NodePort Services) from
 # the grizzly-gameservers repo ./games. dependsOn the cluster Kustomization for
 # CRD-before-CR ordering — a cold sync must not apply GameServer CRs before the
-# Agones CRDs exist. The NodePort Services bind ports in 7000-7010, which
+# Agones CRDs exist. The NodePort Services bind ports in 7000-7099, which
 # requires the apiserver --service-node-port-range to include that band.
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization

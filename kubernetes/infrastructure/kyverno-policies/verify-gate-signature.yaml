@@ -14,7 +14,14 @@ spec:
   # background:false — image verification needs the admission-time context and
   # must not run as a background scan over existing pods.
   background: false
-  failurePolicy: Fail
+  # failurePolicy MUST track failureAction below. This rule is report-only
+  # (failureAction: Audit), so a webhook that errors or times out must not block
+  # admission — Fail here would let any registry slowness reject every pod in a
+  # gated namespace, which is the opposite of what Audit means. The real deploy
+  # boundary is enforce-gameservers-bot-signature, which keeps failurePolicy:
+  # Fail. Flip this to Fail in the same change that flips failureAction: Enforce.
+  # See docs/decisions/069-kyverno-failurepolicy-tracks-failureaction.md.
+  failurePolicy: Ignore
   webhookTimeoutSeconds: 30
   rules:
     - name: verify-first-party-images
@@ -45,8 +52,8 @@ spec:
               entries:
                 - keys:
                     # grizzly-gate cosign PUBLIC key (not secret). Matches the
-                    # private half in OpenBao secret/grizzly-platform/cicd/cosign.
-                    # Rotate: regenerate keypair, bao kv put, replace this block.
+                    # private half in the 1Password item cicd-cosign.
+                    # Rotate: regenerate keypair, op item edit, replace this block.
                     publicKeys: |-
                       -----BEGIN PUBLIC KEY-----
                       MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE4KBckBkLKLINu9WATY50fiJXw1G7

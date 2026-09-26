@@ -1,0 +1,5 @@
+---
+- name: Restart foundation-clickhouse
+  ansible.builtin.command: docker compose up -d --force-recreate
+  args:
+    chdir: "{{ clickhouse_compose_dir }}"

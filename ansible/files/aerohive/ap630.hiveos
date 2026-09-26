@@ -17,9 +17,8 @@
 #
 # VLAN tagging (ADR-060): mgt0 trunks two tagged VLANs up to the SR2024 —
 # restricted (VLAN 20) and trusted (VLAN 30) — alongside untagged native VLAN 1
-# (management + platform). The trusted SSID is tagged to VLAN 30 here and now.
-# Moving the existing SSID onto VLAN 20 is the GO-LIVE step (the commented block
-# by the user-profiles) — until then it rides native VLAN 1, unchanged.
+# (management + platform). The house SSID is tagged to VLAN 20 (its internet is
+# governed out-of-band); the trusted SSID to VLAN 30.
 
 # Standalone mode — never look for a controller/cloud (would override local cfg)
 no capwap client enable
@@ -49,15 +48,12 @@ ssid __TRUSTED_SSID__
 ssid __TRUSTED_SSID__ security-object trusted-sec
 
 # 3b. VLAN mapping via user-profiles (attribute number == VLAN id here).
-#     Trusted SSID -> VLAN 30 — active now.
+#     Both APs must carry the same mapping, or a client gets a different segment
+#     depending on which one it associates with.
 user-profile trusted-up vlan-id 30 attribute 30
 security-object trusted-sec default-user-profile-attr 30
-#     GO-LIVE (apply to BOTH APs together with the out-of-band egress layer):
-#     move the existing SSID onto the restricted segment (VLAN 20). Until these
-#     two lines run, __WIFI_SSID__ rides untagged native VLAN 1 (platform)
-#     exactly as before — nobody is cut over early:
-#         user-profile restricted-up vlan-id 20 attribute 20
-#         security-object home-sec default-user-profile-attr 20
+user-profile restricted-up vlan-id 20 attribute 20
+security-object home-sec default-user-profile-attr 20
 
 # 4. Assign radio profiles to the interfaces (wifi0 = 2.4 GHz, wifi1 = 5 GHz)
 interface wifi0 radio profile rp-2g

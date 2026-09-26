@@ -23,7 +23,7 @@ networking:
 apiServer:
   extraArgs:
     # Widen the NodePort range down to 7000 so grizzly-gameservers can bind
-    # game NodePort Services in 7000-7010 — the band the edge forwards 1:1 over
+    # game NodePort Services in 7000-7099 — the band the edge forwards 1:1 over
     # wg0. Game-server reachability is NodePort-based (no node-pinning), so the
     # external game port equals the NodePort end-to-end.
     - name: "service-node-port-range"

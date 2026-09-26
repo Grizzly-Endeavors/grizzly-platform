@@ -1,7 +1,7 @@
 # ADR-046: Platform Network Segmentation via Home-Eviction
 
 **Date:** 2026-07-02
-**Status:** Accepted (implementation pending — see `docs/runbooks/garage-relocation-cutover.md`)
+**Status:** Accepted — partially live. Refined by [ADR-060](060-downstream-wifi-segmentation.md), which segmented the downstream *WiFi* path into `trusted`/`restricted` VLANs. The *wired* home drops remain on VLAN 1; evicting them is outstanding.
 **Relates to:** [ADR-021](021-off-the-shelf-router-tower-pc-as-worker.md), [ADR-044](044-digi-ex50-as-off-the-shelf-router.md), [ADR-019](019-ingress-and-tls-termination.md)
 
 ## Context
@@ -30,7 +30,7 @@ The natural instinct is "put the platform on its own subnet." There are two ways
 ## Consequences
 
 - **Delivers the segmentation `network.md` has been flagging** with zero disturbance to the cluster, storage, PKI, or Flux manifests. No cert reissue, no PV re-pointing, no CP surgery.
-- **Simplifies the old target design.** `docs/exploration/network-vlans.md` previously dual-homed each lab machine on both the home and lab subnets (two IPs per machine) to get internet + lab on a flat network. With real L3 routing on the EX50 that is unnecessary: platform machines live *solely* on the platform subnet and reach the internet via its gateway. That dual-homing scheme is retired.
+- **Simplifies the old target design.** `archive/network-vlans-design.md` previously dual-homed each lab machine on both the home and lab subnets (two IPs per machine) to get internet + lab on a flat network. With real L3 routing on the EX50 that is unnecessary: platform machines live *solely* on the platform subnet and reach the internet via its gateway. That dual-homing scheme is retired.
 - **Segmentation is staged after the router swap, not during it.** The runbook cuts the EX50 in on the still-flat `10.0.0.0/24` first (verifiable, reversible), then introduces the home subnet as an additive step — so the platform is never renumbered and each variable is isolated.
 - **Firewall policy becomes real config.** The EX50 must express home↔platform rules; because the EX50 stays in IaC (ADR-044), those rules are version-controlled.
 
@@ -42,11 +42,11 @@ Keeping the platform on the **default** `10.0.0.0/24` is a known future problem:
 
 - **Renumber the platform now (option A).** Rejected for now: high-risk stateful surgery for a segmentation outcome that home-eviction achieves for free. Justified only by the mesh driver above, which is not yet being executed.
 - **Stay flat, rely on host firewalls + K8s network policy.** Rejected: that is the status quo the purchased router was meant to end; L3 segmentation is the whole point of having the EX50.
-- **Storage sub-VLAN now.** Deferred (as in `network-vlans.md`) until traffic baselines show storage I/O contends on the flat lab segment.
+- **Storage sub-VLAN now.** Deferred (as in `archive/network-vlans-design.md`) until traffic baselines show storage I/O contends on the flat lab segment.
 
 ## References
 
 - ADR-044 — Digi EX50 (enforces the segmentation and holds the firewall policy in IaC).
-- ADR-021 / `docs/exploration/network-vlans.md` — original VLAN design (dual-homing retired here).
+- ADR-021 / `archive/network-vlans-design.md` — original VLAN design (dual-homing retired here).
 - ADR-016 — single control plane (why a CP IP change is high-risk).
 - ADR-019 — ingress topology (unaffected; tunnel relocation handled in ADR-047).

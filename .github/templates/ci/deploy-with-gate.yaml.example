@@ -25,15 +25,43 @@ jobs:
     outputs:
       digest: ${{ steps.push.outputs.digest }}
     steps:
-      - uses: actions/checkout@v4
-      - name: Build and push (capture digest)
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      # The runners' DinD layer store is an emptyDir that dies with the pod, so
+      # a plain `docker build` is fully cold every run. BuildKit's registry
+      # cache persists layers in zot instead (ADR-057 recipe): dependency
+      # layers become LAN-local cache hits across runs.
+      - name: Build and push via BuildKit registry cache (capture digest)
         id: push
         run: |
           set -euo pipefail
-          docker build -t "$REGISTRY/$IMAGE_NAME:${GITHUB_SHA}" .
-          docker push "$REGISTRY/$IMAGE_NAME:${GITHUB_SHA}"
-          # Resolve the digest of what we just pushed; the gate signs by digest.
-          digest=$(docker inspect --format='{{index .RepoDigests 0}}' "$REGISTRY/$IMAGE_NAME:${GITHUB_SHA}" | cut -d@ -f2)
+          # The buildx builder's buildkitd does its own registry I/O and
+          # ignores dockerd's --registry-mirror/--insecure-registry — mirror
+          # docker.io through zot and mark zot plain-HTTP here.
+          cat > /tmp/buildkitd.toml <<'BKEOF'
+          [registry."docker.io"]
+            mirrors = ["registry.registry.svc.cluster.local:5000"]
+          [registry."registry.registry.svc.cluster.local:5000"]
+            http = true
+          BKEOF
+          # Pin the builder image to the current moby/buildkit release.
+          docker buildx create --name ci \
+            --driver docker-container \
+            --driver-opt image=moby/buildkit:v0.31.2 \
+            --config /tmp/buildkitd.toml
+          # provenance/sbom off so the push stays a single image manifest —
+          # the gate signs this exact digest and Kyverno verifies it.
+          docker buildx build --builder ci \
+            --cache-from "type=registry,ref=$REGISTRY/$IMAGE_NAME:buildcache" \
+            --cache-to "type=registry,ref=$REGISTRY/$IMAGE_NAME:buildcache,mode=max,oci-mediatypes=true,image-manifest=true" \
+            --output "type=registry,name=$REGISTRY/$IMAGE_NAME:${GITHUB_SHA}" \
+            --provenance=false --sbom=false \
+            --metadata-file /tmp/build-metadata.json \
+            .
+          digest=$(node -pe "require('/tmp/build-metadata.json')['containerimage.digest']")
+          case "$digest" in
+            sha256:*) : ;;
+            *) echo "::error::empty/invalid image digest from buildx metadata: '${digest}'"; exit 1 ;;
+          esac
           echo "digest=${digest}" >> "$GITHUB_OUTPUT"
 
   gate:
@@ -47,7 +75,7 @@ jobs:
     needs: gate # only runs if the gate passed and signed the image
     runs-on: lab-runners
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       # ADR-020 model: bump deploy/values.yaml image tag to the signed digest
       # and commit [skip ci]; Flux reconciles. (Replace with your deploy step.)
       - name: Bump deployed tag

@@ -1,7 +1,7 @@
 # ADR-045: Relocate the Platform to the Garage
 
 **Date:** 2026-07-02
-**Status:** Accepted (implementation pending — see `docs/runbooks/garage-relocation-cutover.md`)
+**Status:** Accepted — live (platform relocated to the garage 2026-07-05)
 **Relates to:** [ADR-008](008-keep-existing-switch-chain-for-home.md), [ADR-006](006-proceed-without-ups.md), [ADR-044](044-digi-ex50-as-off-the-shelf-router.md)
 
 ## Context
@@ -18,7 +18,7 @@ This inverts the premise of [ADR-008](008-keep-existing-switch-chain-for-home.md
 
 **Relocate all platform hardware — R730xd, Quanta, Intel NUC, Optiplex, Inspiron, Tower PC (at join), jumpbox — plus the SR2024 and the Xfinity gateway into the garage.** The physical move is a Layer-1 change only: every machine keeps its static `10.0.0.x` address, so from the machines' point of view nothing changes.
 
-**The move is executed as a single, staged maintenance window** with verified, independently reversible checkpoints — see `docs/runbooks/garage-relocation-cutover.md`. The physical relocation (on the existing Xfinity-routed flat network) is the first checkpoint and is fully reversible before any routing change is attempted.
+**The move is executed as a single, staged maintenance window** with verified, independently reversible checkpoints — see `archive/garage-ex50-cutover.md`. The physical relocation (on the existing Xfinity-routed flat network) is the first checkpoint and is fully reversible before any routing change is attempted.
 
 **The garage's below-grade environment is treated as a first-class operational concern** (see Consequences) rather than assumed benign.
 
@@ -44,4 +44,4 @@ This inverts the premise of [ADR-008](008-keep-existing-switch-chain-for-home.md
 - ADR-006 — proceed without UPS (partially revisited for the network core).
 - ADR-044 — Digi EX50 router (co-located, cut over in the same window).
 - ADR-019 — ingress topology (unaffected by the physical move).
-- `docs/runbooks/garage-relocation-cutover.md` — staged procedure with per-checkpoint verification and rollback.
+- `archive/garage-ex50-cutover.md` — staged procedure with per-checkpoint verification and rollback, as executed.

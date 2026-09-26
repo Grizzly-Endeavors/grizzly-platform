@@ -1,5 +1,0 @@
----
-# Control plane specific configuration
-# References network.yml for IP address (single source of truth)
-
-k8s_control_plane_endpoint: "{{ dell_inspiron_ip }}"

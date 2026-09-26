@@ -1,7 +1,7 @@
 # ADR-044: Digi EX50 as the Off-the-Shelf Router
 
 **Date:** 2026-07-02
-**Status:** Accepted (implementation pending — see `docs/runbooks/garage-relocation-cutover.md`)
+**Status:** Accepted — live (EX50 is the router at `10.0.0.1`; cut over 2026-07-08)
 **Relates to:** [ADR-021](021-off-the-shelf-router-tower-pc-as-worker.md), [ADR-019](019-ingress-and-tls-termination.md), [ADR-036](036-internal-dns-zone.md)
 
 ## Context
@@ -33,7 +33,7 @@ Two facts reshape ADR-021's assumptions:
 ## Consequences
 
 - **Routing comes back into IaC — deliberately.** We re-take the config-maintenance burden ADR-021 tried to shed, but we get reproducible, version-controlled router config on top of vendor-maintained firmware. This is a *middle path* between "build your own router" (ADR-001, rejected) and "buy a black box configured by hand" (ADR-021's original framing): bought hardware, scripted config.
-- **The SR2024 trunk is mandatory, not optional.** With only two ports on the EX50, the single LAN port trunks to the SR2024, which fans out to every machine and AP. This matches the target topology in `docs/exploration/network-vlans.md`.
+- **The SR2024 trunk is mandatory, not optional.** With only two ports on the EX50, the single LAN port trunks to the SR2024, which fans out to every machine and AP. This matches the target topology in `archive/network-vlans-design.md`.
 - **Unblocks the deferred network work.** VLAN segmentation ([ADR-046](046-platform-network-segmentation-via-home-eviction.md)), the internal DNS resolver's move off R730xd ([ADR-036](036-internal-dns-zone.md)), and the ingress-tunnel relocation ([ADR-047](047-ingress-tunnel-relocation-to-ex50.md)) all become possible once the EX50 is the router.
 - **Firmware is a gate.** WireGuard on DAL requires ≥ 24.3.28.88; the EX50 must be firmware-checked (and updated if needed) before it can host the ingress tunnel (ADR-047).
 - **ADR-021's model question is closed**; its Tower-PC-as-worker and GPU-host decisions are unaffected.
@@ -51,5 +51,5 @@ Two facts reshape ADR-021's assumptions:
 - ADR-046 — network segmentation via home-eviction (what VLANs the EX50 enforces).
 - ADR-047 — ingress-tunnel relocation to the EX50.
 - ADR-036 — internal DNS zone (resolver's long-term home is this router).
-- `docs/runbooks/garage-relocation-cutover.md` — the staged cutover procedure.
+- `archive/garage-ex50-cutover.md` — the staged cutover procedure as executed.
 - Digi DAL WireGuard support: https://www.digi.com/support/knowledge-base/dal-router-wireguard-client

@@ -2,23 +2,28 @@
 
 One line per runbook. See [`README.md`](README.md) for what runbooks are and when to reach for one.
 
-## Secrets (OpenBao)
+## Secrets
 
-- [openbao-quickref.md](openbao-quickref.md) — addresses, paths, policies, auth methods, path layout, rotate/add how-tos. **Start here for secrets.**
-- [openbao-add-secret.md](openbao-add-secret.md) — adding a secret from the control node's persistent root session.
-- [openbao-rotation.md](openbao-rotation.md) — unseal-key rotation procedure.
-- [openbao-disaster-recovery.md](openbao-disaster-recovery.md) — recovering OpenBao from a sealed/lost state.
-- [secrets-migration.md](secrets-migration.md) — Phase A–E guide for moving consumers onto OpenBao.
+- [onepassword-quickref.md](onepassword-quickref.md) — the vault, the three service account tokens, rate limits, alert response, token rotation, and standing up a control node. **The secrets runbook.**
 
 ## Mail (Stalwart)
 
 - [mail.md](mail.md) — deployment status, architecture, and operator runbook for the mail stack. **Start here for mail.**
 - [stalwart-cli.md](stalwart-cli.md) — driving Stalwart's schema-driven config CLI (verbs, object model, recipes).
 
-## Storage (versitygw S3)
+## Storage
 
+- [zfs-pool-maintenance.md](zfs-pool-maintenance.md) — quiescing everything that touches `tank` so the pool can be exported, and bringing it back in order.
 - [versitygw-deploy.md](versitygw-deploy.md) — how the s3-hot / s3-bulk gateways are stood up and operated.
 - [versitygw-cli.md](versitygw-cli.md) — driving the versitygw tool (accounts, buckets, IAM).
+
+## LLM observability
+
+- [langfuse.md](langfuse.md) — operating Langfuse: health, adding projects, onboarding, upgrades, and the migration/SSO/S3 failure modes.
+
+## Analytics
+
+- [metabase.md](metabase.md) — operating Metabase: standup, adding a database, upgrades (one-way migrations), and the grant/SSO failure modes.
 
 ## CI Gate
 
@@ -27,6 +32,7 @@ One line per runbook. See [`README.md`](README.md) for what runbooks are and whe
 ## Identity / invites
 
 - [invite-authentik-reader.md](invite-authentik-reader.md) — the Authentik read-only group reader backing the invite console.
+- [authentik-email-otp.md](authentik-email-otp.md) — email one-time-code sign-up and passwordless sign-in (health, delivery failures, the auto-ban trap).
 
 ## Notifications
 
@@ -34,7 +40,6 @@ One line per runbook. See [`README.md`](README.md) for what runbooks are and whe
 
 ## Assistant
 
-- [residuum.md](residuum.md) — Residuum platform assistant on the R730xd: deploy/upgrade, health, adding CLI tools, recovery.
 
 ## Cluster
 
@@ -42,7 +47,6 @@ One line per runbook. See [`README.md`](README.md) for what runbooks are and whe
 
 ## Network / hardware
 
-- [garage-relocation-cutover.md](garage-relocation-cutover.md) — staged garage relocation + EX50 router cutover plan and checkpoints.
 - [ex50-console-access.md](ex50-console-access.md) — reaching the Digi EX50 CLI during bench bring-up.
 - [ex50-dal-cli.md](ex50-dal-cli.md) — driving the EX50 DAL config (Admin CLI + `/bin/config` mechanics, gotchas, scheduled-script recipe).
 - [aerohive-ap-setup.md](aerohive-ap-setup.md) — standalone WiFi setup for the AP630 + AP130.

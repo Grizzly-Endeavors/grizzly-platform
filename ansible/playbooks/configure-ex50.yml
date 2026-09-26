@@ -14,7 +14,7 @@
 # VLAN, Ckpt D) and the ingress-tunnel move (Ckpt E) are separate work.
 #
 # This config carries NO secrets (SSH is key-auth, already enrolled; the EX50's
-# own WiFi radios stay off), so nothing here reads OpenBao/vault.
+# own WiFi radios stay off), so nothing here reads 1Password/vault.
 #
 # Reaching the CLI: pre-cutover the box has no IPv4 on 10.0.0.0/24, so use its
 # IPv6 link-local on the LAN segment; post-cutover it's 10.0.0.1. SSH key auth

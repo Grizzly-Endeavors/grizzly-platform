@@ -1,0 +1,47 @@
+version: 1
+metadata:
+  name: metabase
+entries:
+  # Forward-auth (single application) proxy provider fronting Metabase, the
+  # platform analytics service at analytics.grizzly-endeavors.com (ADR-065).
+  # Third proxy provider in the homelab, after grizzly-invite-admin and
+  # grizzly-webmail.
+  - model: authentik_providers_proxy.proxyprovider
+    id: metabase-provider
+    identifiers:
+      name: metabase
+    attrs:
+      mode: forward_single
+      external_host: https://analytics.grizzly-endeavors.com
+      authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+      invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
+
+  - model: authentik_core.application
+    id: metabase-app
+    identifiers:
+      slug: metabase
+    attrs:
+      name: Metabase
+      provider: !KeyOf metabase-provider
+      meta_launch_url: https://analytics.grizzly-endeavors.com
+      meta_description: "Dashboards and ad-hoc queries over the platform's data (grizzly-admins only)"
+      policy_engine_mode: any
+
+  # Same rule as grizzly-invite's provisioning UI: scope both app-library
+  # visibility and access to grizzly-admins (ADR-049). A non-admin who hits the
+  # URL directly gets the outpost's generic 403. This is the only gate — unlike
+  # the invite broker, Metabase does not re-check X-authentik-groups in-app, so
+  # anyone who passes this binding reaches every data source Metabase holds.
+  - model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf metabase-app
+      group: !Find [authentik_core.group, [name, grizzly-admins]]
+      order: 0
+    attrs:
+      enabled: true
+      negate: false
+
+  # NOTE: the embedded-outpost provider binding lives in
+  # blueprints/grizzly-webmail.yaml, which enumerates every proxy provider (a
+  # blueprint replaces the M2M list wholesale, so only one file may own it).
+  # Do not add an outpost entry here.

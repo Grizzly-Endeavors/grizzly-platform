@@ -7,13 +7,13 @@
 #
 #   Play 1  Provision the `authentik` database + login role on the foundation
 #           PostgreSQL (the K8s ExternalSecret and this role share one password,
-#           sourced from OpenBao secret/grizzly-platform/platform/authentik).
+#           sourced from 1Password platform-authentik).
 #   Play 2  Register the authentik server metrics NodePort (30891) as a
 #           Prometheus scrape target and load the AuthentikDown alert.
 #
 # Prerequisites:
 #   - Foundation Postgres running (deploy-foundation-stores.yml).
-#   - OpenBao seeded: secret/grizzly-platform/platform/authentik with keys
+#   - 1Password seeded: platform-authentik with keys
 #     secret_key, db_password, bootstrap_password, bootstrap_token. The
 #     db_password value becomes the authentik role password below — generate it
 #     WITHOUT single quotes (e.g. `openssl rand -base64 36`).
@@ -34,18 +34,13 @@
   gather_facts: no
   tags: [db]
 
-  # The authentik role password lives only in OpenBao (no static vault.yml
-  # fallback), so this play always reads from OpenBao.
-  vars:
-    openbao_read_enabled: true
-
-  vars_files:
-    - "{{ playbook_dir }}/../vars/openbao_auth.yml"
+  # The authentik role password lives only in 1Password (no static vault.yml
+  # fallback), so this play always reads from 1Password.
 
   pre_tasks:
-    - name: Load OpenBao-sourced platform secrets
+    - name: Load 1Password-sourced platform secrets
       ansible.builtin.include_vars:
-        file: "{{ playbook_dir }}/../vars/openbao_secrets.yml"
+        file: "{{ playbook_dir }}/../vars/onepassword_secrets.yml"
 
     - name: Verify foundation Postgres container is running
       ansible.builtin.command: docker exec foundation-postgres pg_isready -U postgres
@@ -78,7 +73,7 @@
       when: ak_role.stdout != "1"
       no_log: true
 
-    - name: Keep the authentik role password in sync with OpenBao
+    - name: Keep the authentik role password in sync with 1Password
       ansible.builtin.shell:
         cmd: >-
           set -o pipefail;

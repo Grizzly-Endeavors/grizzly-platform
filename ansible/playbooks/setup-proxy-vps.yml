@@ -23,20 +23,13 @@
   become: yes
 
   vars_files:
-    - ../group_vars/all/vars.yml
-    - ../group_vars/all/vault.yml
-    # OpenBao auth defaults — inert unless openbao_read_enabled is true.
-    # NOTE: this playbook currently reads from ansible/group_vars/all/
-    # (the stale duplicate tree); Phase E3 consolidates onto
-    # ansible/inventory/group_vars/all/. Until then, the path above is
-    # load-bearing.
-    - "{{ playbook_dir }}/../vars/openbao_auth.yml"
+    - "{{ playbook_dir }}/../../ansible/inventory/group_vars/all/vault.yml"
+    - "{{ playbook_dir }}/../../ansible/inventory/group_vars/all/vars.yml"
 
   pre_tasks:
-    - name: Load OpenBao-sourced platform secrets
+    - name: Load 1Password-sourced platform secrets
       ansible.builtin.include_vars:
-        file: "{{ playbook_dir }}/../vars/openbao_secrets.yml"
-      when: openbao_read_enabled | default(false) | bool
+        file: "{{ playbook_dir }}/../vars/onepassword_secrets.yml"
       tags: [always]
 
     - name: Verify SSH connectivity

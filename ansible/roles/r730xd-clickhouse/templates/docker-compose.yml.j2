@@ -1,0 +1,34 @@
+# Managed by Ansible — r730xd-clickhouse role
+# Foundation OLAP store (ClickHouse) for grizzly-platform services
+# Data: {{ clickhouse_data_dir }}
+
+services:
+  clickhouse:
+    image: {{ clickhouse_image }}
+    container_name: foundation-clickhouse
+    restart: unless-stopped
+    network_mode: host
+    # The image's own clickhouse user. Named explicitly so the ZFS dataset's
+    # ownership and the running process cannot drift apart.
+    user: "101:101"
+    volumes:
+      - {{ clickhouse_data_dir }}:/var/lib/clickhouse
+      - {{ clickhouse_logs_dir }}:/var/log/clickhouse-server
+      - {{ clickhouse_compose_dir }}/config.xml:/etc/clickhouse-server/config.d/grizzly.xml:ro
+      - {{ clickhouse_compose_dir }}/users.xml:/etc/clickhouse-server/users.d/grizzly.xml:ro
+    ulimits:
+      # ClickHouse opens a file per column part and hits the default 1024 fast.
+      nofile:
+        soft: 262144
+        hard: 262144
+    healthcheck:
+      test: ["CMD", "clickhouse-client", "--port", "{{ clickhouse_native_port }}", "--password", "{{ clickhouse_password }}", "--query", "SELECT 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"

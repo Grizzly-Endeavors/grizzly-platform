@@ -1,0 +1,66 @@
+# Public route: analytics.grizzly-endeavors.com. TLS terminates upstream at the
+# VPS Caddy (wildcard *.grizzly-endeavors.com), which reverse-proxies to this
+# nginx ingress over the WireGuard tunnel — no per-service cert-manager issuer,
+# and no DNS change (the wildcard already resolves).
+#
+# Forward-auth gate for the whole app. Authentik's embedded outpost (served by
+# authentik-server on /outpost.goauthentik.io) authenticates the user via the
+# nginx external-auth subrequest; the metabase blueprint binds a grizzly-admins
+# policy, the same rule that scopes grizzly-invite's provisioning UI. Metabase
+# then applies its own account model behind the gate — the SSO layer is what
+# keeps the login page off the public internet, not a replacement for it.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: metabase
+  namespace: metabase
+  labels:
+    app.kubernetes.io/name: metabase
+  annotations:
+    nginx.ingress.kubernetes.io/auth-url: "http://authentik-server.authentik.svc.cluster.local:80/outpost.goauthentik.io/auth/nginx"
+    nginx.ingress.kubernetes.io/auth-signin: "https://analytics.grizzly-endeavors.com/outpost.goauthentik.io/start?rd=$escaped_request_uri"
+    nginx.ingress.kubernetes.io/auth-response-headers: "Set-Cookie,X-authentik-username,X-authentik-groups,X-authentik-email,X-authentik-uid"
+    nginx.ingress.kubernetes.io/auth-proxy-set-headers: "metabase/metabase-auth-headers"
+    # A question against a few million occupancy samples can outrun the default
+    # 60s. The ceiling is deliberate: past this, the query belongs in a
+    # materialized model, not in a longer timeout.
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: analytics.grizzly-endeavors.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: metabase
+                port:
+                  number: 80
+---
+# Unauthenticated route for the forward-auth endpoints themselves — this IS the
+# sign-in surface, so gating it would loop. Routes /outpost.goauthentik.io on
+# analytics.grizzly-endeavors.com to the embedded outpost via the ExternalName
+# bridge. A more specific path than "/", so nginx matches it first.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: metabase-outpost
+  namespace: metabase
+  labels:
+    app.kubernetes.io/name: metabase
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: analytics.grizzly-endeavors.com
+      http:
+        paths:
+          - path: /outpost.goauthentik.io
+            pathType: Prefix
+            backend:
+              service:
+                name: authentik-outpost
+                port:
+                  number: 80

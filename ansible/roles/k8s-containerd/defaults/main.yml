@@ -6,8 +6,19 @@
 
 # === Containerd ===
 
-# Package name — use "containerd" for Debian repos, "containerd.io" for Docker repos
-containerd_package: "containerd"
+# containerd.io comes from the Docker apt repo (ADR-067) — Debian stable's own
+# containerd package tracks a branch too old for current Kubernetes.
+containerd_package: "containerd.io"
+
+# Pinned containerd version — before bumping, check the K8s support matrix:
+# https://github.com/containerd/containerd/blob/main/RELEASES.md
+# The package is apt-held; upgrade-containerd.yml rolls a bump across nodes.
+containerd_version: "2.2.6"
+
+# Docker apt repository (source of containerd.io)
+containerd_apt_repo_url: "https://download.docker.com/linux/debian"
+containerd_apt_key_url: "https://download.docker.com/linux/debian/gpg"
+containerd_apt_keyring: "/etc/apt/keyrings/docker-apt-keyring.gpg"
 
 # === CNI Plugins ===
 
@@ -15,15 +26,16 @@ containerd_package: "containerd"
 containerd_cni_bin_dir: "/opt/cni/bin"
 
 # CNI plugins version from containernetworking/plugins GitHub releases
-containerd_cni_plugins_version: "1.6.2"
+containerd_cni_plugins_version: "1.9.1"
 
 # Architecture for CNI plugin downloads
 containerd_cni_arch: "amd64"
 
 # === crictl ===
 
-# crictl version from kubernetes-sigs/cri-tools GitHub releases
-containerd_crictl_version: "1.32.0"
+# crictl version from kubernetes-sigs/cri-tools GitHub releases — keep within
+# one minor of the cluster's Kubernetes version
+containerd_crictl_version: "1.35.0"
 
 # CRI CLI timeout in seconds
 containerd_crictl_timeout: 10

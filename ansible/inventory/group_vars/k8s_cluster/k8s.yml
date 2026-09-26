@@ -3,8 +3,9 @@
 # CIDRs per ADR-014, dual-stack per k8s-containerd sysctl setup
 # IP addresses: see ansible/group_vars/all/network.yml (single source of truth)
 
-# Kubernetes minor version — latest patch installed automatically
-kubernetes_version: "1.33"
+# Kubernetes minor version — latest patch installed automatically.
+# kubeadm upgrades one minor at a time; see docs/runbooks/k8s-cluster-ops.md
+kubernetes_version: "1.35"
 
 # Pod network CIDRs (dual-stack)
 k8s_pod_cidr_v4: "10.244.0.0/16"

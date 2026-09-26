@@ -1,6 +1,6 @@
 # Digi EX50 DAL Admin CLI — interface map
 
-A map of the EX50's scriptable surface (Digi Accelerated Linux, DAL), captured live over SSH during bench bring-up. This is the automation reference behind [ADR-044](decisions/044-digi-ex50-as-off-the-shelf-router.md) ("its configuration stays in IaC") and the future EX50 Ansible role. For *how to reach* the CLI, see [runbooks/ex50-console-access.md](runbooks/ex50-console-access.md); for the cutover it feeds, see [runbooks/garage-relocation-cutover.md](runbooks/garage-relocation-cutover.md).
+A map of the EX50's scriptable surface (Digi Accelerated Linux, DAL), captured live over SSH during bench bring-up. This is the automation reference behind [ADR-044](decisions/044-digi-ex50-as-off-the-shelf-router.md) ("its configuration stays in IaC") and the future EX50 Ansible role. For *how to reach* the CLI, see [runbooks/ex50-console-access.md](runbooks/ex50-console-access.md); The cutover it fed is complete ([ADR-044](decisions/044-digi-ex50-as-off-the-shelf-router.md)).
 
 Last updated: 2026-07-03 · Captured from firmware **25.11.10.42** (schema version 1276) over SSH key auth. Bench unit, WAN down.
 
@@ -37,7 +37,7 @@ The DAL **Admin CLI** is the same over SSH and serial. Three usable modes, all o
 - **`show config`** prints only the **delta from factory defaults**, as replayable `add`/`set`/`del` commands (this unit's delta is ~20 lines). This is the minimal, version-controllable representation — the thing an Ansible role renders and pushes.
 - **`config` → `show <path>`** prints the *full* subtree including every default — schema introspection, not for storage.
 - Round-trip: capture `show config` → template it → apply via piped stdin (mode 2) → `save`. Full-image backup/restore exists separately (`system` domain) but the delta-replay path is the IaC one.
-- **Secrets note:** `show config` embeds obfuscated secrets (e.g. WiFi PSK as `$ob1$…`, reversible). This repo is public — any committed config sample must be redacted; render real values through OpenBao/ESO at apply time, never commit them.
+- **Secrets note:** `show config` embeds obfuscated secrets (e.g. WiFi PSK as `$ob1$…`, reversible). This repo is public — any committed config sample must be redacted; render real values through 1Password/ESO at apply time, never commit them.
 
 ---
 

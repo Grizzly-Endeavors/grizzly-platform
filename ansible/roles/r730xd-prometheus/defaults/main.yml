@@ -75,6 +75,9 @@ prometheus_observability_targets:
         regex: 'redis_(.*)'
         target_label: __name__
         replacement: 'kv_cache_${1}'
+  # ClickHouse serves Prometheus natively — no exporter sidecar needed.
+  - job: "clickhouse"
+    target: "{{ r730xd_ip }}:9126"
   - job: "cadvisor"
     target: "{{ r730xd_ip }}:8080"
   # Caddy's dedicated metrics listener (caddy_metrics_port), scraped over the
@@ -92,6 +95,11 @@ prometheus_blackbox_targets:
   # the gateway is down, so probe the gateway's own health endpoint directly.
   - "http://{{ r730xd_ip }}:7070/health"
   - "http://{{ r730xd_ip }}:7072/health"
+  # Lab apps, probed on their public hostnames so each check exercises the whole
+  # path: VPS Caddy, the WireGuard tunnel, ingress-nginx and the app itself.
+  - "https://nextcloud.grizzly-endeavors.com/status.php"
+  - "https://photos.grizzly-endeavors.com/api/server/ping"
+  - "https://todo.grizzly-endeavors.com/health"
 
 prometheus_blackbox_exporter: "{{ r730xd_ip }}:9115"
 
@@ -102,3 +110,10 @@ prometheus_k8s_apiserver_target: ""
 # Alertmanager — webhook receiver (optional)
 # Set monitoring_alert_webhook_url in group_vars to enable
 # monitoring_alert_webhook_url: "https://ntfy.example.com/platform-alerts"
+
+# Alertmanager — ntfy push for severity=critical, on top of the Discord trail.
+# Discord is easy to miss; anything paging-worthy also goes to a phone. Empty
+# token disables the route, so Discord-only stays a valid configuration.
+monitoring_ntfy_url: "https://ntfy.grizzly-endeavors.com"
+monitoring_ntfy_critical_topic: "platform-critical"
+monitoring_ntfy_critical_token: ""

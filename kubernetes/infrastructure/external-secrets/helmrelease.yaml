@@ -8,10 +8,11 @@ spec:
   chart:
     spec:
       chart: external-secrets
-      # Chart versioning aligned with app version since 2.x. Bump
-      # intentionally — ESO has occasionally shipped breaking CRD
-      # changes between minors; watch release notes.
-      version: "0.18.2"
+      # Chart version tracks app version. Bump intentionally — ESO has
+      # occasionally shipped breaking CRD changes between minors; read
+      # the release notes and check that the provider fields and value
+      # keys this release sets still exist before moving.
+      version: "2.8.0"
       sourceRef:
         kind: HelmRepository
         name: external-secrets
@@ -21,31 +22,35 @@ spec:
   values:
     installCRDs: true
     replicaCount: 1
+    # Sized for 2.x with provider SDKs loaded. The controller links a client
+    # per configured provider, so its footprint grows as stores are added —
+    # 128Mi was survivable on 0.18.2 with one provider and OOMKilled the
+    # moment the 1Password SDK came into play.
     resources:
       requests:
-        cpu: 20m
-        memory: 64Mi
+        cpu: 50m
+        memory: 192Mi
       limits:
-        cpu: 100m
-        memory: 128Mi
+        cpu: 1000m
+        memory: 768Mi
     webhook:
       replicaCount: 1
       resources:
         requests:
-          cpu: 20m
-          memory: 32Mi
+          cpu: 25m
+          memory: 64Mi
         limits:
-          cpu: 100m
-          memory: 128Mi
+          cpu: 500m
+          memory: 256Mi
     certController:
       replicaCount: 1
       resources:
         requests:
-          cpu: 20m
-          memory: 32Mi
+          cpu: 25m
+          memory: 96Mi
         limits:
-          cpu: 100m
-          memory: 128Mi
+          cpu: 500m
+          memory: 256Mi
     # ServiceMonitor requires Prometheus Operator; r730xd Prometheus
     # scrapes ESO via a NodePort-exposed /metrics endpoint instead.
     serviceMonitor:
@@ -54,8 +59,7 @@ spec:
       service:
         enabled: true
     # The operator runs under a dedicated SA (default "external-secrets"
-    # in the chart). Its K8s auth role in OpenBao is bound to that SA
-    # + namespace.
+    # in the chart).
     serviceAccount:
       create: true
       name: external-secrets

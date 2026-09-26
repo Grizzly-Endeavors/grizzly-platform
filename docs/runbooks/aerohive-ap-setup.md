@@ -1,6 +1,6 @@
 # Runbook: Aerohive AP standalone WiFi setup (AP630 + AP130)
 
-Stands up house WiFi on the Aerohive **AP630** (primary, WiFi 6) and one **AP130** (secondary) as a single roaming network, in **standalone mode** (no controller/cloud). This is Checkpoint B of the [garage relocation + EX50 cutover](garage-relocation-cutover.md) — the APs must be serving WiFi *before* the Xfinity gateway is bridged in Checkpoint C, so bridging doesn't black out the house.
+Stands up house WiFi on the Aerohive **AP630** (primary, WiFi 6) and one **AP130** (secondary) as a single roaming network, in **standalone mode** (no controller/cloud). The APs carry the downstream `trusted` and `restricted` WiFi segments, tagged onto the SR2024 trunk ([ADR-060](../decisions/060-downstream-wifi-segmentation.md)).
 
 The committed configs are `ansible/files/aerohive/ap630.hiveos` and `ap130.hiveos`. They carry `__PLACEHOLDER__` tokens (SSID, PSK, hive secret) that are rendered in at paste time and never committed. HiveOS is order-sensitive and driven over legacy-SSH, so these are applied by paste (not a full Ansible role) — see [ADR-009](../decisions/009-start-with-ap230-only.md) context, though note this deployment uses AP630 + AP130 rather than the AP230.
 
@@ -36,7 +36,19 @@ LEGACY='-oKexAlgorithms=+diffie-hellman-group14-sha1 -oHostKeyAlgorithms=+ssh-rs
 # AP130 (legacy): ssh $LEGACY admin@<ap130-ip>
 ```
 
-If a device rejects the connection with a cipher/kex error, add `-c aes128-cbc` (or `aes256-ctr`) to `LEGACY`. Device IPs: discover via the switch/DHCP (vendor class `AEROHIVE`, hostname `AH-XXXXXX`); the AP130 in scope is `AH-b614c0` per the inventory table.
+If a device rejects the connection with a cipher/kex error, add `-c aes128-cbc` (or `aes256-ctr`) to `LEGACY`.
+
+**Finding an AP's address.** `mgt0` carries no static address on either AP, so both are DHCP clients out of the EX50's pool and **an AP's address changes across a reboot**. Don't rely on a remembered IP. The most reliable locator is to ask an AP that is already up for its hive neighbours — this works even when you have no idea what address the other one took:
+
+```bash
+printf 'console page 0\nshow amrp neighbor\nexit\n' | ssh $LEGACY admin@<known-ap-ip>
+#   eth0:
+#       3485:8403:ca80 10.0.0.71 recv 1 sec ago     <- the other AP, with its current IP
+```
+
+Failing that, look for hostname `AH-XXXXXX` (the suffix is the MAC tail) in the EX50's `show arp`. The AP130 in scope is `AH-b614c0` per the inventory table.
+
+Driving the CLI non-interactively needs a paced feed: both APs drop a piped stream that arrives before the shell is ready. Sleep ~4s after connect and ~5s between commands (see the `expect` note under Gotchas for config writes).
 
 ## Step 2 — Render placeholders and paste the config
 
@@ -66,7 +78,7 @@ render ansible/files/aerohive/ap130.hiveos | ssh $LEGACY admin@<ap130-ip>
 Notes:
 - The `sed` delimiter is `|` (not `/`) so PSKs/secrets containing a `/` don't break substitution; if a value contains a literal `|`, pick another delimiter.
 - Reuse the **same** SSIDs, PSKs, and `HIVEPW` for both APs — that's what makes them one roaming network.
-- This paste tags the **trusted** SSID onto VLAN 30 and leaves the existing SSID on native VLAN 1 (the `restricted-up` / `home-sec` binding lines are commented — that's the go-live step below). Each script ends with `save config`. Confirm with `show run` / `show ssid`.
+- This paste tags the **house** SSID onto VLAN 20 and the **trusted** SSID onto VLAN 30. Each script ends with `save config`. Confirm with `show run` / `show ssid`.
 
 ## Step 3 — Verify (per AP)
 
@@ -97,16 +109,19 @@ Rotating the Aerohive admin password off the `admin`/`aerohive` default is worth
 - **AP130 config apply needs `expect`** — the AP130's old HiveOS SSH takes an interactive `-tt` **`show`** session fine, but drops a **piped `-tt` config stream right after login** (and a no-PTY pipe hits `tcgetattr: Invalid argument`). Drive multi-line config changes on the AP130 with an `expect` script: send the password, wait for `#`, send each line waiting for `#`, then `save config`. The AP630 (modern SSH) accepts a piped `-tt` stream directly.
 - **"Connected, no internet" on a segmented SSID = EX50 DNS ACL** — a client that associates and gets a lease + gateway but resolves nothing is almost always missing from the EX50 DNS resolver's zone ACL (`service dns acl zone`). Factory default allows only internal/ipsec/hotspot; the `trusted`/`restricted` zones must be added (now in `config.dal.j2`). Routing/NAT being fine while DNS is blocked produces exactly this symptom.
 
-## VLAN tagging + go-live ([ADR-060](../decisions/060-downstream-wifi-segmentation.md))
+## VLAN tagging ([ADR-060](../decisions/060-downstream-wifi-segmentation.md))
 
 The APs carry two SSIDs on `mgt0` trunked to the SR2024 (native VLAN 1 untagged + tagged 20/30 — pair this with [`sr2024-vlan-trunks.md`](sr2024-vlan-trunks.md) and the EX50's `configure-ex50.yml`):
 
-- **Trusted SSID → VLAN 30** (`10.30.0.0/24`) — active as soon as the config is pasted. Personal + guest devices: internet, isolated from the platform.
-- **Existing SSID → VLAN 20** (`10.20.0.0/24`, restricted) — **deferred to go-live.** The two binding lines (`user-profile restricted-up …` + `security-object home-sec default-user-profile-attr 20`) are commented in both `.hiveos` files, so a normal paste leaves the existing SSID on native VLAN 1 exactly as before. Nobody is cut over early.
+- **House SSID → VLAN 20** (`10.20.0.0/24`, restricted) — the household's younger members. Isolated from the platform, and its internet egress is governed out-of-band rather than always-on.
+- **Trusted SSID → VLAN 30** (`10.30.0.0/24`) — personal + guest devices: internet, isolated from the platform.
 
-**Go-live** (do only once the out-of-band egress layer that governs VLAN 20 is in place, so the restricted segment isn't dark with no way back): apply those two lines to **both** APs and `save config`. From that point the existing SSID's clients re-associate into `10.20.0.0/24`.
+Both mappings come from the `user-profile … vlan-id N` + `security-object … default-user-profile-attr N` pairs in the `.hiveos` files, so a normal paste establishes them.
+
+**Both APs must carry identical mappings.** A client that associates to an AP missing the VLAN-20 binding lands on untagged native VLAN 1 — the *platform* segment — with unrestricted internet, silently outside the egress policy. After any factory reset or re-provision of a single AP, verify with `show running-config | include profile` on **both** before considering the job done:
 
 ```bash
-printf 'user-profile restricted-up vlan-id 20 attribute 20\nsecurity-object home-sec default-user-profile-attr 20\nsave config\n' | ssh admin@<ap630-ip>
-printf 'user-profile restricted-up vlan-id 20 attribute 20\nsecurity-object home-sec default-user-profile-attr 20\nsave config\n' | ssh $LEGACY admin@<ap130-ip>
+printf 'show running-config | include profile\n' | ssh admin@<ap-ip>
+# expect BOTH: user-profile restricted-up … vlan-id 20 attribute 20
+#              security-object home-sec default-user-profile-attr 20
 ```

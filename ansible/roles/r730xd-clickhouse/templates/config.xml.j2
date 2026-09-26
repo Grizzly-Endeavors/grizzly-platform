@@ -1,0 +1,54 @@
+<?xml version="1.0"?>
+<!-- Managed by Ansible — r730xd-clickhouse role.
+     Dropped into /etc/clickhouse-server/config.d/, which ClickHouse merges over
+     its shipped config.xml. Overriding here rather than replacing config.xml
+     means an image upgrade keeps upstream's defaults for everything we don't
+     name. -->
+<clickhouse>
+    <listen_host>0.0.0.0</listen_host>
+    <http_port>{{ clickhouse_http_port }}</http_port>
+    <tcp_port>{{ clickhouse_native_port }}</tcp_port>
+
+    <!-- Single node: no replication, so no interserver port and no Keeper. -->
+    <interserver_http_port remove="remove"/>
+
+    <max_server_memory_usage>{{ clickhouse_max_server_memory_usage }}</max_server_memory_usage>
+    <max_concurrent_queries>{{ clickhouse_max_concurrent_queries }}</max_concurrent_queries>
+    <mark_cache_size>{{ clickhouse_mark_cache_size }}</mark_cache_size>
+    <uncompressed_cache_size>{{ clickhouse_uncompressed_cache_size }}</uncompressed_cache_size>
+
+    <!-- Scraped by the R730xd Prometheus alongside the other foundation stores. -->
+    <prometheus>
+        <endpoint>/metrics</endpoint>
+        <port>{{ clickhouse_prometheus_port }}</port>
+        <metrics>true</metrics>
+        <events>true</events>
+        <asynchronous_metrics>true</asynchronous_metrics>
+        <errors>true</errors>
+    </prometheus>
+
+    <logger>
+        <level>information</level>
+        <console>true</console>
+        <!-- Console only: the container's stdout is the log of record, rotated
+             by the Docker json-file driver like every other compose service
+             here. A second copy on disk would rotate on its own schedule and
+             quietly consume the ZFS dataset. -->
+        <log remove="remove"/>
+        <errorlog remove="remove"/>
+    </logger>
+
+    <!-- system.* tables are diagnostics and grow without bound if left alone. -->
+    <query_log>
+        <ttl>event_date + INTERVAL {{ clickhouse_system_log_ttl_days }} DAY DELETE</ttl>
+    </query_log>
+    <trace_log>
+        <ttl>event_date + INTERVAL {{ clickhouse_system_log_ttl_days }} DAY DELETE</ttl>
+    </trace_log>
+    <metric_log>
+        <ttl>event_date + INTERVAL {{ clickhouse_system_log_ttl_days }} DAY DELETE</ttl>
+    </metric_log>
+    <part_log>
+        <ttl>event_date + INTERVAL {{ clickhouse_system_log_ttl_days }} DAY DELETE</ttl>
+    </part_log>
+</clickhouse>

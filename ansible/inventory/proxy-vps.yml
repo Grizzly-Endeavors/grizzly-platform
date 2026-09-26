@@ -1,7 +1,7 @@
 ---
 # Proxy VPS Inventory
 # Hetzner VPS running Caddy as reverse proxy to K8s cluster via NetBird tunnel
-# IP addresses: see ansible/group_vars/all/network.yml (single source of truth)
+# IP addresses: see ansible/inventory/group_vars/all/network.yml (single source of truth)
 #
 # SSH configured in ~/.ssh/config:
 #   Host proxy-vps

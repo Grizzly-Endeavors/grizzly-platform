@@ -1,0 +1,236 @@
+---
+# Containerd Runtime Upgrade
+#
+# Rolls the container runtime on every K8s node to the pinned containerd
+# version in roles/k8s-containerd/defaults/main.yml — workers one at a time,
+# control plane last. Each node is drained and its kubelet stopped before the
+# k8s-containerd role applies the repo/package/config change, then kubelet is
+# restarted and the node uncordoned. Also handles the initial swap from
+# Debian's containerd package to containerd.io (ADR-067): apt removes the
+# conflicting containerd/runc packages in the same transaction.
+#
+# Prerequisites:
+#   - Update `containerd_version` in ansible/roles/k8s-containerd/defaults/main.yml
+#   - Verify the target version against the K8s support matrix:
+#     https://github.com/containerd/containerd/blob/main/RELEASES.md
+#   - No PDB-protected singleton pods on the nodes (shut down game servers first)
+#
+# Usage:
+#   ansible-playbook ansible/playbooks/upgrade-containerd.yml
+#
+# Verification:
+#   kubectl get nodes -o wide     # CONTAINER-RUNTIME column shows new version
+#   kubectl get pods -n kube-system
+#   cilium status
+
+# ============================================================
+# Play 1: Upgrade workers (one at a time)
+# ============================================================
+- name: Upgrade containerd on worker nodes
+  hosts: k8s_workers
+  gather_facts: yes
+  serial: 1
+  become: yes
+
+  vars:
+    network_interface: "{{ ansible_facts['default_ipv4']['interface'] }}"
+    kubectl_env:
+      KUBECONFIG: "{{ lookup('env', 'HOME') }}/.kube/config"
+
+  tasks:
+    - name: Record current containerd version
+      ansible.builtin.command: containerd --version
+      changed_when: false
+      register: containerd_before
+
+    - name: Drain node {{ inventory_hostname }}
+      ansible.builtin.command: >
+        kubectl drain {{ inventory_hostname }}
+        --ignore-daemonsets
+        --delete-emptydir-data
+        --timeout=600s
+      delegate_to: localhost
+      become: no
+      environment: "{{ kubectl_env }}"
+
+    - name: Stop kubelet during runtime swap
+      ansible.builtin.systemd:
+        name: kubelet
+        state: stopped
+
+    - name: Apply k8s-containerd role
+      ansible.builtin.include_role:
+        name: k8s-containerd
+
+    - name: Start kubelet
+      ansible.builtin.systemd:
+        name: kubelet
+        state: started
+
+    - name: "Wait for node Ready: {{ inventory_hostname }}"
+      ansible.builtin.command: >
+        kubectl wait --for=condition=Ready
+        node/{{ inventory_hostname }} --timeout=180s
+      delegate_to: localhost
+      become: no
+      environment: "{{ kubectl_env }}"
+      changed_when: false
+      retries: 3
+      delay: 10
+      register: node_ready
+      until: node_ready.rc == 0
+
+    - name: Uncordon node {{ inventory_hostname }}
+      ansible.builtin.command: kubectl uncordon {{ inventory_hostname }}
+      delegate_to: localhost
+      become: no
+      environment: "{{ kubectl_env }}"
+
+    - name: Record new containerd version
+      ansible.builtin.command: containerd --version
+      changed_when: false
+      register: containerd_after
+
+    - name: Display upgrade summary
+      ansible.builtin.debug:
+        msg:
+          - "Before: {{ containerd_before.stdout }}"
+          - "After:  {{ containerd_after.stdout }}"
+
+# ============================================================
+# Play 2: Upgrade control plane (single CP — brief API downtime
+# while kubelet restarts the static pods on the new runtime)
+# ============================================================
+- name: Upgrade containerd on control plane
+  hosts: k8s_control_plane
+  gather_facts: yes
+  become: yes
+
+  vars:
+    network_interface: "{{ ansible_facts['default_ipv4']['interface'] }}"
+    kubectl_env:
+      KUBECONFIG: "{{ lookup('env', 'HOME') }}/.kube/config"
+
+  tasks:
+    - name: Record current containerd version
+      ansible.builtin.command: containerd --version
+      changed_when: false
+      register: containerd_before
+
+    - name: Drain node {{ inventory_hostname }}
+      ansible.builtin.command: >
+        kubectl drain {{ inventory_hostname }}
+        --ignore-daemonsets
+        --delete-emptydir-data
+        --timeout=600s
+      delegate_to: localhost
+      become: no
+      environment: "{{ kubectl_env }}"
+
+    - name: Stop kubelet during runtime swap
+      ansible.builtin.systemd:
+        name: kubelet
+        state: stopped
+
+    - name: Apply k8s-containerd role
+      ansible.builtin.include_role:
+        name: k8s-containerd
+
+    - name: Start kubelet
+      ansible.builtin.systemd:
+        name: kubelet
+        state: started
+
+    - name: Wait for API server to be ready
+      ansible.builtin.command: kubectl cluster-info
+      environment:
+        KUBECONFIG: "/home/{{ ansible_user }}/.kube/config"
+      retries: 30
+      delay: 5
+      register: api_ready
+      until: api_ready.rc == 0
+      changed_when: false
+      become: no
+
+    - name: "Wait for node Ready: {{ inventory_hostname }}"
+      ansible.builtin.command: >
+        kubectl wait --for=condition=Ready
+        node/{{ inventory_hostname }} --timeout=180s
+      delegate_to: localhost
+      become: no
+      environment: "{{ kubectl_env }}"
+      changed_when: false
+      retries: 3
+      delay: 10
+      register: node_ready
+      until: node_ready.rc == 0
+
+    - name: Uncordon node {{ inventory_hostname }}
+      ansible.builtin.command: kubectl uncordon {{ inventory_hostname }}
+      delegate_to: localhost
+      become: no
+      environment: "{{ kubectl_env }}"
+
+    - name: Record new containerd version
+      ansible.builtin.command: containerd --version
+      changed_when: false
+      register: containerd_after
+
+    - name: Display upgrade summary
+      ansible.builtin.debug:
+        msg:
+          - "Before: {{ containerd_before.stdout }}"
+          - "After:  {{ containerd_after.stdout }}"
+
+# ============================================================
+# Play 3: Post-upgrade verification
+# ============================================================
+- name: Verify containerd upgrade
+  hosts: localhost
+  gather_facts: no
+  connection: local
+
+  vars:
+    kubectl_env:
+      KUBECONFIG: "{{ lookup('env', 'HOME') }}/.kube/config"
+
+  tasks:
+    - name: Get cluster nodes with runtime versions
+      ansible.builtin.command: kubectl get nodes -o wide
+      environment: "{{ kubectl_env }}"
+      changed_when: false
+      register: cluster_nodes
+
+    - name: Display cluster nodes
+      ansible.builtin.debug:
+        var: cluster_nodes.stdout_lines
+
+    - name: Check for unhealthy kube-system pods
+      ansible.builtin.shell: >
+        kubectl get pods -n kube-system --no-headers
+        | grep -vE 'Running|Completed'
+      environment: "{{ kubectl_env }}"
+      changed_when: false
+      failed_when: false
+      register: unhealthy_pods
+
+    - name: Fail if unhealthy pods found
+      ansible.builtin.fail:
+        msg: |
+          Unhealthy pods in kube-system after upgrade:
+          {{ unhealthy_pods.stdout }}
+      when: unhealthy_pods.stdout | length > 0
+
+    - name: Verify all nodes are Ready
+      ansible.builtin.shell: >
+        kubectl get nodes --no-headers | grep -v ' Ready ' || true
+      environment: "{{ kubectl_env }}"
+      changed_when: false
+      register: not_ready_nodes
+
+    - name: Fail if any nodes not Ready
+      ansible.builtin.fail:
+        msg: |
+          Nodes not Ready after upgrade:
+          {{ not_ready_nodes.stdout }}
+      when: not_ready_nodes.stdout | length > 0

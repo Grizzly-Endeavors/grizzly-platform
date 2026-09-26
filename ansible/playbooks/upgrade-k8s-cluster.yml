@@ -213,7 +213,7 @@
         kubectl drain {{ inventory_hostname }}
         --ignore-daemonsets
         --delete-emptydir-data
-        --timeout=300s
+        --timeout=600s
       delegate_to: localhost
       become: no
       environment: "{{ kubectl_env }}"

@@ -19,15 +19,10 @@
   vars:
     idrac_ssh_cmd: "sshpass -p {{ idrac_password }} ssh -o StrictHostKeyChecking=no -o LogLevel=ERROR root@{{ idrac_host }}"
 
-  vars_files:
-    # OpenBao auth defaults — inert unless openbao_read_enabled is true.
-    - "{{ playbook_dir }}/../vars/openbao_auth.yml"
-
   pre_tasks:
-    - name: Load OpenBao-sourced platform secrets
+    - name: Load 1Password-sourced platform secrets
       ansible.builtin.include_vars:
-        file: "{{ playbook_dir }}/../vars/openbao_secrets.yml"
-      when: openbao_read_enabled | default(false) | bool
+        file: "{{ playbook_dir }}/../vars/onepassword_secrets.yml"
       tags: [always]
 
     - name: Validate drive bay inventory exists
@@ -46,6 +41,9 @@
       become: false
       register: idrac_pdisks_raw
       changed_when: false
+      # Read-only discovery. Must run under --check too, or the facts derived
+      # from it are undefined and the play fails before reaching anything real.
+      check_mode: false
       no_log: true
 
     - name: Parse iDRAC disk info into bay→serial mapping
@@ -81,6 +79,7 @@
       ansible.builtin.command: lsblk -J -b -o NAME,SERIAL,SIZE,TYPE
       register: lsblk_output
       changed_when: false
+      check_mode: false
 
     - name: Build serial→device mapping from host
       ansible.builtin.set_fact:
@@ -92,6 +91,33 @@
             {%- if dev.type == 'disk' and dev.serial -%}
               {%- set normalized = dev.serial | trim | replace(' ', '') | replace('-', '') | upper -%}
               {%- set _ = result.update({normalized: dev.name}) -%}
+            {%- endif -%}
+          {%- endfor -%}
+          {{ result }}
+
+    # Kernel names (sdX) are assigned in enumeration order and move between boots.
+    # ZFS bakes whatever path it is given into the on-disk label permanently, so
+    # the pool must be built from /dev/disk/by-id/ links, which are derived from
+    # model+serial and therefore stable.
+    - name: Gather /dev/disk/by-id links
+      ansible.builtin.command: "find /dev/disk/by-id -type l -printf '%l %f\\n'"
+      register: by_id_links
+      changed_when: false
+      check_mode: false
+
+    - name: Build device to by-id path map
+      ansible.builtin.set_fact:
+        device_to_by_id: >-
+          {%- set result = {} -%}
+          {%- for line in by_id_links.stdout_lines | sort -%}
+            {%- set parts = line.split(' ') -%}
+            {%- if parts | length == 2 -%}
+              {%- set dev = parts[0] | basename -%}
+              {%- set link = parts[1] -%}
+              {%- if (link.startswith('ata-') or link.startswith('nvme-'))
+                     and dev not in result -%}
+                {%- set _ = result.update({dev: '/dev/disk/by-id/' ~ link}) -%}
+              {%- endif -%}
             {%- endif -%}
           {%- endfor -%}
           {{ result }}
@@ -109,12 +135,13 @@
             {%- if serial -%}
               {%- set normalized = serial | replace(' ', '') | replace('-', '') | upper -%}
               {%- set device = serial_to_device.get(normalized, '') -%}
-              {%- if device -%}
+              {%- if device and device_to_by_id.get(device, '') -%}
                 {%- set _ = result.append({
                   'bay': bay_num,
                   'role': bay_def.role,
                   'serial': serial,
-                  'device': device
+                  'device': device,
+                  'by_id': device_to_by_id.get(device)
                 }) -%}
               {%- endif -%}
             {%- endif -%}
@@ -130,8 +157,12 @@
           {{ r730xd_drive_bays | selectattr('role', 'equalto', 'zfs') | list | length }}
           drives, found {{ zfs_drives | length }}.
           Check that drives are installed, in JBOD mode, and visible to the OS.
+          A drive is also dropped here if it resolves to a kernel device with no
+          /dev/disk/by-id/ata-* or nvme-* link, since the pool must be built from
+          stable paths.
           iDRAC bay→serial map: {{ idrac_bay_map }}
           Host serial→device map: {{ serial_to_device }}
+          Device→by-id map: {{ device_to_by_id }}
 
     - name: Display resolved ZFS drive mapping
       ansible.builtin.debug:

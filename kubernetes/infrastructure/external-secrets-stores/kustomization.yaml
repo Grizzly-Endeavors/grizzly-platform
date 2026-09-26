@@ -14,7 +14,7 @@ kind: Kustomization
 # it lets us keep the infrastructure Kustomization clean of apply-
 # order hazards.
 resources:
-  - openbao-store.yaml
+  - onepassword-store.yaml
   - registry.yaml
   - github-runners.yaml
   - argo-workflows.yaml

@@ -1,0 +1,24 @@
+# External Secrets Operator metrics — exposed via NodePort for R730xd
+# Prometheus (same pattern as cert-manager/metrics-service.yaml).
+# Scrape target: <control-plane-ip>:30894
+#
+# The chart's own metrics Service is ClusterIP, which r730xd Prometheus
+# cannot reach; this publishes the same endpoint at a fixed nodePort
+# rather than flipping the chart Service's type, so a chart upgrade
+# can't silently take the scrape target away.
+apiVersion: v1
+kind: Service
+metadata:
+  name: external-secrets-metrics-nodeport
+  namespace: external-secrets
+spec:
+  type: NodePort
+  selector:
+    app.kubernetes.io/instance: external-secrets-external-secrets
+    app.kubernetes.io/name: external-secrets
+  ports:
+    - port: 8080
+      targetPort: metrics
+      nodePort: 30894
+      protocol: TCP
+      name: metrics

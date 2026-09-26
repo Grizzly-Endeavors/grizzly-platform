@@ -1,6 +1,17 @@
 # Managed by Ansible — r730xd-prometheus role
 # Alertmanager configuration
 
+{# Discord carries every alert. Rendered into both receivers so critical alerts
+   keep their Discord trail as well as reaching a phone. #}
+{% macro discord_config() %}
+    discord_configs:
+      - webhook_url: '{{ monitoring_discord_webhook_url }}'
+        send_resolved: true
+        title: '{% raw %}{{ if eq .Status "firing" }}🔥{{ else }}✅{{ end }} [{{ .Status | toUpper }}] {{ .GroupLabels.SortedPairs.Values | join " " }}{% endraw %}'
+        message: '{% raw %}{{ range .Alerts }}• {{ if .Annotations.summary }}{{ .Annotations.summary }}{{ else if .Annotations.description }}{{ .Annotations.description }}{{ else }}{{ .Labels.alertname }} on {{ .Labels.instance }}{{ end }}{{ "\n" }}{{ end }}{% endraw %}'
+{% endmacro %}
+
+{% set ntfy_enabled = monitoring_ntfy_critical_token is defined and monitoring_ntfy_critical_token %}
 route:
   group_by: ['alertname', 'severity']
   group_wait: 30s
@@ -12,17 +23,34 @@ route:
     - match:
         alertname: PrometheusWatchdog
       receiver: 'null'
+{% if ntfy_enabled %}
+    # Critical alerts get a phone push on top of the Discord trail. A receiver
+    # carrying both destinations is used rather than `continue: true`, because a
+    # matched child route means the parent's receiver never fires.
+    - match:
+        severity: critical
+      receiver: 'critical'
+{% endif %}
 
 receivers:
   - name: 'null'
 
 {% if monitoring_discord_webhook_url is defined and monitoring_discord_webhook_url %}
   - name: 'default'
-    discord_configs:
-      - webhook_url: '{{ monitoring_discord_webhook_url }}'
+{{ discord_config() }}
+{% if ntfy_enabled %}
+  - name: 'critical'
+{{ discord_config() }}
+    webhook_configs:
+      # ntfy renders Alertmanager's payload with its built-in `alertmanager`
+      # template, so the push reads as a summary rather than raw JSON.
+      - url: '{{ monitoring_ntfy_url }}/{{ monitoring_ntfy_critical_topic }}?template=alertmanager'
         send_resolved: true
-        title: '{% raw %}{{ if eq .Status "firing" }}🔥{{ else }}✅{{ end }} [{{ .Status | toUpper }}] {{ .GroupLabels.SortedPairs.Values | join " " }}{% endraw %}'
-        message: '{% raw %}{{ range .Alerts }}• {{ if .Annotations.summary }}{{ .Annotations.summary }}{{ else if .Annotations.description }}{{ .Annotations.description }}{{ else }}{{ .Labels.alertname }} on {{ .Labels.instance }}{{ end }}{{ "\n" }}{{ end }}{% endraw %}'
+        http_config:
+          authorization:
+            type: Bearer
+            credentials: '{{ monitoring_ntfy_critical_token }}'
+{% endif %}
 {% elif monitoring_alert_webhook_url is defined and monitoring_alert_webhook_url %}
   - name: 'default'
     webhook_configs:
