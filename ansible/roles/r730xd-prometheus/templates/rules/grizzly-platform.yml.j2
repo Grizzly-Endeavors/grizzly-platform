@@ -79,11 +79,12 @@ groups:
             CPU at {{ '{{' }} $value {{ '}}' }}°C
             on {{ '{{' }} $labels.instance {{ '}}' }}
 
-      # Previous boot had no graceful shutdown. The check caches that verdict
-      # on the kernel boot id and publishes uptime from /proc/uptime, so a
-      # clock step cannot look like a reboot.
+      # Previous boot had no graceful shutdown. The metric stays 1 for the
+      # whole boot; the alert matches only the first hour of monotonic uptime
+      # so it notifies and then resolves. Boot id and /proc/uptime keep a
+      # clock step from looking like a reboot.
       - alert: UncleanReboot
-        expr: monitoring_boot_unclean == 1
+        expr: monitoring_boot_unclean == 1 and on(instance) monitoring_uptime_seconds < 3600
         for: 0m
         labels:
           severity: warning
@@ -92,8 +93,9 @@ groups:
             {{ '{{' }} $labels.instance {{ '}}' }} booted after an unclean shutdown
           description: >-
             The previous boot's journal has no graceful shutdown
-            (systemd-shutdown, Power-Off, or Reboot). This stays firing
-            until a later boot follows a clean shutdown.
+            (systemd-shutdown, Power-Off, or Reboot). Fires while this
+            boot's uptime is under an hour, then resolves. Uptime comes
+            from /proc/uptime.
 
       # Several hosts with monotonic uptime under 15 minutes at once: a
       # shared reboot window, which is the fleet-wide power-cut case.
