@@ -18,7 +18,7 @@ k8s_registry_nodeport: 30500
 
 # Upstream registries routed through the in-cluster zot pull-through cache.
 # zot's sync extension (onDemand) mirrors these — see
-# kubernetes/infrastructure/registry/configmap.yaml and
+# kubernetes/infrastructure/registry/config.json and
 # docs/decisions/032-registry-pullthrough-cache.md. For each entry we write a
 # containerd certs.d hosts.toml that tries the local NodePort mirror first and
 # falls back to `server` (the real upstream) if zot can't serve the image, so a

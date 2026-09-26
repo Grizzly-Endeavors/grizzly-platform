@@ -76,6 +76,8 @@ spec:
       volumes:
         - name: config
           configMap:
+            # Generator name. kustomize rewrites this to the hashed zot-config
+            # ConfigMap produced from config.json.
             name: zot-config
         - name: cache
           # Persistent ZFS PVC, NOT emptyDir: zot's BoltDB index lives here

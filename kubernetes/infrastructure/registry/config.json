@@ -39,8 +39,8 @@
           "urls": ["https://registry-1.docker.io"],
           "onDemand": true,
           "tlsVerify": true,
-          "maxRetries": 3,
-          "retryDelay": "5m",
+          "maxRetries": 1,
+          "retryDelay": "2s",
           "content": [
             { "prefix": "**" }
           ]
@@ -49,8 +49,8 @@
           "urls": ["https://gcr.io"],
           "onDemand": true,
           "tlsVerify": true,
-          "maxRetries": 3,
-          "retryDelay": "5m",
+          "maxRetries": 1,
+          "retryDelay": "2s",
           "content": [
             { "prefix": "**" }
           ]
