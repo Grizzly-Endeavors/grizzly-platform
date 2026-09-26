@@ -1,8 +1,9 @@
 # ExternalSecret manifests for arc-runners:
 #   - sccache-s3-credentials (s3-bulk creds for Rust build cache)
 #   - github-runner-pat (org-level PAT for ARC v2)
-# Both previously seeded imperatively by seed-app-secrets.yml /
-# setup-k8s-cicd.yml; now reconciled from 1Password via ESO.
+#   - claude-code-oauth (Claude Code OAuth token for the claude-runners scale set)
+# Reconciled from 1Password via ESO. The Claude token is created once in
+# 1Password (item cicd-claude-code, field oauth_token); it is not in git.
 apiVersion: external-secrets.io/v1
 kind: ExternalSecret
 metadata:
@@ -41,3 +42,21 @@ spec:
     - secretKey: github_token
       remoteRef:
         key: platform-github-runner/pat
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: claude-code-oauth
+  namespace: arc-runners
+spec:
+  refreshPolicy: OnChange
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: onepassword
+  target:
+    name: claude-code-oauth
+    creationPolicy: Owner
+  data:
+    - secretKey: token
+      remoteRef:
+        key: cicd-claude-code/oauth_token

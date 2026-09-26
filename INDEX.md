@@ -14,6 +14,11 @@ Centralized CI gate — versioned `grizzly-gate` image runs per-language checks 
 - **How:** [runbooks/ci-gate.md](docs/runbooks/ci-gate.md) (operate) · **integrate:** [integration/deploy.md](docs/integration/deploy.md) (get an app onto the cluster through the gate) · overview [ci-gate.md](docs/ci-gate.md), threat model [ci-gate-coverage.md](docs/ci-gate-coverage.md).
 - **Code:** `.github/workflows/gate.yaml` (reusable), `kubernetes/infrastructure/argo-workflows/build-gate-image.yaml` (build), `kubernetes/infrastructure/kyverno{,-policies}/` (admission), `docker/grizzly-gate/` (pointer stub). Signing key: 1Password item `cicd-cosign`.
 
+### GitHub Actions runners
+Org-level ARC v2 in `arc-runners`. `lab-runners` (max 4) is the CI pool. `claude-runners` (min 0, max 2) runs `@claude` for this repo; only those pods receive `CLAUDE_CODE_OAUTH_TOKEN`.
+- **Why:** [ADR-017](docs/decisions/017-arc-v2-github-runners.md) (ARC v2), [ADR-078](docs/decisions/078-claude-code-runner-scale-set.md) (Claude scale set).
+- **Code:** `kubernetes/infrastructure/github-runners/`, `.github/workflows/claude.yml`. Token: 1Password item `cicd-claude-code` → ExternalSecret `claude-code-oauth`.
+
 ### Secrets (1Password)
 The `grizzly-platform` 1Password vault is the platform secrets source of truth. K8s reads via External Secrets Operator (`onepassword` ClusterSecretStore); Ansible reads via `op` lookups. Three service account tokens reach it and nothing else does.
 - **Why:** [ADR-073](docs/decisions/073-retire-openbao.md) (1Password as the source of truth; OpenBao retired), [048](docs/decisions/048-first-party-app-secrets-domain.md) (app secrets domain).

@@ -1,0 +1,77 @@
+# Claude Code scale set. Separate from lab-runners so CLAUDE_CODE_OAUTH_TOKEN
+# is injected only into pods that run `runs-on: claude-runners`, and so a
+# Claude session does not consume one of the four CI slots.
+#
+# No DinD sidecar: this pool edits the repo and compiles on the runner. It
+# does not build or push images, and a privileged dockerd would widen the
+# blast radius of a pod that holds the OAuth token.
+# No sccache credentials: cargo on the runner image compiles without the
+# cache. The s3-bulk keys stay on lab-runners.
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: arc-runner-set-claude
+  namespace: flux-system
+spec:
+  interval: 30m
+  dependsOn:
+    - name: arc-controller
+  chart:
+    spec:
+      chart: gha-runner-scale-set
+      version: "0.14.0"
+      sourceRef:
+        kind: HelmRepository
+        name: actions-runner-controller
+  targetNamespace: arc-runners
+  install:
+    createNamespace: false
+  values:
+    githubConfigUrl: "https://github.com/grizzly-endeavors"
+    githubConfigSecret: github-runner-pat
+    runnerScaleSetName: "claude-runners"
+    minRunners: 0
+    maxRunners: 2
+    listenerMetrics:
+      counters:
+        gha_started_jobs_total:
+          labels: ["repository", "organization", "job_name", "event_name"]
+        gha_completed_jobs_total:
+          labels: ["repository", "organization", "job_name", "event_name", "job_result"]
+      gauges:
+        gha_assigned_jobs:
+          labels: ["name", "namespace", "repository", "organization"]
+        gha_running_jobs:
+          labels: ["name", "namespace", "repository", "organization"]
+        gha_idle_runners:
+          labels: ["name", "namespace", "repository", "organization"]
+        gha_min_runners:
+          labels: ["name", "namespace"]
+        gha_max_runners:
+          labels: ["name", "namespace"]
+        gha_desired_runners:
+          labels: ["name", "namespace"]
+    template:
+      spec:
+        containers:
+          - name: runner
+            image: registry.registry.svc.cluster.local:5000/github-runner:latest
+            imagePullPolicy: Always
+            command: ["/home/runner/run.sh"]
+            env:
+              # Process env for every job on this scale set. The workflow
+              # promotes it into the Actions env context; see claude.yml.
+              # Required (not optional): a missing secret must fail the pod
+              # rather than start a runner that cannot authenticate.
+              - name: CLAUDE_CODE_OAUTH_TOKEN
+                valueFrom:
+                  secretKeyRef:
+                    name: claude-code-oauth
+                    key: token
+            resources:
+              limits:
+                cpu: "8"
+                memory: 16Gi
+              requests:
+                cpu: "4"
+                memory: 8Gi
