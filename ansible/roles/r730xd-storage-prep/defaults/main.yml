@@ -3,7 +3,8 @@
 # Mounts drives at bay-based paths using resolved_drives fact from playbook pre-tasks
 #
 # Requires: resolved_drives fact set by r730xd-storage.yml pre-tasks
-#   Each entry: {bay: N, role: "parity"|"data", serial: "...", device: "sdX"}
+#   Each entry: {bay: N, role: "parity"|"data", serial: "...", device: "sdX",
+#     by_id: "/dev/disk/by-id/ata-Model_Serial"}
 
 # Base mount path — drives mount as {{ storage_mount_base }}/bay0, bay1, etc.
 storage_mount_base: "/mnt/data"
