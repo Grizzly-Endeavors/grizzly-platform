@@ -8,7 +8,7 @@ spec:
   chart:
     spec:
       chart: cert-manager
-      version: "v1.16.2"
+      version: "v1.19.6"
       sourceRef:
         kind: HelmRepository
         name: jetstack
@@ -16,10 +16,12 @@ spec:
   install:
     createNamespace: false
   values:
-    # Install CRDs alongside the chart. Alternative would be a separate
-    # Kustomization that applies CRDs first, but inline install is simpler
-    # and cert-manager's CRDs are stable.
-    installCRDs: true
+    # CRDs ship with the chart. crds.keep adds helm.sh/resource-policy: keep
+    # so uninstalling the release does not delete the CRDs (and with them
+    # every Certificate and Issuer).
+    crds:
+      enabled: true
+      keep: true
     replicaCount: 1
     resources:
       requests:
