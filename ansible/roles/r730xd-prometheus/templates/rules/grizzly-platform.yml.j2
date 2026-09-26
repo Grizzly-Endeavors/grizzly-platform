@@ -35,6 +35,7 @@ groups:
         annotations:
           summary: >-
             SMART health check failed for {{ '{{' }} $labels.device {{ '}}' }}
+            ({{ '{{' }} $labels.kname {{ '}}' }})
             on {{ '{{' }} $labels.instance {{ '}}' }}
 
       - alert: DriveTemperatureHigh
@@ -44,7 +45,8 @@ groups:
           severity: critical
         annotations:
           summary: >-
-            Drive {{ '{{' }} $labels.device {{ '}}' }} at
+            Drive {{ '{{' }} $labels.device {{ '}}' }}
+            ({{ '{{' }} $labels.kname {{ '}}' }}) at
             {{ '{{' }} $value {{ '}}' }}°C
             on {{ '{{' }} $labels.instance {{ '}}' }}
 
@@ -57,7 +59,8 @@ groups:
           summary: >-
             {{ '{{' }} $value {{ '}}' }} reallocated sectors on
             {{ '{{' }} $labels.device {{ '}}' }}
-            ({{ '{{' }} $labels.instance {{ '}}' }})
+            ({{ '{{' }} $labels.kname {{ '}}' }},
+            {{ '{{' }} $labels.instance {{ '}}' }})
 
   - name: hardware
     rules:
