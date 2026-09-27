@@ -8,9 +8,11 @@
     that:
       - resolved_drives is defined
       - resolved_drives | length > 0
+      - resolved_drives | selectattr('by_id', 'defined') | list | length == resolved_drives | length
     fail_msg: >
-      resolved_drives fact is not set. This role must be called from
-      r730xd-storage.yml which resolves drive bays via iDRAC in pre_tasks.
+      resolved_drives fact is not set, or entries are missing the by_id key. This
+      role must be called from r730xd-storage.yml, which resolves drive bays via
+      iDRAC and maps each to a stable /dev/disk/by-id path in pre_tasks.
 
 - name: Install parted (required for partitioning)
   ansible.builtin.apt:
@@ -19,13 +21,13 @@
 
 - name: Display resolved drives
   ansible.builtin.debug:
-    msg: "Bay {{ item.bay }} ({{ item.role }}): /dev/{{ item.device }} — serial {{ item.serial }}"
+    msg: "Bay {{ item.bay }} ({{ item.role }}): {{ item.by_id }} (currently /dev/{{ item.device }}) — serial {{ item.serial }}"
   loop: "{{ resolved_drives }}"
   loop_control:
     label: "bay{{ item.bay }}"
 
 - name: Check for RAID or foreign filesystem signatures
-  ansible.builtin.command: "blkid -o value -s TYPE /dev/{{ item.device }}"
+  ansible.builtin.command: "blkid -o value -s TYPE {{ item.by_id }}"
   register: drive_signature_check
   changed_when: false
   failed_when: false
@@ -36,7 +38,7 @@
 - name: Fail if drives have RAID or foreign signatures
   ansible.builtin.fail:
     msg: >
-      Bay {{ item.item.bay }} (/dev/{{ item.item.device }}) has signature type '{{ item.stdout | trim }}'.
+      Bay {{ item.item.bay }} ({{ item.item.by_id }}) has signature type '{{ item.stdout | trim }}'.
       Drives must be wiped before storage-prep can run.
       Run: ./scripts/wipe-r730xd-bays.sh {{ resolved_drives | map(attribute='bay') | join(' ') }}
   when:
@@ -48,17 +50,47 @@
 
 - name: Create GPT partition table on each drive
   community.general.parted:
-    device: "/dev/{{ item.device }}"
+    device: "{{ item.by_id }}"
     label: gpt
     state: info
   register: disk_info
   loop: "{{ resolved_drives }}"
   loop_control:
-    label: "bay{{ item.bay }} (/dev/{{ item.device }})"
+    label: "bay{{ item.bay }} ({{ item.by_id }})"
+
+# Re-check the by-id link resolves to the same serial it did at resolution time,
+# immediately before the one command in this role that can destroy data on a
+# mis-identified disk. Closes the TOCTOU window between resolving resolved_drives
+# and this task.
+- name: Re-verify drive identity immediately before partitioning
+  ansible.builtin.command: "lsblk -no SERIAL --nodeps {{ resolved_drives[idx].by_id }}"
+  register: pre_partition_identity
+  changed_when: false
+  when: item.partitions | length == 0
+  loop: "{{ disk_info.results }}"
+  loop_control:
+    index_var: idx
+    label: "bay{{ resolved_drives[idx].bay }}"
+
+- name: Fail if a drive no longer matches its resolved identity
+  ansible.builtin.fail:
+    msg: >
+      Bay {{ resolved_drives[idx].bay }} ({{ resolved_drives[idx].by_id }}) now
+      reports serial '{{ item.stdout | trim }}', expected
+      '{{ resolved_drives[idx].serial }}'. The device behind this by-id path
+      changed since it was resolved — refusing to partition.
+  when:
+    - not (item.skipped | default(false))
+    - (item.stdout | trim | replace(' ', '') | replace('-', '') | upper)
+      != (resolved_drives[idx].serial | replace(' ', '') | replace('-', '') | upper)
+  loop: "{{ pre_partition_identity.results }}"
+  loop_control:
+    index_var: idx
+    label: "bay{{ resolved_drives[idx].bay }}"
 
 - name: Create single partition on drives without partitions
   community.general.parted:
-    device: "/dev/{{ item.item.device }}"
+    device: "{{ resolved_drives[idx].by_id }}"
     number: 1
     label: gpt
     part_start: "0%"
@@ -67,25 +99,75 @@
   when: item.partitions | length == 0
   loop: "{{ disk_info.results }}"
   loop_control:
-    label: "bay{{ item.item.bay }}"
+    index_var: idx
+    label: "bay{{ resolved_drives[idx].bay }}"
 
+# by-id partition symlinks use a uniform -partN suffix regardless of the
+# underlying bus (see docs/runbooks/zfs-pool-maintenance.md), which sidesteps
+# the sdX1 vs nvme0n1p1 kernel-naming split entirely.
 - name: Build partition device list
   ansible.builtin.set_fact:
     drive_partitions: >-
       {{
-        resolved_drives | map(attribute='device')
-        | map('regex_replace', '$', '1')
+        resolved_drives | map(attribute='by_id')
+        | map('regex_replace', '$', '-part1')
         | list
       }}
+
+- name: Re-verify partition link exists immediately before formatting
+  ansible.builtin.stat:
+    path: "{{ item }}"
+    follow: true
+  register: pre_format_stat
+  loop: "{{ drive_partitions }}"
+  loop_control:
+    index_var: idx
+    label: "bay{{ resolved_drives[idx].bay }}"
+
+- name: Fail if the expected partition link is missing before formatting
+  ansible.builtin.fail:
+    msg: >
+      Bay {{ resolved_drives[idx].bay }}: expected partition path {{ item }}
+      does not exist. Refusing to format.
+  when: not pre_format_stat.results[idx].stat.exists
+  loop: "{{ drive_partitions }}"
+  loop_control:
+    index_var: idx
+    label: "bay{{ resolved_drives[idx].bay }}"
+
+- name: Re-verify parent disk identity immediately before formatting
+  ansible.builtin.command: "lsblk -no SERIAL --nodeps {{ resolved_drives[idx].by_id }}"
+  register: pre_format_identity
+  changed_when: false
+  loop: "{{ drive_partitions }}"
+  loop_control:
+    index_var: idx
+    label: "bay{{ resolved_drives[idx].bay }}"
+
+- name: Fail if a drive no longer matches its resolved identity before formatting
+  ansible.builtin.fail:
+    msg: >
+      Bay {{ resolved_drives[idx].bay }} ({{ resolved_drives[idx].by_id }}) now
+      reports serial '{{ pre_format_identity.results[idx].stdout | trim }}',
+      expected '{{ resolved_drives[idx].serial }}'. The device behind this
+      by-id path changed since it was resolved — refusing to format.
+  when: >-
+    (pre_format_identity.results[idx].stdout | trim | replace(' ', '') | replace('-', '') | upper)
+    != (resolved_drives[idx].serial | replace(' ', '') | replace('-', '') | upper)
+  loop: "{{ drive_partitions }}"
+  loop_control:
+    index_var: idx
+    label: "bay{{ resolved_drives[idx].bay }}"
 
 - name: Create ext4 filesystem on each partition (skips existing)
   community.general.filesystem:
     fstype: "{{ storage_filesystem }}"
-    dev: "/dev/{{ item }}"
+    dev: "{{ item }}"
     opts: "{{ storage_mkfs_options }}"
   loop: "{{ drive_partitions }}"
   loop_control:
-    label: "{{ item }}"
+    label: "bay{{ resolved_drives[idx].bay }}"
+    index_var: idx
 
 - name: Create mount point directories
   ansible.builtin.file:
@@ -98,7 +180,7 @@
     label: "bay{{ resolved_drives[idx].bay }}"
 
 - name: Get partition UUIDs
-  ansible.builtin.command: "blkid -s UUID -o value /dev/{{ item }}"
+  ansible.builtin.command: "blkid -s UUID -o value {{ item }}"
   register: partition_uuids
   changed_when: false
   loop: "{{ drive_partitions }}"
