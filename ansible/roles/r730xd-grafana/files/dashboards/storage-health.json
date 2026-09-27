@@ -176,8 +176,8 @@
       "type": "stat",
       "targets": [
         {
-          "expr": "smartmon_device_smart_healthy",
-          "legendFormat": "{{disk}}"
+          "expr": "monitoring_smart_healthy",
+          "legendFormat": "{{device}} ({{kname}})"
         }
       ]
     },
@@ -206,8 +206,8 @@
       "type": "stat",
       "targets": [
         {
-          "expr": "smartmon_reallocated_sector_ct_raw_value",
-          "legendFormat": "{{disk}}"
+          "expr": "monitoring_smart_reallocated_sectors",
+          "legendFormat": "{{device}} ({{kname}})"
         }
       ]
     },
@@ -241,8 +241,8 @@
       "type": "timeseries",
       "targets": [
         {
-          "expr": "smartmon_airflow_temperature_cel_raw_value",
-          "legendFormat": "{{disk}}"
+          "expr": "monitoring_smart_temperature_celsius",
+          "legendFormat": "{{device}} ({{kname}})"
         }
       ]
     },

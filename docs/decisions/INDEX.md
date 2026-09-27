@@ -55,6 +55,7 @@ One line per decision, grouped by domain. See [`README.md`](README.md) for what 
 ## CI/CD, registry & builds
 
 - [017-arc-v2-github-runners](017-arc-v2-github-runners.md) — ARC v2 for GitHub Actions runners.
+- [078-claude-code-runner-scale-set](078-claude-code-runner-scale-set.md) — Claude Code on a separate `claude-runners` scale set; OAuth token only on those pods.
 - [020-app-delivery-model](020-app-delivery-model.md) — app delivery via per-repo Flux sources.
 - [059-app-self-service-provisioning](059-app-self-service-provisioning.md) — apps self-provision foundation resources via an aggregate `App` CR + additive-only controllers (Proposed; design in exploration/).
 - [025-personal-apps-in-separate-repo](025-personal-apps-in-separate-repo.md) — personal apps live in a separate `lab-apps` repo.

@@ -35,6 +35,7 @@ groups:
         annotations:
           summary: >-
             SMART health check failed for {{ '{{' }} $labels.device {{ '}}' }}
+            ({{ '{{' }} $labels.kname {{ '}}' }})
             on {{ '{{' }} $labels.instance {{ '}}' }}
 
       - alert: DriveTemperatureHigh
@@ -44,7 +45,8 @@ groups:
           severity: critical
         annotations:
           summary: >-
-            Drive {{ '{{' }} $labels.device {{ '}}' }} at
+            Drive {{ '{{' }} $labels.device {{ '}}' }}
+            ({{ '{{' }} $labels.kname {{ '}}' }}) at
             {{ '{{' }} $value {{ '}}' }}°C
             on {{ '{{' }} $labels.instance {{ '}}' }}
 
@@ -57,7 +59,8 @@ groups:
           summary: >-
             {{ '{{' }} $value {{ '}}' }} reallocated sectors on
             {{ '{{' }} $labels.device {{ '}}' }}
-            ({{ '{{' }} $labels.instance {{ '}}' }})
+            ({{ '{{' }} $labels.kname {{ '}}' }},
+            {{ '{{' }} $labels.instance {{ '}}' }})
 
   - name: hardware
     rules:
@@ -78,6 +81,39 @@ groups:
           summary: >-
             CPU at {{ '{{' }} $value {{ '}}' }}°C
             on {{ '{{' }} $labels.instance {{ '}}' }}
+
+      # Previous boot had no graceful shutdown. The metric stays 1 for the
+      # whole boot; the alert matches only the first hour of monotonic uptime
+      # so it notifies and then resolves. Boot id and /proc/uptime keep a
+      # clock step from looking like a reboot.
+      - alert: UncleanReboot
+        expr: monitoring_boot_unclean == 1 and on(instance) monitoring_uptime_seconds < 3600
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: >-
+            {{ '{{' }} $labels.instance {{ '}}' }} booted after an unclean shutdown
+          description: >-
+            The previous boot's journal has no graceful shutdown
+            (systemd-shutdown, Power-Off, or Reboot). Fires while this
+            boot's uptime is under an hour, then resolves. Uptime comes
+            from /proc/uptime.
+
+      # Several hosts with monotonic uptime under 15 minutes at once: a
+      # shared reboot window, which is the fleet-wide power-cut case.
+      # One host rebooting does not match.
+      - alert: FleetPowerCut
+        expr: count(monitoring_uptime_seconds < 900) >= 2
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: >-
+            {{ '{{' }} $value | printf "%.0f" {{ '}}' }} hosts booted within the last 15 minutes
+          description: >-
+            That many hosts report uptime under 15 minutes at the same time.
+            Uptime comes from /proc/uptime, so a clock step cannot raise this.
 
       - alert: ECCMemoryErrors
         expr: monitoring_ipmi_memory_errors_sel > 0

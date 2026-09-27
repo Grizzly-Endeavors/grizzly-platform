@@ -1,0 +1,133 @@
+name: Claude Code
+
+# @claude on this repo, on the claude-runners scale set.
+#
+# GitHub auth is the Claude GitHub App (https://github.com/apps/claude), not
+# the workflow GITHUB_TOKEN. With github_token left unset, the action requests
+# an OIDC token and exchanges it for an installation token. That exchange
+# fails if the app is not installed on this repository. Passing github.token
+# would skip the app, and pushes from github-actions[bot] do not trigger
+# other workflows, so Claude's commits would not run CI.
+#
+# CLAUDE_CODE_OAUTH_TOKEN is injected into the runner process by the scale
+# set. A composite action's env: block only sees the workflow env context, and
+# the action assigns CLAUDE_CODE_OAUTH_TOKEN from
+# `inputs.claude_code_oauth_token || env.CLAUDE_CODE_OAUTH_TOKEN`, which
+# overwrites the process environment when both are empty. The first step
+# masks the runner value and writes it to $GITHUB_ENV so the action's
+# expression can read it. Do not reference secrets.* — the org is on the
+# Free plan, where org secrets are not available to private repositories,
+# and the token is delivered by the runner instead.
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+  pull_request_review:
+    types: [submitted]
+  issues:
+    types: [opened]
+
+jobs:
+  claude:
+    if: >-
+      (
+        github.actor == 'BearFlinn'
+        || (
+          (github.event_name == 'issue_comment' || github.event_name == 'pull_request_review_comment')
+          && (github.event.comment.author_association == 'OWNER' || github.event.comment.author_association == 'MEMBER')
+        )
+        || (
+          github.event_name == 'pull_request_review'
+          && (github.event.review.author_association == 'OWNER' || github.event.review.author_association == 'MEMBER')
+        )
+        || (
+          github.event_name == 'issues'
+          && (github.event.issue.author_association == 'OWNER' || github.event.issue.author_association == 'MEMBER')
+        )
+      )
+      && (
+        (github.event_name == 'issue_comment' && github.event.comment.body && contains(github.event.comment.body, '@claude'))
+        || (github.event_name == 'pull_request_review_comment' && github.event.comment.body && contains(github.event.comment.body, '@claude'))
+        || (github.event_name == 'pull_request_review' && github.event.review.body && contains(github.event.review.body, '@claude'))
+        || (
+          github.event_name == 'issues'
+          && (
+            (github.event.issue.body && contains(github.event.issue.body, '@claude'))
+            || contains(github.event.issue.title, '@claude')
+          )
+        )
+      )
+    runs-on: claude-runners
+    timeout-minutes: 90
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write
+      actions: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          fetch-depth: 1
+
+      - name: Publish runner OAuth token to the workflow env
+        run: |
+          set -euo pipefail
+          if [ -z "${CLAUDE_CODE_OAUTH_TOKEN:-}" ]; then
+            echo "CLAUDE_CODE_OAUTH_TOKEN is not set in the runner process environment" >&2
+            exit 1
+          fi
+          case "${CLAUDE_CODE_OAUTH_TOKEN}" in
+            *$'\n'*|*$'\r'*)
+              echo "CLAUDE_CODE_OAUTH_TOKEN must be a single line" >&2
+              exit 1
+              ;;
+          esac
+          echo "::add-mask::${CLAUDE_CODE_OAUTH_TOKEN}"
+          echo "CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN}" >> "${GITHUB_ENV}"
+
+      - name: Run Claude Code
+        id: claude
+        uses: anthropics/claude-code-action@756cc22e19660d20e8cc9496b4f242475a7f7790 # v1 (2026-09-25)
+        with:
+          # Bash timeouts go through settings. At this pin the composite
+          # step sets its own env: block, which shadows the calling job
+          # and forwards only the names it lists. BASH_DEFAULT_TIMEOUT_MS
+          # and BASH_MAX_TIMEOUT_MS are not on that list, and the SDK
+          # copies that process environment into the Claude session.
+          # settings is written to ~/.claude/settings.json before launch,
+          # and Claude Code applies settings.env over that environment.
+          # 1800000 ms (30 min) is the default command timeout; 3600000 ms
+          # (60 min) is the ceiling the model can request. A cold
+          # pre-commit (hook environments, then ansible-lint over
+          # ansible/) exceeds the unset 2 min default and 10 min ceiling,
+          # so git commit is backgrounded before it returns. Both values
+          # sit inside this job's 90 minute timeout.
+          settings: |
+            {
+              "env": {
+                "BASH_DEFAULT_TIMEOUT_MS": "1800000",
+                "BASH_MAX_TIMEOUT_MS": "3600000"
+              }
+            }
+          # Sonnet unless the issue or PR carries the model:opus label.
+          # IDs from the Claude models overview: claude-sonnet-5, claude-opus-5-5.
+          #
+          # --allowedTools merges with tag mode's defaults.
+          # base-action/src/parse-sdk-options.ts accumulates every
+          # --allowedTools value into one set, and tag mode already
+          # includes the git-push.sh wrapper. Pushes stay on that
+          # wrapper: this list has no Bash(git push:*) and no Bash(*).
+          # A rule matches a command that starts with that prefix.
+          # Run each check from the repo root as its own command.
+          claude_args: >-
+            --model ${{
+              contains(toJson(github.event.issue.labels || github.event.pull_request.labels), 'model:opus')
+              && 'claude-opus-5-5'
+              || 'claude-sonnet-5'
+            }}
+            --allowedTools "Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git rev-parse:*),Bash(pre-commit run:*),Bash(ansible-lint:*),Bash(yamllint:*),Bash(shellcheck:*)"
+            --append-system-prompt "This is the grizzly-platform repository. Follow CLAUDE.md at the repository root. Run each check from the repo root as its own command. The full hook set is `pre-commit run --all-files` (vault-encrypt via .githooks/pre-commit, trailing-whitespace, end-of-file-fixer, check-yaml, check-added-large-files, check-merge-conflict, detect-private-key, yamllint with -c .yamllint, ansible-lint on ansible/, shellcheck with --external-sources). To run one hook: `pre-commit run yamllint --all-files`, `pre-commit run ansible-lint --all-files`, or `pre-commit run shellcheck --all-files`. Direct linters with the same configuration: `yamllint -c .yamllint` on the YAML files you changed (the hook skips archive/), `ansible-lint` (reads .ansible-lint), and `shellcheck --external-sources` on the shell scripts you changed. Inspect the tree with `git status`, `git diff`, `git log`, `git show`, and `git rev-parse`. git commit runs the pre-commit hook and can take a long time on a cold checkout while hook environments install and ansible-lint runs; run it in the foreground with a Bash timeout of 1800000 ms, never in the background, and don't finish until `git log -1` shows the commit and the push script has succeeded."

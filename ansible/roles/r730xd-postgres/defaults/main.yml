@@ -57,3 +57,6 @@ postgres_backup_enabled: true
 postgres_backup_retention_days: 7
 postgres_backup_cron_hour: "2"
 postgres_backup_cron_minute: "0"
+# Compressed dumps smaller than this are rejected. A dump of roles and the
+# template databases is a few KB, so 64 KiB still drops a truncated gzip.
+postgres_backup_min_bytes: 65536

@@ -5,6 +5,7 @@ resources:
   - helmrepository.yaml
   - arc-controller-helmrelease.yaml
   - runner-scale-set-helmrelease.yaml
+  - claude-runner-scale-set-helmrelease.yaml
   - metrics-service.yaml
   - network-policy.yaml
   - limitrange.yaml
