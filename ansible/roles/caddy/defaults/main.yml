@@ -1,8 +1,19 @@
 ---
 # Caddy role default variables
 
-# Caddy version (leave empty for latest)
+# Upstream version for the custom DNS-plugin build (for example "2.10.2"
+# or "v2.10.2"). Empty follows the installed caddy package version, so the
+# next role run rebuilds after a package upgrade. The running service uses
+# the custom binary either way; the package binary is not what it executes.
 caddy_version: ""
+
+# Rebuild the custom binary even when its version and DNS module already match.
+caddy_force_rebuild: false
+
+# Custom build with the DNS provider module. Kept off the package path so
+# apt upgrades of /usr/bin/caddy cannot replace it. The systemd drop-in
+# points the service here.
+caddy_custom_binary: "/usr/local/bin/caddy"
 
 # Caddy configuration directory
 caddy_config_dir: "/etc/caddy"

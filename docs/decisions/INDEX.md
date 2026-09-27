@@ -43,6 +43,7 @@ One line per decision, grouped by domain. See [`README.md`](README.md) for what 
 ## Cluster networking, DNS & internal TLS
 
 - [019-ingress-and-tls-termination](019-ingress-and-tls-termination.md) — VPS Caddy → WireGuard → NodePort → ingress-nginx topology.
+- [078-caddy-custom-binary-off-package-path](078-caddy-custom-binary-off-package-path.md) — DNS-plugin Caddy build at `/usr/local/bin/caddy`; the service drop-in points at it.
 - [034-in-cluster-wireguard-encryption](034-in-cluster-wireguard-encryption.md) — transparent in-cluster encryption via Cilium WireGuard.
 - [035-internal-tls-openbao-pki](035-internal-tls-openbao-pki.md) — internal TLS foundation via OpenBao PKI (never implemented; superseded by 073).
 - [036-internal-dns-zone](036-internal-dns-zone.md) — internal DNS zone for name-based addressing.

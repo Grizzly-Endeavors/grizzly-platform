@@ -116,22 +116,97 @@
     group: "{{ caddy_group }}"
     mode: '0644'
 
-- name: Create systemd override directory
-  ansible.builtin.file:
-    path: /etc/systemd/system/caddy.service.d
-    state: directory
-    mode: '0755'
+- name: Point the Caddy service at the custom binary
   when:
     - caddy_dns_provider | default('') | length > 0
+  block:
+    - name: Create the Caddy systemd drop-in directory
+      ansible.builtin.file:
+        path: /etc/systemd/system/caddy.service.d
+        state: directory
+        mode: '0755'
 
-- name: Deploy systemd override with Cloudflare API token
-  ansible.builtin.template:
-    src: caddy-override.conf.j2
-    dest: /etc/systemd/system/caddy.service.d/override.conf
-    mode: '0600'
-  when:
-    - caddy_dns_provider | default('') | length > 0
-  notify: Restart caddy
+    - name: Locate the packaged Caddy unit
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop:
+        - /usr/lib/systemd/system/caddy.service
+        - /lib/systemd/system/caddy.service
+      register: caddy_unit_candidates
+
+    - name: Confirm the caddy package installed a systemd unit
+      ansible.builtin.assert:
+        that:
+          - caddy_unit_candidates.results | selectattr('stat.exists') | list | length > 0
+        fail_msg: "The caddy package did not install caddy.service."
+
+    - name: Read the packaged Caddy unit
+      ansible.builtin.slurp:
+        src: "{{ caddy_unit_candidates.results | selectattr('stat.exists') | map(attribute='item') | first }}"
+      register: caddy_packaged_unit
+
+    - name: Record the packaged Caddy unit
+      ansible.builtin.set_fact:
+        caddy_packaged_unit_text: "{{ caddy_packaged_unit.content | b64decode }}"
+
+    - name: Confirm the packaged unit starts /usr/bin/caddy
+      ansible.builtin.assert:
+        that:
+          - "'ExecStart=/usr/bin/caddy ' in caddy_packaged_unit_text"
+          - "'ExecReload=/usr/bin/caddy ' in caddy_packaged_unit_text"
+        fail_msg: >-
+          The packaged caddy.service does not start /usr/bin/caddy with
+          ExecStart and ExecReload. The drop-in cannot retarget it safely.
+
+    - name: Deploy the Caddy systemd drop-in
+      ansible.builtin.template:
+        src: caddy-override.conf.j2
+        dest: /etc/systemd/system/caddy.service.d/override.conf
+        mode: '0600'
+      notify: Restart caddy
+
+    - name: Reload systemd to pick up the Caddy drop-in
+      ansible.builtin.systemd:
+        daemon_reload: yes
+
+    # /usr/bin/caddy belongs to the caddy package. When its checksum no
+    # longer matches, put the packaged file back. The service uses
+    # caddy_custom_binary, so restoring this file keeps the DNS module.
+    - name: Check the package-owned Caddy binary
+      ansible.builtin.command:
+        argv:
+          - dpkg
+          - --verify
+          - caddy
+      register: caddy_dpkg_verify
+      changed_when: false
+      failed_when: false
+
+    - name: Restore the package-owned Caddy binary  # noqa: command-instead-of-module
+      ansible.builtin.command:
+        argv:
+          - apt-get
+          - install
+          - --reinstall
+          - -y
+          - -o
+          - Dpkg::Options::=--force-confdef
+          - -o
+          - Dpkg::Options::=--force-confold
+          - caddy
+      environment:
+        DEBIAN_FRONTEND: noninteractive
+      when: >-
+        caddy_dpkg_verify.rc is defined
+        and caddy_dpkg_verify.rc != 0
+        and '/usr/bin/caddy' in (caddy_dpkg_verify.stdout | default(''))
+      changed_when: true
+      notify: Restart caddy
+
+- name: Remove /usr/bin/caddy.backup
+  ansible.builtin.file:
+    path: /usr/bin/caddy.backup
+    state: absent
 
 - name: Determine which Caddyfile template to use
   ansible.builtin.set_fact:
@@ -148,12 +223,6 @@
     validate: "{{ omit if (caddy_dns_provider | default('') | length > 0) else 'caddy validate --adapter caddyfile --config %s' }}"
     backup: yes
   notify: Restart caddy
-
-- name: Reload systemd daemon
-  ansible.builtin.systemd:
-    daemon_reload: yes
-  when:
-    - caddy_dns_provider | default('') | length > 0
 
 - name: Enable and start Caddy service
   ansible.builtin.systemd:
@@ -176,4 +245,6 @@
       - "Template used: {{ caddy_config_template_final }}"
       - "K8s proxy mode: {{ caddy_enable_k8s_proxy | default(false) }}"
       - "DNS provider: {{ caddy_dns_provider | default('none') }}"
+      - "Binary: {{ caddy_custom_binary if (caddy_dns_provider | default('') | length > 0) else '/usr/bin/caddy' }}"
+      - "Custom build version: {{ caddy_desired_version | default('n/a') }}"
       - "Service status: {{ caddy_service_state }}"
