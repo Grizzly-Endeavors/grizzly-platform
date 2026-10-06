@@ -28,6 +28,7 @@ configMapGenerator:
       - blueprints/langfuse.yaml
       - blueprints/metabase.yaml
       - blueprints/gameservers-admin.yaml
+      - blueprints/home-iot.yaml
       - blueprints/social-login.yaml
       - blueprints/email-otp.yaml
   # Brand images served by authentik-brand-assets (nginx) and mounted at
