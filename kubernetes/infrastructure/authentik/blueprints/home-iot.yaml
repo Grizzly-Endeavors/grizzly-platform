@@ -1,0 +1,75 @@
+version: 1
+metadata:
+  name: home-iot
+entries:
+  # Forward-auth gates for the home IoT stack in lab-apps (apps/home-automation):
+  # Home Assistant at home.grizzly-endeavors.com and the Zigbee2MQTT frontend at
+  # zigbee.grizzly-endeavors.com. Both control physical devices in the house, so
+  # both are grizzly-admins only. One file for the pair because they are one
+  # stack and share a binding rule.
+  #
+  # Zigbee2MQTT's frontend has no login of its own — this binding is its only
+  # gate. Home Assistant keeps its own account login behind it.
+  - model: authentik_providers_proxy.proxyprovider
+    id: home-assistant-provider
+    identifiers:
+      name: home-assistant
+    attrs:
+      mode: forward_single
+      external_host: https://home.grizzly-endeavors.com
+      authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+      invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
+
+  - model: authentik_providers_proxy.proxyprovider
+    id: zigbee2mqtt-provider
+    identifiers:
+      name: zigbee2mqtt
+    attrs:
+      mode: forward_single
+      external_host: https://zigbee.grizzly-endeavors.com
+      authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+      invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
+
+  - model: authentik_core.application
+    id: home-assistant-app
+    identifiers:
+      slug: home-assistant
+    attrs:
+      name: Home Assistant
+      provider: !KeyOf home-assistant-provider
+      meta_launch_url: https://home.grizzly-endeavors.com
+      meta_description: "Lights and home automation (grizzly-admins only)"
+      policy_engine_mode: any
+
+  - model: authentik_core.application
+    id: zigbee2mqtt-app
+    identifiers:
+      slug: zigbee2mqtt
+    attrs:
+      name: Zigbee2MQTT
+      provider: !KeyOf zigbee2mqtt-provider
+      meta_launch_url: https://zigbee.grizzly-endeavors.com
+      meta_description: "Zigbee network: pairing, device settings, OTA (grizzly-admins only)"
+      policy_engine_mode: any
+
+  - model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf home-assistant-app
+      group: !Find [authentik_core.group, [name, grizzly-admins]]
+      order: 0
+    attrs:
+      enabled: true
+      negate: false
+
+  - model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf zigbee2mqtt-app
+      group: !Find [authentik_core.group, [name, grizzly-admins]]
+      order: 0
+    attrs:
+      enabled: true
+      negate: false
+
+  # NOTE: the embedded-outpost provider binding lives in
+  # blueprints/grizzly-webmail.yaml, which enumerates every proxy provider.
+  # Do not add an outpost entry here.
