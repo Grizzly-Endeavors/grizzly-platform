@@ -35,6 +35,18 @@
     # Prometheus metrics on admin endpoint
     servers {
         metrics
+{% if caddy_trust_cloudflare_proxies | default(false) | bool %}
+        # Requests arrive from Cloudflare edges. Trust only Cloudflare's
+        # ranges (refreshed by the caddy-cloudflare-ip module) and read the
+        # visitor IP from CF-Connecting-IP, so {client_ip} is the visitor.
+        # A request from outside those ranges keeps its socket address, so
+        # the header can't be spoofed by hitting this host directly.
+        trusted_proxies cloudflare {
+            interval 12h
+            timeout 15s
+        }
+        client_ip_headers CF-Connecting-IP
+{% endif %}
     }
 
     # Log settings
@@ -157,7 +169,8 @@
 {{ domain_entry.domain }} {
     reverse_proxy http://{{ caddy_k8s_ingress_endpoint }} {
         header_up Host {host}
-        header_up X-Real-IP {remote}
+        header_up X-Real-IP {client_ip}
+        header_up X-Forwarded-For {client_ip}
     }
 
     header {
@@ -209,7 +222,8 @@
 *.{{ wildcard_root }} {
     reverse_proxy http://{{ caddy_k8s_ingress_endpoint }} {
         header_up Host {host}
-        header_up X-Real-IP {remote}
+        header_up X-Real-IP {client_ip}
+        header_up X-Forwarded-For {client_ip}
     }
 
     header {
