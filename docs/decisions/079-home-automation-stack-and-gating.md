@@ -26,12 +26,15 @@ The platform's usual way to restrict a web app to a group is nginx forward-auth 
    - HA keeps auth, devices and integrations as files under `.storage`.
    HA's recorder stays on SQLite in that same volume, so one volume restores the whole of HA. Block storage, not NFS, because of the SQLite locking risk. The Retain class means deleting a PVC can't destroy the zvol.
 
+6. **Agent access goes through a dedicated `claude` HA user**: administrator, local-network only. Its password and long-lived token live in the 1Password item `home-assistant-claude`. An ExternalSecret mounts the token into the HA pod at `/run/secrets/hassapi/token`. The `hassapi` wrapper on the control node calls the REST and WebSocket APIs through `kubectl exec` against `127.0.0.1:8123`. Because the user is local-only, the token is refused from outside the pod, and HA's logbook attributes agent changes to "Claude". Zigbee2MQTT needs no extra credential: agents drive it over MQTT through the Mosquitto pod.
+
 ## Alternatives Considered
 
 - **Forward-auth in front of all of HA.** Rejected: it breaks the companion app. The hass-oidc-auth maintainer calls proxy auth with the app an unsupported setup.
 - **Forward-auth with `/api` and `/auth` exempted.** Rejected: the exempt paths include HA's login and API, so the group restriction would only cover the HTML shell.
 - **Header auth (`BeryJu/hass-auth-header`).** Rejected: the repository was archived on 2025-10-23.
 - **`cavefire/hass-openid`.** A viable alternative that Authentik's integration docs also list. hass-oidc-auth was chosen because it has YAML-configurable role and group enforcement and a device-code login for the companion app.
+- **Agent access through Bear's own HA account or a token on it.** Rejected: agent changes would be indistinguishable from Bear's in the logbook, and revoking the agent would mean touching Bear's login.
 - **Confidential OIDC client.** Rejected: PKCE with a strict redirect URI is enough, and the integration recommends a public client. A secret would add a 1Password item and an ExternalSecret without adding protection.
 - **Zigbee2MQTT and HA on the desktop over USB.** Rejected: the lights would depend on a workstation being on.
 - **HA alone with ZHA.** Bear chose Zigbee2MQTT for its device coverage and frontend.
