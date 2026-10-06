@@ -6,7 +6,8 @@
 # remove the DNS provider module. The service is pointed at the custom
 # binary by the systemd drop-in in tasks/main.yml.
 #
-# A rebuild runs only when that binary is missing, lacks the DNS module,
+# A rebuild runs only when that binary is missing, lacks the DNS module (or
+# the Cloudflare IP-range module when caddy_trust_cloudflare_proxies is set),
 # does not match the desired version, or caddy_force_rebuild is true.
 # The desired version is caddy_version when set, otherwise the version
 # of the installed caddy package.
@@ -25,6 +26,7 @@
       - caddy
   register: caddy_pkg_version_cmd
   changed_when: false
+  check_mode: false
 
 - name: Check whether the custom Caddy binary includes the DNS provider
   ansible.builtin.command:
@@ -33,6 +35,7 @@
       - list-modules
   register: caddy_custom_modules
   changed_when: false
+  check_mode: false
   failed_when: false
   when: caddy_custom_binary_stat.stat.exists
 
@@ -43,6 +46,7 @@
       - version
   register: caddy_custom_version
   changed_when: false
+  check_mode: false
   failed_when: false
   when: caddy_custom_binary_stat.stat.exists
 
@@ -69,6 +73,7 @@
       {{
         (not caddy_custom_binary_stat.stat.exists)
         or (('dns.providers.' ~ caddy_dns_provider) not in (caddy_custom_modules.stdout | default('')))
+        or ((caddy_trust_cloudflare_proxies | bool) and ('http.ip_sources.cloudflare' not in (caddy_custom_modules.stdout | default(''))))
         or (caddy_custom_version_parsed != caddy_desired_version)
         or (caddy_force_rebuild | bool)
       }}
@@ -126,9 +131,11 @@
         mode: "0755"
       when: caddy_xcaddy_binary.stat.exists or not ansible_check_mode
 
-    - name: Build Caddy with the DNS provider plugin
+    - name: Build Caddy with the DNS provider (and Cloudflare IP-range) plugins
       ansible.builtin.command:
-        argv:
+        argv: "{{ caddy_xcaddy_base_argv + (caddy_xcaddy_cloudflare_ip_argv if (caddy_trust_cloudflare_proxies | bool) else []) }}"
+      vars:
+        caddy_xcaddy_base_argv:
           - /usr/local/bin/xcaddy
           - build
           - "v{{ caddy_desired_version }}"
@@ -136,6 +143,9 @@
           - /tmp/caddy-custom
           - --with
           - "github.com/caddy-dns/{{ caddy_dns_provider }}"
+        caddy_xcaddy_cloudflare_ip_argv:
+          - --with
+          - "{{ caddy_cloudflare_ip_module }}"
       environment:
         CGO_ENABLED: "0"
         GOPATH: /var/cache/xcaddy
@@ -178,6 +188,7 @@
       - list-modules
   register: caddy_modules
   changed_when: false
+  check_mode: false
   when: caddy_custom_binary_stat.stat.exists or not ansible_check_mode
 
 - name: Assert the DNS provider module is present
@@ -187,3 +198,13 @@
     fail_msg: "DNS provider module '{{ caddy_dns_provider }}' not found in {{ caddy_custom_binary }}"
     success_msg: "DNS provider module '{{ caddy_dns_provider }}' is present in {{ caddy_custom_binary }}"
   when: caddy_custom_binary_stat.stat.exists or not ansible_check_mode
+
+- name: Assert the Cloudflare IP-range module is present
+  ansible.builtin.assert:
+    that:
+      - "'http.ip_sources.cloudflare' in caddy_modules.stdout"
+    fail_msg: "caddy_trust_cloudflare_proxies is set but {{ caddy_custom_binary }} lacks http.ip_sources.cloudflare"
+    success_msg: "Cloudflare IP-range module is present in {{ caddy_custom_binary }}"
+  when:
+    - caddy_trust_cloudflare_proxies | bool
+    - caddy_custom_binary_stat.stat.exists or not ansible_check_mode

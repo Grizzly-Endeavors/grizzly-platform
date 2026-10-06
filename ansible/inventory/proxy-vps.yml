@@ -22,6 +22,12 @@ all:
       enable_caddy: true
       caddy_email: "bearflinn@gmail.com"
       caddy_dns_provider: "cloudflare"
+      # Build this upstream release rather than the installed package's
+      # version (the package lags the repo candidate on this host).
+      caddy_version: "2.11.7"
+      # The domains are orange-clouded, so requests arrive from Cloudflare
+      # edges; recover the visitor IP from CF-Connecting-IP.
+      caddy_trust_cloudflare_proxies: true
 
       # K8s proxy mode - routes traffic to K8s ingress via dedicated
       # WireGuard tunnel to R730xd (ingress-tunnel role). The tunnel

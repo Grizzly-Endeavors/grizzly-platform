@@ -15,6 +15,16 @@ caddy_force_rebuild: false
 # points the service here.
 caddy_custom_binary: "/usr/local/bin/caddy"
 
+# Set when Cloudflare proxies traffic to this Caddy (orange-cloud DNS). Caddy
+# then trusts Cloudflare's published ranges as proxies, takes the visitor IP
+# from CF-Connecting-IP, and hands that IP upstream as X-Real-IP and
+# X-Forwarded-For. Without it every app behind this Caddy sees a Cloudflare
+# edge IP, which changes between requests. The ranges come from the
+# caddy-cloudflare-ip module (built into the custom binary), which refreshes
+# them from cloudflare.com on its own.
+caddy_trust_cloudflare_proxies: false
+caddy_cloudflare_ip_module: "github.com/WeidiDeng/caddy-cloudflare-ip"
+
 # Caddy configuration directory
 caddy_config_dir: "/etc/caddy"
 caddy_data_dir: "/var/lib/caddy"
