@@ -37,3 +37,7 @@ Run Claude on a second ARC scale set, `claude-runners`, in the existing `arc-run
 - **Alerts:** `ARCControllerDown` and `ARCRunnerPodCrashLooping` already cover `arc-runners`. A missing 1Password item shows up as `ExternalSecret` `SecretSyncedError` and as runner pods stuck in `CreateContainerConfigError` once a job is queued.
 - **Recovery:** Flux reconciles the HelmRelease. Rotate the token by editing the 1Password item and force-syncing the ExternalSecret (`refreshPolicy: OnChange` does not poll). Re-run `@claude` to start a new pod.
 - **First steps when a mention does nothing:** confirm the actor is allowed, then `kubectl get externalsecret claude-code-oauth -n arc-runners` and `kubectl get pods -n arc-runners`. The listener depends on `github-runner-pat`; the runner pod depends on `claude-code-oauth` and on the Claude GitHub App being installed on this repository.
+
+## Update (2026-10-07) — Default model is Sonnet 5.5
+
+`.github/workflows/claude.yml` now passes `claude-sonnet-5-5` as the default `--model`. The `model:opus` label still selects `claude-opus-5-5`.

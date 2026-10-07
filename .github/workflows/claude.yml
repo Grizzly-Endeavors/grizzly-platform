@@ -113,8 +113,8 @@ jobs:
                 "BASH_MAX_TIMEOUT_MS": "3600000"
               }
             }
-          # Sonnet unless the issue or PR carries the model:opus label.
-          # IDs from the Claude models overview: claude-sonnet-5, claude-opus-5-5.
+          # Sonnet 5.5 unless the issue or PR carries the model:opus label.
+          # IDs from the Claude models overview: claude-sonnet-5-5, claude-opus-5-5.
           #
           # --allowedTools merges with tag mode's defaults.
           # base-action/src/parse-sdk-options.ts accumulates every
@@ -127,7 +127,7 @@ jobs:
             --model ${{
               contains(toJson(github.event.issue.labels || github.event.pull_request.labels), 'model:opus')
               && 'claude-opus-5-5'
-              || 'claude-sonnet-5'
+              || 'claude-sonnet-5-5'
             }}
             --allowedTools "Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git rev-parse:*),Bash(pre-commit run:*),Bash(ansible-lint:*),Bash(yamllint:*),Bash(shellcheck:*)"
             --append-system-prompt "This is the grizzly-platform repository. Follow CLAUDE.md at the repository root. Run each check from the repo root as its own command. The full hook set is `pre-commit run --all-files` (vault-encrypt via .githooks/pre-commit, trailing-whitespace, end-of-file-fixer, check-yaml, check-added-large-files, check-merge-conflict, detect-private-key, yamllint with -c .yamllint, ansible-lint on ansible/, shellcheck with --external-sources). To run one hook: `pre-commit run yamllint --all-files`, `pre-commit run ansible-lint --all-files`, or `pre-commit run shellcheck --all-files`. Direct linters with the same configuration: `yamllint -c .yamllint` on the YAML files you changed (the hook skips archive/), `ansible-lint` (reads .ansible-lint), and `shellcheck --external-sources` on the shell scripts you changed. Inspect the tree with `git status`, `git diff`, `git log`, `git show`, and `git rev-parse`. git commit runs the pre-commit hook and can take a long time on a cold checkout while hook environments install and ansible-lint runs; run it in the foreground with a Bash timeout of 1800000 ms, never in the background, and don't finish until `git log -1` shows the commit and the push script has succeeded."
