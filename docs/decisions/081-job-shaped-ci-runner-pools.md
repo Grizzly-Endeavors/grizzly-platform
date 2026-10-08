@@ -20,10 +20,11 @@ Split CI into pools shaped by the job, as separate `gha-runner-scale-set` HelmRe
 |------|-------|-----|------------------------|----------------------|-----|
 | `lab-runners` | prefers quanta, optiplex; any | 4 | 4 / 8 CPU, 8 / 16 Gi | 0.5 / 4 CPU, 0.5 / 8 Gi | the org default |
 | `lab-runners-fast` | intel-nuc only | 2 | 5 / 16 CPU, 8 / 24 Gi | 0.5 / 4 CPU, 0.5 / 8 Gi | long serial critical paths (Rust compile and test) |
-| `lab-runners-wide` | quanta, optiplex only | 6 | 2 / 8 CPU, 4 / 12 Gi | 2 / 8 CPU, 2 / 12 Gi | work split across many runners (sharded browser suites, release builds) |
+| `lab-runners-wide` | quanta, optiplex only | 6 | 2 / 8 CPU, 4 / 12 Gi | 2 / 8 CPU, 4 / 16 Gi, image store in memory | work split across many runners (sharded browser suites, release builds) |
 | `lab-runners-light` | any | 6 | 0.1 / 1 CPU, 0.25 / 2 Gi | none | shell and `gh` only |
 
 - Every DinD sidecar carries explicit resources, so job containers get real CPU and the scheduler sees them.
+- The wide pool's DinD keeps its image store (`/var/lib/docker`) in a memory-backed `emptyDir` (8 Gi cap). quanta boots from a consumer SATA SSD (SanDisk Ultra II) whose sustained writes collapse. With residuum's browser suite in four shards, three runners unpacked the 2 GB Playwright image into that disk together. The disk stayed 95–100% busy for ten minutes while quanta's CPUs sat at 20%, and each shard waited six minutes before its first test. The job work directory stays on disk, because release builds in this pool write several GB of `target/`.
 - `lab-runners` leans toward quanta and optiplex so the NUC stays free for `lab-runners-fast`, and still falls back to the NUC rather than queue.
 - The light pool has no DinD and no sccache credentials, and runs `run.sh` directly.
 - The zot pull-through cache also mirrors `mcr.microsoft.com` under `/mcr`, so the Playwright browser image a CI run pulls into a fresh DinD comes from the LAN. That pull took 3.4 minutes from MCR on every run. The mcr entry is first in the sync list, because zot tries on-demand registries in order and skips an entry whose content rules don't match without calling upstream. zot's limits rose to 4 CPU / 4 Gi to serve multi-GB pulls to several runners at once.

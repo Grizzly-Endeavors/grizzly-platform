@@ -161,13 +161,15 @@ spec:
             # run in this container's cgroup, so these are their resources.
             # Without them the namespace LimitRange default of 1 CPU / 2Gi
             # caps every one of them.
+            # The image store lives in memory (dind-storage below), so the
+            # memory here covers it as well as the job's containers.
             resources:
               requests:
                 cpu: "2"
-                memory: 2Gi
+                memory: 4Gi
               limits:
                 cpu: "8"
-                memory: 12Gi
+                memory: 16Gi
             securityContext:
               privileged: true
             volumeMounts:
@@ -177,6 +179,8 @@ spec:
                 mountPath: /run/docker
               - name: dind-externals
                 mountPath: /home/runner/externals
+              - name: dind-storage
+                mountPath: /var/lib/docker
         volumes:
           - name: work
             emptyDir: {}
@@ -184,3 +188,11 @@ spec:
             emptyDir: {}
           - name: dind-externals
             emptyDir: {}
+          # Docker's image store in memory. Every job here starts with an empty
+          # store, and unpacking a multi-GB image (the Playwright browsers) into
+          # quanta's SATA SSD from several runners at once kept the disk 100%
+          # busy for minutes while the CPUs idled.
+          - name: dind-storage
+            emptyDir:
+              medium: Memory
+              sizeLimit: 8Gi
