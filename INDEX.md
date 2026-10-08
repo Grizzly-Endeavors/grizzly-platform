@@ -15,8 +15,8 @@ Centralized CI gate — versioned `grizzly-gate` image runs per-language checks 
 - **Code:** `.github/workflows/gate.yaml` (reusable), `kubernetes/infrastructure/argo-workflows/build-gate-image.yaml` (build), `kubernetes/infrastructure/kyverno{,-policies}/` (admission), `docker/grizzly-gate/` (pointer stub). Signing key: 1Password item `cicd-cosign`.
 
 ### GitHub Actions runners
-Org-level ARC v2 in `arc-runners`. `lab-runners` (max 4) is the CI pool. `claude-runners` (min 0, max 2) runs `@claude` for this repo; only those pods receive `CLAUDE_CODE_OAUTH_TOKEN`.
-- **Why:** [ADR-017](docs/decisions/017-arc-v2-github-runners.md) (ARC v2), [ADR-078](docs/decisions/078-claude-code-runner-scale-set.md) (Claude scale set).
+Org-level ARC v2 in `arc-runners`. `lab-runners` (max 4) is the default CI pool. Jobs can pick a pool by shape: `lab-runners-fast` (NUC only, max 2) for long serial builds, `lab-runners-wide` (quanta/optiplex, max 6) for sharded or parallel work, `lab-runners-light` (no DinD, max 6) for shell-only jobs. `claude-runners` (min 0, max 2) runs `@claude` for this repo; only those pods receive `CLAUDE_CODE_OAUTH_TOKEN`.
+- **Why:** [ADR-017](docs/decisions/017-arc-v2-github-runners.md) (ARC v2), [ADR-078](docs/decisions/078-claude-code-runner-scale-set.md) (Claude scale set), [ADR-081](docs/decisions/081-job-shaped-ci-runner-pools.md) (job-shaped pools).
 - **Code:** `kubernetes/infrastructure/github-runners/`, `.github/workflows/claude.yml`. Token: 1Password item `cicd-claude-code` → ExternalSecret `claude-code-oauth`.
 
 ### Secrets (1Password)

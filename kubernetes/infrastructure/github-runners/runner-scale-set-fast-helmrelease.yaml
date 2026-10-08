@@ -1,7 +1,12 @@
+# Fast CI pool, pinned to the NUC (i7-12700H). Its per-core speed is about
+# three times quanta's Xeon E5-2670, which is what matters for work with a long
+# serial critical path, like compiling one large Rust crate. Jobs opt in with
+# `runs-on: lab-runners-fast`. Two runners at these requests fit beside the
+# NUC's other workloads. See ADR-081.
 apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
-  name: arc-runner-set
+  name: arc-runner-set-fast
   namespace: flux-system
 spec:
   interval: 30m
@@ -20,9 +25,9 @@ spec:
   values:
     githubConfigUrl: "https://github.com/grizzly-endeavors"
     githubConfigSecret: github-runner-pat
-    runnerScaleSetName: "lab-runners"
+    runnerScaleSetName: "lab-runners-fast"
     minRunners: 0
-    maxRunners: 4
+    maxRunners: 2
     # NOTE: we do NOT use `containerMode.type: dind` — that shortcut would
     # inject a default dind sidecar whose dockerd has no insecure-registry
     # config, which prevents pushing to the in-cluster OCI registry at
@@ -51,18 +56,14 @@ spec:
           labels: ["name", "namespace"]
     template:
       spec:
-        # The general pool for the org. It leans toward quanta and optiplex so the
-        # NUC stays free for lab-runners-fast (ADR-081), but takes the NUC when
-        # nothing else fits rather than leaving a job queued.
         affinity:
           nodeAffinity:
-            preferredDuringSchedulingIgnoredDuringExecution:
-              - weight: 100
-                preference:
-                  matchExpressions:
+            requiredDuringSchedulingIgnoredDuringExecution:
+              nodeSelectorTerms:
+                - matchExpressions:
                     - key: kubernetes.io/hostname
                       operator: In
-                      values: ["quanta", "optiplex"]
+                      values: ["intel-nuc"]
         initContainers:
           - name: init-dind-externals
             image: registry.registry.svc.cluster.local:5000/github-runner:latest
@@ -125,12 +126,12 @@ spec:
               # references the cosign-signing-key secret directly — workflow
               # steps on the runners never see the key material.
             resources:
-              limits:
-                cpu: "8"
-                memory: 16Gi
               requests:
-                cpu: "4"
+                cpu: "5"
                 memory: 8Gi
+              limits:
+                cpu: "16"
+                memory: 24Gi
             volumeMounts:
               - name: work
                 mountPath: /home/runner/_work

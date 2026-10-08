@@ -19,10 +19,16 @@ data:
   # walk on a clean restart (metaDB persists on the cache PVC); combined with
   # the dedupe-restore-complete marker, restarts don't storm.
   #
-  # extensions.sync (onDemand): transparent pull-through cache for docker.io +
-  # gcr.io. On a cache miss zot fetches from upstream and stores it here, then
-  # serves it LAN-local. content.prefix "**" maps the request path 1:1 onto the
-  # upstream repo. sync+S3 requires downloadDir (zot stages synced images on a
+  # extensions.sync (onDemand): transparent pull-through cache for docker.io,
+  # gcr.io and mcr.microsoft.com. On a cache miss zot fetches from upstream and
+  # stores it here, then serves it LAN-local. For docker.io and gcr.io,
+  # content.prefix "**" maps the request path 1:1 onto the upstream repo.
+  # mcr.microsoft.com is served under /mcr (destination), so
+  # `<zot>/mcr/playwright` is `mcr.microsoft.com/playwright`; nothing routes
+  # there implicitly, and clients name the /mcr path themselves. zot tries the
+  # on-demand registries in list order and skips an entry whose content rules
+  # don't match the repo without calling upstream, so mcr comes first: /mcr
+  # requests go straight to MCR, and every other request passes it locally. sync+S3 requires downloadDir (zot stages synced images on a
   # local dir before the S3 push) — pointed at the cache PVC. Nodes route
   # docker.io/gcr.io pulls here via containerd certs.d (k8s-registry-trust) and
   # CI DinD via --registry-mirror. See docs/decisions/032-registry-pullthrough-cache.md.
@@ -74,6 +80,16 @@ data:
           "enable": true,
           "downloadDir": "/var/lib/zot/.sync",
           "registries": [
+            {
+              "urls": ["https://mcr.microsoft.com"],
+              "onDemand": true,
+              "tlsVerify": true,
+              "maxRetries": 1,
+              "retryDelay": "2s",
+              "content": [
+                { "prefix": "**", "destination": "/mcr" }
+              ]
+            },
             {
               "urls": ["https://registry-1.docker.io"],
               "onDemand": true,
