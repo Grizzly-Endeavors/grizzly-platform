@@ -5,6 +5,9 @@ resources:
   - helmrepository.yaml
   - arc-controller-helmrelease.yaml
   - runner-scale-set-helmrelease.yaml
+  - runner-scale-set-fast-helmrelease.yaml
+  - runner-scale-set-wide-helmrelease.yaml
+  - runner-scale-set-light-helmrelease.yaml
   - claude-runner-scale-set-helmrelease.yaml
   - metrics-service.yaml
   - network-policy.yaml

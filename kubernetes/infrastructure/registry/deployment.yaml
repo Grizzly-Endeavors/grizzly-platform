@@ -66,13 +66,15 @@ spec:
             periodSeconds: 20
           resources:
             requests:
-              cpu: 50m
-              memory: 256Mi
+              cpu: 250m
+              memory: 512Mi
             limits:
-              cpu: "1"
+              # CI pulls multi-GB images (the Playwright browser image) through
+              # here from several runners at once, each streamed from S3.
+              cpu: "4"
               # 512Mi OOMKills zot while pushing large multi-GB images (e.g. the
               # grizzly-gate image); give it headroom for blob handling.
-              memory: 2Gi
+              memory: 4Gi
       volumes:
         - name: config
           configMap:

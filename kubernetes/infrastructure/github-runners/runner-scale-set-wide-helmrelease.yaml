@@ -1,7 +1,12 @@
+# Wide CI pool on quanta and optiplex, for work that splits across many
+# runners at once, like sharded browser suites and release builds: many slower
+# cores in parallel. Jobs opt in with `runs-on: lab-runners-wide`. The dind
+# sidecar is sized like the runner because browsers and other job containers
+# run in its cgroup. See ADR-081.
 apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
-  name: arc-runner-set
+  name: arc-runner-set-wide
   namespace: flux-system
 spec:
   interval: 30m
@@ -20,9 +25,9 @@ spec:
   values:
     githubConfigUrl: "https://github.com/grizzly-endeavors"
     githubConfigSecret: github-runner-pat
-    runnerScaleSetName: "lab-runners"
+    runnerScaleSetName: "lab-runners-wide"
     minRunners: 0
-    maxRunners: 4
+    maxRunners: 6
     # NOTE: we do NOT use `containerMode.type: dind` — that shortcut would
     # inject a default dind sidecar whose dockerd has no insecure-registry
     # config, which prevents pushing to the in-cluster OCI registry at
@@ -51,15 +56,11 @@ spec:
           labels: ["name", "namespace"]
     template:
       spec:
-        # The general pool for the org. It leans toward quanta and optiplex so the
-        # NUC stays free for lab-runners-fast (ADR-081), but takes the NUC when
-        # nothing else fits rather than leaving a job queued.
         affinity:
           nodeAffinity:
-            preferredDuringSchedulingIgnoredDuringExecution:
-              - weight: 100
-                preference:
-                  matchExpressions:
+            requiredDuringSchedulingIgnoredDuringExecution:
+              nodeSelectorTerms:
+                - matchExpressions:
                     - key: kubernetes.io/hostname
                       operator: In
                       values: ["quanta", "optiplex"]
@@ -125,12 +126,12 @@ spec:
               # references the cosign-signing-key secret directly — workflow
               # steps on the runners never see the key material.
             resources:
+              requests:
+                cpu: "2"
+                memory: 4Gi
               limits:
                 cpu: "8"
-                memory: 16Gi
-              requests:
-                cpu: "4"
-                memory: 8Gi
+                memory: 12Gi
             volumeMounts:
               - name: work
                 mountPath: /home/runner/_work
@@ -162,11 +163,11 @@ spec:
             # caps every one of them.
             resources:
               requests:
-                cpu: 500m
-                memory: 512Mi
+                cpu: "2"
+                memory: 2Gi
               limits:
-                cpu: "4"
-                memory: 8Gi
+                cpu: "8"
+                memory: 12Gi
             securityContext:
               privileged: true
             volumeMounts:
