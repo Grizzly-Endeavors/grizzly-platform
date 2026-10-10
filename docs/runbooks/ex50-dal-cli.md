@@ -19,9 +19,11 @@ Both read/write one committed config store. `save` (Admin CLI) == `config commit
 
 ---
 
-## ⚠ The shell-access menu footgun (currently ARMED)
+## ⚠ The shell-access menu footgun
 
-When **Shell access** is enabled (System → Device → Shell access, or it was toggled on for a work session), an interactive SSH login lands on an **Access selection menu** first:
+Shell access is the `auth group admin acl shell enable` leaf. Turn it on with `printf 'config\nauth group admin acl shell enable true\nsave\nexit\n' | ssh -T admin@10.0.0.1`, and back off with the same stream prefixed by `a\n` (it has to get past the menu below).
+
+When **Shell access** is enabled, an interactive SSH login lands on an **Access selection menu** first:
 
 ```
     a: Admin CLI
