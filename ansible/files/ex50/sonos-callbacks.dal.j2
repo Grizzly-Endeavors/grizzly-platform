@@ -1,0 +1,45 @@
+{#
+  Sonos event callbacks from the `restricted` segment to Home Assistant (ADR-082).
+
+  Rendered by configure-ex50.yml (tag `sonos-callbacks`) and piped into the DAL
+  Admin CLI like config.dal.j2. Unlike that from-factory delta, this one is
+  safe to re-apply on the live box:
+
+  - Static leases are list elements, so each is added only when its MAC is
+    absent from the pre-apply `show config` (ex50_before). `add ... end`
+    moves the CLI into the new element, so its fields are set relatively and
+    each lease gets its own `config ... save` session (`save` commits and
+    leaves config mode; the next `config` starts back at the root).
+  - `firewall custom` leaves are scalars; re-assigning them is a no-op.
+
+  `firewall filter` matches zones only (no address or port), so the narrow
+  allow is a `firewall custom` rule. DAL runs the `rules` string through the
+  shell whenever the firewall is rebuilt, after its own ruleset. That ruleset
+  is legacy iptables with a single FORWARD chain: RELATED,ESTABLISHED accept
+  first, then the zone accepts, then a final LOGDROP. So an `-I FORWARD` accept
+  for new connections lands ahead of the drop, and replies ride the conntrack
+  accept. The sets are flushed and refilled on every run so they always match
+  network.yml; the iptables rule is inserted only if not already present.
+  `override` stays false — true would replace DAL's whole firewall.
+#}
+{%- set nodes = [dell_inspiron_ip, intel_nuc_ip, optiplex_ip, quanta_ip] -%}
+{%- set match = "-p tcp --dport " ~ sonos_event_port ~ " -m set --match-set ha-sonos-src src -m set --match-set ha-sonos-dst dst -j ACCEPT" -%}
+{%- set cmds = ["ipset -exist create ha-sonos-src hash:ip", "ipset flush ha-sonos-src"]
+      + (ex50_restricted_sonos | map(attribute='ip') | map('regex_replace', '^', 'ipset add ha-sonos-src ') | list)
+      + ["ipset -exist create ha-sonos-dst hash:ip", "ipset flush ha-sonos-dst"]
+      + (nodes | map('regex_replace', '^', 'ipset add ha-sonos-dst ') | list)
+      + ["iptables -C FORWARD " ~ match ~ " || iptables -I FORWARD " ~ match] -%}
+{% for s in ex50_restricted_sonos if s.mac | lower not in ex50_before.stdout | lower %}
+config
+add network interface restricted ipv4 dhcp_server advanced static_lease end
+mac {{ s.mac }}
+ip {{ s.ip }}
+name {{ s.name }}
+save
+{% endfor %}
+config
+firewall custom override false
+firewall custom rules "{{ cmds | join('; ') }}"
+firewall custom enable true
+save
+exit

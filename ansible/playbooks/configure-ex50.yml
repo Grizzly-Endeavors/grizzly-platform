@@ -9,9 +9,12 @@
 # stdin, staged edits committed atomically by the trailing `save`), and reads
 # `show config` back for verification.
 #
-# Scope: the FLAT-cutover (Checkpoint C) posture only — LAN 10.0.0.1/24, DHCP
-# with the #80 pool carve-out, and pre-cutover hardening. Segmentation (home
-# VLAN, Ckpt D) and the ingress-tunnel move (Ckpt E) are separate work.
+# Scope: the base delta (config.dal.j2: LAN 10.0.0.1/24, DHCP with the #80
+# pool carve-out, hardening, the trusted/restricted segments) tagged `base`,
+# and the Sonos event-callback delta (sonos-callbacks.dal.j2, ADR-082) tagged
+# `sonos-callbacks`. Only the latter is safe to re-apply on the live box; the
+# base delta is a from-factory replay. The ingress-tunnel move (ADR-047) is
+# separate work.
 #
 # This config carries NO secrets (SSH is key-auth, already enrolled; the EX50's
 # own WiFi radios stay off), so nothing here reads 1Password/vault.
@@ -57,6 +60,7 @@
 
   tasks:
     - name: Require ex50_host
+      tags: [always]
       ansible.builtin.assert:
         that:
           - ex50_host is defined
@@ -67,42 +71,50 @@
           (post-cutover). See docs/runbooks/ex50-console-access.md.
 
     - name: Build the SSH base command
+      tags: [always]
       ansible.builtin.set_fact:
         ex50_ssh: "ssh {{ ex50_ssh_opts }} {{ ex50_ssh_user }}@{{ ex50_host }}"
 
     - name: Capture current config (pre-apply — rollback reference)
+      tags: [always]
       ansible.builtin.command: "{{ ex50_ssh }} show config"
       register: ex50_before
       changed_when: false
 
     - name: Create a temp file for the rendered delta
+      tags: [base]
       ansible.builtin.tempfile:
         state: file
         suffix: .dal
       register: ex50_rendered
 
     - name: Render the DAL config delta
+      tags: [base]
       ansible.builtin.template:
         src: "{{ playbook_dir }}/../files/ex50/config.dal.j2"
         dest: "{{ ex50_rendered.path }}"
         mode: "0600"
 
     - name: Apply the delta over SSH (staged edits → save → exit)
+      tags: [base]
       ansible.builtin.shell: "{{ ex50_ssh }} < {{ ex50_rendered.path }}"
       register: ex50_apply
       changed_when: true
 
     - name: Re-capture config (post-apply verification)
+      tags: [base]
       ansible.builtin.command: "{{ ex50_ssh }} show config"
       register: ex50_after
       changed_when: false
 
     - name: Remove the rendered delta from the control node
+      tags: [base]
       ansible.builtin.file:
         path: "{{ ex50_rendered.path }}"
         state: absent
 
     - name: Report apply output and resulting config
+      tags: [base]
       ansible.builtin.debug:
         msg: |-
           ── apply output (per-line; a benign `# ERROR` on a re-run `del` is expected) ──
@@ -114,8 +126,59 @@
           {{ ex50_after.stdout | default('') }}
 
     - name: Remind about the manual SSH-ACL hardening
+      tags: [base]
       ansible.builtin.debug:
         msg: >-
           NEXT (manual, interactive on the bench): restrict `service ssh` to the
           LAN/internal zone and confirm SSH is unreachable from WAN. See the
           rendered delta's note and the cutover runbook's Checkpoint C step.
+
+    # Sonos event callbacks (ADR-082): restricted-segment speakers → HA's
+    # hostPort on the k8s nodes. Safe to re-apply on the live box, unlike the
+    # base delta above, so it runs on its own:
+    #   ansible-playbook ansible/playbooks/configure-ex50.yml \
+    #     -e ex50_host=10.0.0.1 --tags sonos-callbacks
+    - name: Create a temp file for the Sonos callback delta
+      tags: [sonos-callbacks]
+      ansible.builtin.tempfile:
+        state: file
+        suffix: .dal
+      register: ex50_sonos_rendered
+
+    - name: Render the Sonos callback delta
+      tags: [sonos-callbacks]
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../files/ex50/sonos-callbacks.dal.j2"
+        dest: "{{ ex50_sonos_rendered.path }}"
+        mode: "0600"
+
+    - name: Apply the Sonos callback delta over SSH
+      tags: [sonos-callbacks]
+      ansible.builtin.shell: "{{ ex50_ssh }} < {{ ex50_sonos_rendered.path }}"
+      register: ex50_sonos_apply
+      changed_when: true
+
+    - name: Remove the rendered Sonos callback delta
+      tags: [sonos-callbacks]
+      ansible.builtin.file:
+        path: "{{ ex50_sonos_rendered.path }}"
+        state: absent
+
+    - name: Re-capture config (Sonos callback verification)
+      tags: [sonos-callbacks]
+      ansible.builtin.command: "{{ ex50_ssh }} show config"
+      register: ex50_sonos_after
+      changed_when: false
+
+    - name: Assert the Sonos leases and custom firewall rule are present
+      tags: [sonos-callbacks]
+      ansible.builtin.assert:
+        that:
+          - (ex50_sonos_after.stdout | lower) is search(item.mac | lower)
+          - ex50_sonos_after.stdout is search('ha-sonos-src')
+          - ex50_sonos_after.stdout is search('firewall custom enable "true"')
+        fail_msg: "{{ ex50_sonos_apply.stdout | default('') }}"
+        quiet: true
+      loop: "{{ ex50_restricted_sonos }}"
+      loop_control:
+        label: "{{ item.name }}"

@@ -19,6 +19,7 @@ One line per decision, grouped by domain. See [`README.md`](README.md) for what 
 - [046-platform-network-segmentation-via-home-eviction](046-platform-network-segmentation-via-home-eviction.md) — segment the platform off the home LAN.
 - [047-ingress-tunnel-relocation-to-ex50](047-ingress-tunnel-relocation-to-ex50.md) — home the ingress tunnel on the EX50.
 - [060-downstream-wifi-segmentation](060-downstream-wifi-segmentation.md) — split downstream WiFi into trusted + restricted VLANs (refines 046); platform stays native VLAN 1.
+- [082-sonos-event-callbacks-from-restricted](082-sonos-event-callbacks-from-restricted.md) — restricted-segment Sonos speakers may reach HA's hostPort 1400 on the k8s nodes via one EX50 `firewall custom` rule; static leases for the speakers.
 
 ## Cluster & compute
 

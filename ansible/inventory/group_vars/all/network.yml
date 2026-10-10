@@ -40,7 +40,8 @@ ex50_dns_upstreams: "{{ lab_dns }}"
 #                DAL default-denies inter-zone forwarding, so with no
 #                trusted-style external rule it has no internet by default.
 # Custom zones are created simply by naming them on the interface. Segment
-# isolation (each ↛ platform, each ↛ the other) is automatic under default-deny.
+# isolation (each ↛ platform, each ↛ the other) is automatic under default-deny,
+# with one narrow exception: Sonos callbacks from restricted to HA (ADR-082).
 ex50_restricted_vlan_id: "20"
 ex50_restricted_ip: "10.20.0.1"
 ex50_restricted_prefix: "24"
@@ -52,6 +53,20 @@ ex50_trusted_ip: "10.30.0.1"
 ex50_trusted_prefix: "24"
 ex50_trusted_dhcp_pool_start: "10.30.0.50"
 ex50_trusted_dhcp_pool_end: "10.30.0.150"
+
+# Sonos speakers on the `restricted` segment that Home Assistant controls
+# (lab-apps apps/home-automation). Each gets an EX50 static DHCP lease so the
+# HA Sonos config and the event-callback rule below can name it by IP. HA's
+# event listener is a hostPort 1400 on whichever node runs HA, so callbacks
+# are allowed to every k8s node (ADR-082).
+ex50_restricted_sonos:
+  - name: sonos-den
+    mac: "5C:AA:FD:2A:9A:5C"
+    ip: "10.20.0.94"
+  - name: sonos-bedroom
+    mac: "5C:AA:FD:2A:9D:3A"
+    ip: "10.20.0.110"
+sonos_event_port: 1400
 
 # Firewall filter index for the trusted→external (internet) rule. The two
 # factory rules occupy indices 0 (internal→any) and 1 (hotspot→external), so
