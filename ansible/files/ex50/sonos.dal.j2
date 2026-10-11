@@ -1,7 +1,9 @@
 {#
-  Sonos event callbacks from the `restricted` segment to Home Assistant (ADR-082).
+  Static leases for the Sonos speakers Home Assistant controls, and their event
+  callbacks from the `restricted` segment to HA (ADR-082). Speakers on `lan`
+  share the k8s nodes' subnet, so they need a lease but no firewall rule.
 
-  Rendered by configure-ex50.yml (tag `sonos-callbacks`) and piped into the DAL
+  Rendered by configure-ex50.yml (tag `sonos`) and piped into the DAL
   Admin CLI like config.dal.j2. Unlike that from-factory delta, this one is
   safe to re-apply on the live box:
 
@@ -25,13 +27,13 @@
 {%- set nodes = [dell_inspiron_ip, intel_nuc_ip, optiplex_ip, quanta_ip] -%}
 {%- set match = "-p tcp --dport " ~ sonos_event_port ~ " -m set --match-set ha-sonos-src src -m set --match-set ha-sonos-dst dst -j ACCEPT" -%}
 {%- set cmds = ["ipset -exist create ha-sonos-src hash:ip", "ipset flush ha-sonos-src"]
-      + (ex50_restricted_sonos | map(attribute='ip') | map('regex_replace', '^', 'ipset add ha-sonos-src ') | list)
+      + (ex50_sonos | selectattr('interface', 'eq', 'restricted') | map(attribute='ip') | map('regex_replace', '^', 'ipset add ha-sonos-src ') | list)
       + ["ipset -exist create ha-sonos-dst hash:ip", "ipset flush ha-sonos-dst"]
       + (nodes | map('regex_replace', '^', 'ipset add ha-sonos-dst ') | list)
       + ["iptables -C FORWARD " ~ match ~ " || iptables -I FORWARD " ~ match] -%}
-{% for s in ex50_restricted_sonos if s.mac | lower not in ex50_before.stdout | lower %}
+{% for s in ex50_sonos if s.mac | lower not in ex50_before.stdout | lower %}
 config
-add network interface restricted ipv4 dhcp_server advanced static_lease end
+add network interface {{ s.interface }} ipv4 dhcp_server advanced static_lease end
 mac {{ s.mac }}
 ip {{ s.ip }}
 name {{ s.name }}

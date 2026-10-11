@@ -1,6 +1,6 @@
 # Runbook — SR2024 VLAN trunks (downstream WiFi segmentation)
 
-Convert the SR2024 uplink ports (EX50 gateway + the two APs) into 802.1Q trunks so the tagged `restricted` (VLAN 20) and `trusted` (VLAN 30) segments reach the EX50 and the APs, while the platform keeps riding native VLAN 1 untagged. Config artifact: [`ansible/files/aerohive/sr2024-vlan-trunks.hiveos`](../../ansible/files/aerohive/sr2024-vlan-trunks.hiveos). Decision: [ADR-060](../decisions/060-downstream-wifi-segmentation.md). This is one slice of the WiFi-segmentation work — the EX50 side is in `configure-ex50.yml`, the AP side in the `*.hiveos` AP files.
+Convert the SR2024 uplink ports (EX50 gateway + the two APs) into 802.1Q trunks so the tagged `restricted` (VLAN 20) and `trusted` (VLAN 30, idle — no SSID maps to it, [ADR-083](../decisions/083-personal-ssid-on-platform-vlan.md)) segments reach the EX50 and the APs, while the platform keeps riding native VLAN 1 untagged. Config artifact: [`ansible/files/aerohive/sr2024-vlan-trunks.hiveos`](../../ansible/files/aerohive/sr2024-vlan-trunks.hiveos). Decision: [ADR-060](../decisions/060-downstream-wifi-segmentation.md). This is one slice of the WiFi-segmentation work — the EX50 side is in `configure-ex50.yml`, the AP side in the `*.hiveos` AP files.
 
 > **This is a live-network change with lock-out potential.** The EX50 uplink (`eth1/1`) carries the platform's own gateway traffic untagged on native VLAN 1. Trunking it is safe *as long as* native VLAN 1 stays the untagged native — but a mistake here drops the whole platform. Drive it from a **wired platform host**, not over WiFi, and have serial-console access to the SR2024 ready as a fallback.
 
@@ -40,7 +40,7 @@ The trailing `save config` persists it.
 
 - **Platform intact (most important):** from a wired platform host, `ping 10.0.0.1` and confirm SSH/kubectl to `10.0.0.x` hosts still work. Native VLAN 1 must be unaffected.
 - **Trunks formed:** `show run` shows `eth1/1`, `eth1/3`, `eth1/4` in trunk mode with VLANs 20/30 allowed. Note the display gotcha — trunks may print `allow vlan 1 - 3966` even when narrowed; verify at the traffic level, not the config text.
-- **VLAN reachability** (after the EX50 + AP sides are also in place): a client on the trusted SSID lands in `10.30.0.0/24` and reaches the internet; a client on the restricted segment lands in `10.20.0.0/24`.
+- **VLAN reachability** (after the EX50 + AP sides are also in place): a client on the house SSID lands in `10.20.0.0/24`; a client on the personal SSID lands in `10.0.0.0/24` (native VLAN 1).
 
 ## Rollback
 

@@ -1,7 +1,7 @@
 # ADR-060: Downstream WiFi Segmentation — Trusted and Restricted Segments
 
 **Date:** 2026-07-09
-**Status:** Accepted — live (EX50 interfaces/zones, SR2024 trunks, and both APs' SSID→VLAN tagging all in place)
+**Status:** Accepted — partially reversed by [ADR-083](083-personal-ssid-on-platform-vlan.md): the personal SSID now rides native VLAN 1, and the `trusted` segment is configured but carries no SSID. The `restricted` segment is live as written.
 **Relates to:** [ADR-046](046-platform-network-segmentation-via-home-eviction.md) (refines), [ADR-044](044-digi-ex50-as-off-the-shelf-router.md), [ADR-021](021-off-the-shelf-router-tower-pc-as-worker.md)
 
 ## Context
