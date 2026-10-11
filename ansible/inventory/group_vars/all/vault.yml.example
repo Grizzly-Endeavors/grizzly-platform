@@ -33,8 +33,8 @@ vault_obs_s3_secret_key: "your-obs-s3-secret-key-here"
 # WiFi PSKs for the Aerohive APs (AP630 + AP130). Rendered into the committed
 # HiveOS scripts (ansible/files/aerohive/) at paste time, per
 # docs/runbooks/aerohive-ap-setup.md. WPA2-AES-PSK — 8..63 ASCII chars.
-# `home` = the existing SSID (restricted, VLAN 20); `trusted` = the new trusted
-# SSID (VLAN 30). Use distinct PSKs.
+# `home` = the existing SSID (restricted, VLAN 20); `trusted` = the personal
+# SSID (native VLAN 1). Use distinct PSKs.
 vault_home_wifi_psk: "your-home-wifi-psk-here"
 vault_trusted_wifi_psk: "your-trusted-wifi-psk-here"
 

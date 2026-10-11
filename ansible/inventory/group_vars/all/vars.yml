@@ -59,7 +59,7 @@ sccache_s3_secret_key: "{{ vault_sccache_s3_secret_key }}"
 # __WIFI_PSK2__ placeholders, rendered in at paste time per
 # docs/runbooks/aerohive-ap-setup.md and never committed. Public repo — the real
 # PSKs live only in the encrypted vault.yml. `home` = the existing SSID (the
-# restricted segment, VLAN 20); `trusted` = the trusted SSID (VLAN 30).
+# restricted segment, VLAN 20); `trusted` = the personal SSID (native VLAN 1, ADR-083).
 home_wifi_psk: "{{ vault_home_wifi_psk }}"
 trusted_wifi_psk: "{{ vault_trusted_wifi_psk }}"
 
@@ -91,4 +91,3 @@ onepassword_vault: "grizzly-platform"
 # alerts on age (see the external-secrets rule group). Update this whenever a
 # token is re-minted, and re-run setup-1password-eso.yml.
 onepassword_tokens_minted: "2026-08-01"
-

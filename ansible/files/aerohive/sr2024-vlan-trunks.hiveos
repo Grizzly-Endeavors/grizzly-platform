@@ -7,7 +7,8 @@
 # no secrets here. Persists only on the trailing `save config`. Legacy SSH algos
 # + creds admin/aerohive; see docs/aerohive-cli-reference.md.
 #
-# What this does: defines VLANs 20 (restricted) + 30 (trusted) and converts the
+# What this does: defines VLANs 20 (restricted) + 30 (trusted, no SSID mapped to it
+# per ADR-083) and converts the
 # three UPLINK ports — to the EX50 gateway and the two APs — into 802.1Q trunks
 # carrying native VLAN 1 (untagged: platform + switch/AP management) plus tagged
 # 20 and 30. Every other port stays an untagged VLAN-1 access port and is left
