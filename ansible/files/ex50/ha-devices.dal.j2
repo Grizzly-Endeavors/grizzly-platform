@@ -1,9 +1,10 @@
 {#
-  Static leases for the Sonos speakers Home Assistant controls, and their event
-  callbacks from the `restricted` segment to HA (ADR-082). Speakers on `lan`
-  share the k8s nodes' subnet, so they need a lease but no firewall rule.
+  Static leases for the devices Home Assistant addresses by IP (the Sonos
+  speakers and ex50_ha_devices), and the Sonos event callbacks from the
+  `restricted` segment to HA (ADR-082). Devices on `lan` share the k8s nodes'
+  subnet, so they need a lease but no firewall rule.
 
-  Rendered by configure-ex50.yml (tag `sonos`) and piped into the DAL
+  Rendered by configure-ex50.yml (tag `ha-devices`) and piped into the DAL
   Admin CLI like config.dal.j2. Unlike that from-factory delta, this one is
   safe to re-apply on the live box:
 
@@ -31,7 +32,7 @@
       + ["ipset -exist create ha-sonos-dst hash:ip", "ipset flush ha-sonos-dst"]
       + (nodes | map('regex_replace', '^', 'ipset add ha-sonos-dst ') | list)
       + ["iptables -C FORWARD " ~ match ~ " || iptables -I FORWARD " ~ match] -%}
-{% for s in ex50_sonos if s.mac | lower not in ex50_before.stdout | lower %}
+{% for s in ex50_sonos + ex50_ha_devices if s.mac | lower not in ex50_before.stdout | lower %}
 config
 add network interface {{ s.interface }} ipv4 dhcp_server advanced static_lease end
 mac {{ s.mac }}

@@ -85,6 +85,14 @@ ex50_sonos:
     ip: "10.0.0.99"
 sonos_event_port: 1400
 
+# Other devices Home Assistant addresses by IP, each pinned with an EX50 static
+# DHCP lease like the speakers above (same delta, tag `ha-devices`).
+ex50_ha_devices:
+  - name: tcl-tv
+    interface: lan
+    mac: "34:51:80:6D:94:D7"
+    ip: "10.0.0.53"
+
 # Firewall filter index for the trusted→external (internet) rule. The two
 # factory rules occupy indices 0 (internal→any) and 1 (hotspot→external), so
 # the trusted rule lands at 2. Reserved range: any out-of-band layer that adds
