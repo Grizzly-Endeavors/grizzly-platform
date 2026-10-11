@@ -79,6 +79,10 @@ ex50_sonos:
     interface: lan
     mac: "5C:AA:FD:81:8C:0E"
     ip: "10.0.0.112"
+  - name: sonos-bedside
+    interface: lan
+    mac: "5C:AA:FD:2A:C4:DC"
+    ip: "10.0.0.99"
 sonos_event_port: 1400
 
 # Firewall filter index for the trusted→external (internet) rule. The two
