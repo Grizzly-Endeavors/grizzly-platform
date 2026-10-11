@@ -34,8 +34,9 @@ ex50_dns_upstreams: "{{ lab_dns }}"
 # Downstream WiFi segments (ADR-060) — two tagged VLANs the EX50 routes and
 # firewalls over the LAN trunk (LAN port → SR2024 → APs). The platform stays
 # native/untagged on VLAN 1 (10.0.0.0/24), so nothing above is renumbered.
-#   trusted    — personal + guest WiFi devices: internet, isolated from the
-#                platform (its own custom firewall zone `trusted`).
+#   trusted    — internet, isolated from the platform (its own custom
+#                firewall zone `trusted`). Configured, but no SSID maps to it:
+#                the personal SSID rides native VLAN 1 (ADR-083).
 #   restricted — an isolated segment whose WAN egress is managed out-of-band;
 #                DAL default-denies inter-zone forwarding, so with no
 #                trusted-style external rule it has no internet by default.
@@ -54,18 +55,30 @@ ex50_trusted_prefix: "24"
 ex50_trusted_dhcp_pool_start: "10.30.0.50"
 ex50_trusted_dhcp_pool_end: "10.30.0.150"
 
-# Sonos speakers on the `restricted` segment that Home Assistant controls
-# (lab-apps apps/home-automation). Each gets an EX50 static DHCP lease so the
-# HA Sonos config and the event-callback rule below can name it by IP. HA's
-# event listener is a hostPort 1400 on whichever node runs HA, so callbacks
-# are allowed to every k8s node (ADR-082).
-ex50_restricted_sonos:
+# Sonos speakers that Home Assistant controls (lab-apps apps/home-automation).
+# Each gets an EX50 static DHCP lease on its `interface` so HA's Sonos host
+# list can name it by IP; HA runs on the pod network and never sees SSDP
+# discovery. HA's event listener is a hostPort 1400 on whichever node runs HA.
+# Speakers on `lan` share the nodes' subnet and reach it directly; speakers on
+# `restricted` cross the EX50, which allows their callbacks to every k8s node
+# (ADR-082).
+ex50_sonos:
   - name: sonos-den
+    interface: restricted
     mac: "5C:AA:FD:2A:9A:5C"
     ip: "10.20.0.94"
   - name: sonos-bedroom
+    interface: restricted
     mac: "5C:AA:FD:2A:9D:3A"
     ip: "10.20.0.110"
+  - name: sonos-playbar
+    interface: lan
+    mac: "5C:AA:FD:1B:5F:B9"
+    ip: "10.0.0.147"
+  - name: sonos-sub
+    interface: lan
+    mac: "5C:AA:FD:81:8C:0E"
+    ip: "10.0.0.112"
 sonos_event_port: 1400
 
 # Firewall filter index for the trusted→external (internet) rule. The two
