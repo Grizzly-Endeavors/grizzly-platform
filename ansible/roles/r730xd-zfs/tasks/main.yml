@@ -152,6 +152,38 @@
     minute: "{{ zfs_scrub_cron_minute }}"
     user: root
 
+# --- ZED notifications (ntfy) ---
+# Only the ZED_NTFY_* keys are managed; the distro zed.rc is otherwise untouched.
+# ZED enables the ntfy transport when ZED_NTFY_TOPIC is set, so an empty token
+# removes the keys and leaves the transport off.
+
+- name: Enable ZED ntfy transport
+  ansible.builtin.lineinfile:
+    path: /etc/zfs/zed.d/zed.rc
+    regexp: '^#?\s*{{ item.key }}='
+    line: '{{ item.key }}="{{ item.value }}"'
+  loop:
+    - { key: ZED_NTFY_URL, value: "{{ zfs_zed_ntfy_url }}" }
+    - { key: ZED_NTFY_TOPIC, value: "{{ zfs_zed_ntfy_topic }}" }
+    - { key: ZED_NTFY_ACCESS_TOKEN, value: "{{ zfs_zed_ntfy_token }}" }
+  loop_control:
+    label: "{{ item.key }}"
+  no_log: true
+  when: zfs_zed_ntfy_token | length > 0
+  notify: Restart zfs-zed
+
+- name: Disable ZED ntfy transport
+  ansible.builtin.lineinfile:
+    path: /etc/zfs/zed.d/zed.rc
+    regexp: '^{{ item }}='
+    state: absent
+  loop:
+    - ZED_NTFY_URL
+    - ZED_NTFY_TOPIC
+    - ZED_NTFY_ACCESS_TOKEN
+  when: zfs_zed_ntfy_token | length == 0
+  notify: Restart zfs-zed
+
 # --- Service datasets ---
 
 - name: Check existing datasets

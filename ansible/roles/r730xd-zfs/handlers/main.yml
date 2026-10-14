@@ -2,3 +2,8 @@
 - name: Apply ARC max at runtime
   ansible.builtin.shell: "echo {{ zfs_arc_max_bytes }} > /sys/module/zfs/parameters/zfs_arc_max"
   changed_when: true
+
+- name: Restart zfs-zed
+  ansible.builtin.systemd:
+    name: zfs-zed
+    state: restarted

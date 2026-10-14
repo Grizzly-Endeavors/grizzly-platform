@@ -65,6 +65,25 @@ amtool config routes test --config.file=/opt/observability/prometheus/alertmanag
 amtool config routes test --config.file=/opt/observability/prometheus/alertmanager.yml severity=warning alertname=ContainerMemoryHigh   # -> default
 ```
 
+## ZFS (ZED) → phone
+
+ZED on the R730xd publishes pool and vdev events (state changes, faults, scrub/resilver results) to the same `platform-critical` topic, using ZED's built-in ntfy transport and the Alertmanager token (`vault_monitoring_ntfy_critical_token`). The `r730xd-zfs` role manages only the `ZED_NTFY_URL` / `ZED_NTFY_TOPIC` / `ZED_NTFY_ACCESS_TOKEN` keys in `/etc/zfs/zed.d/zed.rc` and restarts `zfs-zed` on change; an empty token removes them and leaves the transport off. This is faster and more specific than the `check-zfs.sh` → `ZFSPoolDegraded` path, which is unchanged. By default ZED notifies on scrub/resilver finish only when the pool is unhealthy.
+
+Apply and check:
+
+```fish
+ansible-playbook -i ansible/inventory ansible/playbooks/r730xd-zfs.yml --vault-password-file .vault_pass --tags zfs
+ssh r730xd 'sudo grep ^ZED_NTFY /etc/zfs/zed.d/zed.rc; systemctl is-active zfs-zed'
+```
+
+Send a test event — publish to the topic with the same token (confirms the credential and topic grant that ZED uses):
+
+```fish
+curl -H "Authorization: Bearer tk_xxxxxxxx" -d "zed test" https://ntfy.grizzly-endeavors.com/platform-critical
+```
+
+To exercise ZED itself, run a scrub on a healthy pool with verbose notifications temporarily enabled (`ZED_NOTIFY_VERBOSE=1` in `zed.rc`, then `systemctl restart zfs-zed`) and `zpool scrub tank`; the finish event should arrive on the topic. Revert the manual change afterwards. Failures show in `journalctl -u zfs-zed`.
+
 ## Operational readiness
 
 - **Health:** `GET /v1/health`; the Deployment's readiness/liveness probes hit it. `kubectl -n ntfy get pods`.
