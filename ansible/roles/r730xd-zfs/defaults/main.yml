@@ -35,6 +35,14 @@ zfs_scrub_cron_day: "0"     # Sunday
 zfs_scrub_cron_hour: "2"    # 2 AM
 zfs_scrub_cron_minute: "0"
 
+# ZED → ntfy: publishes pool/vdev events to the same topic Alertmanager uses for
+# severity=critical (r730xd-prometheus). URL and topic follow the monitoring_ntfy_*
+# vars when set; the token is the shared vault-backed critical token. An empty
+# token leaves ZED's ntfy transport off.
+zfs_zed_ntfy_url: "{{ monitoring_ntfy_url | default('https://ntfy.grizzly-endeavors.com') }}"
+zfs_zed_ntfy_topic: "{{ monitoring_ntfy_critical_topic | default('platform-critical') }}"
+zfs_zed_ntfy_token: "{{ monitoring_ntfy_critical_token | default('') }}"
+
 # Service datasets — created under the pool with per-workload recordsize tuning
 # Each mounts automatically at {{ zfs_mount_point }}/<name>/
 zfs_datasets:
