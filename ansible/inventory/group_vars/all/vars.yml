@@ -90,4 +90,4 @@ onepassword_vault: "grizzly-platform"
 # Prometheus turns this into onepassword_token_minted_timestamp_seconds and
 # alerts on age (see the external-secrets rule group). Update this whenever a
 # token is re-minted, and re-run setup-1password-eso.yml.
-onepassword_tokens_minted: "2026-08-01"
+onepassword_tokens_minted: "2026-10-19"
