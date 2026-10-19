@@ -23,6 +23,12 @@ route:
     - match:
         alertname: PrometheusWatchdog
       receiver: 'null'
+    # The token-age warning stays firing for the whole two-week re-mint window
+    # by design, so it reminds once a day instead of every repeat_interval.
+    - match:
+        alertname: OnePasswordTokenNearingMaxAge
+      receiver: 'default'
+      repeat_interval: 24h
 {% if ntfy_enabled %}
     # Critical alerts get a phone push on top of the Discord trail. A receiver
     # carrying both destinations is used rather than `continue: true`, because a
