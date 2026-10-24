@@ -23,9 +23,10 @@ spec:
     spec:
       containers:
         - name: roundcube
-          # Roundcube 1.7.2 (current stable, released 2026-07-05; actively
-          # maintained). Apache variant = self-contained web server on :80.
-          image: roundcube/roundcubemail:1.7.2-apache
+          # Apache variant = self-contained web server on :80. Pinned by
+          # digest: upstream rebuilds the same tag in place for PHP security
+          # releases, so the tag alone doesn't say which PHP is running.
+          image: roundcube/roundcubemail:1.7.5-apache@sha256:dfe7e05eccab55cf3d0d508fade5046ca4c7cd1530070c803d670ec2b2933607
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
@@ -35,6 +36,11 @@ spec:
                 name: roundcube-config
             - secretRef:
                 name: roundcube-secrets
+          volumeMounts:
+            - name: php-overrides
+              mountPath: /usr/local/etc/php/conf.d/zz-session-upload-progress.ini
+              subPath: zz-session-upload-progress.ini
+              readOnly: true
           readinessProbe:
             httpGet:
               path: /
@@ -54,3 +60,7 @@ spec:
             limits:
               cpu: "1"
               memory: 1Gi
+      volumes:
+        - name: php-overrides
+          configMap:
+            name: roundcube-php

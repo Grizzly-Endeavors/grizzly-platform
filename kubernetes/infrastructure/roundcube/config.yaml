@@ -52,3 +52,17 @@ metadata:
 data:
   X-Forwarded-Host: "webmail.grizzly-endeavors.com"
   X-Forwarded-Proto: "https"
+---
+# PHP overrides mounted into conf.d. Session upload progress stays off: it is
+# the request path for the PHP2Shell use-after-free (CVE-2026-109619) and
+# CVE-2026-115560, and Roundcube doesn't use it.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: roundcube-php
+  namespace: roundcube
+  labels:
+    app.kubernetes.io/name: roundcube
+data:
+  zz-session-upload-progress.ini: |
+    session.upload_progress.enabled=0
