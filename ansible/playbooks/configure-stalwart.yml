@@ -524,6 +524,29 @@
       changed_when: "'Updated' in stalwart_claude_pw.stdout"
       no_log: true
 
+    # Share claude's Inbox and Sent Items read-only with the bootstrap mailbox,
+    # so the operator reads the agent's mail in their own Roundcube session
+    # (Shared Folders). Rights "lr" (see + read) deliberately omit "s": the
+    # grizzly-mail plugin's wait_for_message polls for UNSEEN mail, so the
+    # operator opening a message must not mark it seen for the agent.
+    - name: Share the claude mailbox read-only with the bootstrap mailbox
+      ansible.builtin.command:
+        argv:
+          - python3
+          - -I
+          - "{{ stalwart_plan_dir }}/share-mailbox.py"
+          - "{{ stalwart_tls_san }}"
+          - "{{ stalwart_claude_local }}@{{ stalwart_domain }}"
+          - "{{ stalwart_account_local }}@{{ stalwart_domain }}"
+          - "lr"
+          - INBOX
+          - Sent Items
+      environment:
+        SHARE_OWNER_PASSWORD: "{{ vault_stalwart_claude_password }}"
+      register: stalwart_claude_share
+      changed_when: stalwart_claude_share.stdout.startswith('changed')
+      no_log: true
+
     # --- noreply submission account (Authentik one-time codes) ---------------
     # Authentik authenticates as noreply@grizzly-endeavors.com on :465 to send
     # enrollment and sign-in codes (ADR-066). Same check-then-create shape as the
