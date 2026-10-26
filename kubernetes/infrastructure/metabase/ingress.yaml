@@ -57,8 +57,12 @@ spec:
     - host: analytics.grizzly-endeavors.com
       http:
         paths:
+          # ImplementationSpecific, not Prefix: the "." in the path fails
+          # ingress-nginx's strict Prefix/Exact path validation. nginx still
+          # matches it as a prefix, which the /start, /callback and /auth/*
+          # sub-paths need.
           - path: /outpost.goauthentik.io
-            pathType: Prefix
+            pathType: ImplementationSpecific
             backend:
               service:
                 name: authentik-outpost
