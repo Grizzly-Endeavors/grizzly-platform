@@ -22,3 +22,6 @@ iscsi_zfs_snapshot_dataset: "tank/iscsi-snaps"
 
 # Open firewall port (follows enable_firewall from inventory)
 iscsi_open_firewall: "{{ enable_firewall | default(false) | bool }}"
+
+# Concurrent SSH channels democratic-csi may open (one per in-flight volume operation).
+iscsi_democratic_csi_max_sessions: 64

@@ -114,3 +114,28 @@
       - "ZFS snapshot dataset: {{ iscsi_zfs_snapshot_dataset }}"
       - ""
       - "democratic-csi will manage all targetcli objects over SSH."
+
+# ==========================================================================
+# SSH session limit for democratic-csi
+# ==========================================================================
+# democratic-csi multiplexes every ZFS/targetcli command as a channel on one
+# SSH connection. sshd's default MaxSessions of 10 makes concurrent PVC
+# creates and deletes fail with "Channel open failure" once more than ten
+# volumes are in flight, so the limit is raised for that user alone.
+
+- name: Raise sshd MaxSessions for democratic-csi
+  ansible.builtin.copy:
+    dest: /etc/ssh/sshd_config.d/60-democratic-csi.conf
+    content: |
+      Match User {{ democratic_csi_ssh_user | default('democratic-csi') }}
+          MaxSessions {{ iscsi_democratic_csi_max_sessions }}
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload sshd
+  tags: [democratic-csi-sshd]
+
+- name: Check the sshd config still parses
+  ansible.builtin.command: /usr/sbin/sshd -t
+  changed_when: false
+  tags: [democratic-csi-sshd]
