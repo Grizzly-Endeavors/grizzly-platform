@@ -1,0 +1,19 @@
+# The Gary web console from the grizzly-gameservers repo ./web/deploy, on its
+# own Kustomization so its deploys are independent of the bot's HelmRelease.
+# Owns the gary-web namespace; the repo's web.yml workflow pins the image.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: grizzly-gameservers-web
+  namespace: flux-system
+spec:
+  dependsOn:
+    - name: infrastructure
+  interval: 5m
+  sourceRef:
+    kind: GitRepository
+    name: grizzly-gameservers
+  path: ./web/deploy
+  prune: true
+  wait: true
+  timeout: 5m
