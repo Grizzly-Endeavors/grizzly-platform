@@ -21,6 +21,7 @@ One line per decision, grouped by domain. See [`README.md`](README.md) for what 
 - [060-downstream-wifi-segmentation](060-downstream-wifi-segmentation.md) — split downstream WiFi into trusted + restricted VLANs (refines 046); platform stays native VLAN 1.
 - [082-sonos-event-callbacks-from-restricted](082-sonos-event-callbacks-from-restricted.md) — restricted-segment Sonos speakers may reach HA's hostPort 1400 on the k8s nodes via one EX50 `firewall custom` rule; static leases for the speakers.
 - [083-personal-ssid-on-platform-vlan](083-personal-ssid-on-platform-vlan.md) — the personal SSID (`GrizzlyWiFi`) rides native VLAN 1 beside the wired home drops; the `trusted` VLAN 30 stays configured but idle (partially reverses 060).
+- [084-gameservers-bot-signature-not-enforced](084-gameservers-bot-signature-not-enforced.md) — the grizzly-gameservers bot image is no longer signature-enforced at admission; it falls under the Audit-only `verify-gate-signature` like every other first-party image.
 
 ## Cluster & compute
 
