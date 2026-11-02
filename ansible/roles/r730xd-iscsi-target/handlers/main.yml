@@ -3,3 +3,8 @@
   ansible.builtin.systemd:
     name: rtslib-fb-targetctl
     state: restarted
+
+- name: Reload sshd
+  ansible.builtin.systemd:
+    name: ssh
+    state: reloaded
