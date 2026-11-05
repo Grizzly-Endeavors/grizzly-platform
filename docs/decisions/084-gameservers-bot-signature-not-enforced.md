@@ -1,7 +1,7 @@
 # ADR-084: The grizzly-gameservers Bot Image Is Not Signature-Enforced
 
 **Date:** 2026-11-02
-**Status:** Accepted
+**Status:** Superseded by [ADR-085](085-gameservers-bot-signature-enforced-again.md)
 **Relates to:** [ADR-028](028-centralized-ci-gate.md) (the gate's Kyverno admission boundary), [ADR-069](069-kyverno-failurepolicy-tracks-failureaction.md) (named `enforce-gameservers-bot-signature` as the one fail-closed boundary; that policy is removed here)
 
 ## Context

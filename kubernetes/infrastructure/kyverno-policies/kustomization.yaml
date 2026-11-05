@@ -6,3 +6,8 @@ kind: Kustomization
 # for a later enforcement phase.
 resources:
   - verify-gate-signature.yaml
+  # Bot-scoped Enforce policy: refuses an unsigned grizzly-gameservers BOT image
+  # at admission (the broad verify-gate-signature stays Audit during rollout).
+  # Scoped by the imageReferences glob so game-supervisor + Agones images are
+  # unaffected. Enabled only after the first gate-signed bot image is live.
+  - enforce-gameservers-bot-signature.yaml
