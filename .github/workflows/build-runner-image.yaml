@@ -1,6 +1,7 @@
 name: Build Custom Runner Image
 
-# Triggers an Argo Workflows build when the runner Dockerfile changes.
+# Triggers an Argo Workflows build when the runner Dockerfile changes. The
+# build-runner-image-weekly CronWorkflow rebuilds the same image every week.
 # The actual build runs in-cluster via rootless BuildKit (see
 # kubernetes/infrastructure/argo-workflows/build-runner-image.yaml).
 #

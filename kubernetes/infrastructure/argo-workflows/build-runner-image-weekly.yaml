@@ -1,0 +1,28 @@
+apiVersion: argoproj.io/v1alpha1
+kind: CronWorkflow
+metadata:
+  name: build-runner-image-weekly
+  namespace: argo
+spec:
+  # Rebuilds the runner image from master every week so it follows its moving
+  # base (ghcr.io/actions/actions-runner:latest). GitHub refuses a runner more
+  # than 30 days behind the newest release, and ARC then tears the scale set
+  # down (docs/runbooks/github-runners.md), so an image rebuilt only when its
+  # Dockerfile changes eventually takes every pool offline. The Workflow runs
+  # the build-runner-image template unchanged and gets its service account and
+  # pod GC from the controller's workflowDefaults. See
+  # docs/decisions/086-runner-image-weekly-rebuild.md.
+  schedules:
+    - "17 4 * * 0"
+  timezone: UTC
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 3600
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 3
+  workflowSpec:
+    workflowTemplateRef:
+      name: build-runner-image
+    arguments:
+      parameters:
+        - name: git-ref
+          value: master

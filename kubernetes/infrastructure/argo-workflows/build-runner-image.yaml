@@ -7,7 +7,9 @@ spec:
   # Builds the self-hosted GitHub Actions runner image in-cluster via rootless
   # BuildKit and pushes it to the in-cluster zot registry. Source lives in this
   # repo (docker/github-runner); build-runner-image.yaml in .github/workflows
-  # submits this template on push. See docs/decisions/057-container-builds-buildkit.md.
+  # submits this template on push, and the build-runner-image-weekly CronWorkflow
+  # submits it every week. See docs/decisions/057-container-builds-buildkit.md
+  # and docs/decisions/086-runner-image-weekly-rebuild.md.
   entrypoint: build
   arguments:
     parameters:
@@ -63,8 +65,10 @@ spec:
           # buildctl-daemonless.sh starts a throwaway rootless buildkitd, runs
           # the build, and exits — one-shot, no always-on daemon. Registry cache
           # import/export against zot persists layers across builds (image-manifest
-          # so zot accepts the cache); FROM pulls route through zot's mirror via
-          # the mounted buildkitd.toml.
+          # so zot accepts the cache). The runner base is on ghcr.io, which
+          # buildkitd.toml does not mirror, so each build resolves the base's
+          # :latest tag against ghcr.io and a new upstream digest invalidates
+          # every layer built on it.
           - |
             IMG=registry.registry.svc.cluster.local:5000/github-runner
             buildctl-daemonless.sh build \

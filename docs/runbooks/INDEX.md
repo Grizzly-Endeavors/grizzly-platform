@@ -28,6 +28,7 @@ One line per runbook. See [`README.md`](README.md) for what runbooks are and whe
 ## CI Gate
 
 - [ci-gate.md](ci-gate.md) — bootstrap, Audit→Enforce rollout, key rotation, gate version bump, deploy-denied diagnosis.
+- [github-runners.md](github-runners.md) — ARC runner pools: the 30-day runner version window, weekly image rebuild, recovering an `Outdated` scale set, ARC upgrades.
 
 ## Identity / invites
 
