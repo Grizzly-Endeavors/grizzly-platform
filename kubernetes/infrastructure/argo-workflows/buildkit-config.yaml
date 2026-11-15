@@ -15,6 +15,8 @@ data:
 
     # Route Docker Hub base-image (FROM) pulls through zot's pull-through cache
     # so they're fetched once and served LAN-local (ADR-032), same as the DinD
-    # runner path. Non-docker.io bases go direct (egress is open).
+    # runner path. Non-docker.io bases go direct (egress is open); the runner
+    # image's ghcr.io base must stay direct so a weekly rebuild sees upstream's
+    # current digest (ADR-086).
     [registry."docker.io"]
       mirrors = ["registry.registry.svc.cluster.local:5000"]
