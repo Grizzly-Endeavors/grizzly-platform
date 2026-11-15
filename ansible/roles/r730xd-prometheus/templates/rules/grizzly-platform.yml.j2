@@ -408,6 +408,20 @@ groups:
             ARC runner pod {{ '{{' }} $labels.pod {{ '}}' }}
             has restarted {{ '{{' }} $value | printf "%.0f" {{ '}}' }} times in 15 minutes
 
+      # Each scale set has one listener pod in arc-systems; ARC deletes it when
+      # GitHub refuses the runner version (docs/runbooks/github-runners.md) and
+      # jobs for that pool then queue until GitHub cancels them. The 5 is the
+      # number of scale-set HelmReleases in kubernetes/infrastructure/github-runners/.
+      - alert: ARCScaleSetListenerMissing
+        expr: (count(kube_pod_status_ready{namespace="arc-systems",pod=~".+-listener",condition="true"} == 1) or vector(0)) < 5
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: >-
+            Only {{ '{{' }} $value | printf "%.0f" {{ '}}' }} of 5 ARC scale-set listeners are ready —
+            jobs for the missing pools are queueing
+
       - alert: ArgoControllerDown
         expr: up{job="argo-workflows",component="workflow-controller"} == 0
         for: 5m
