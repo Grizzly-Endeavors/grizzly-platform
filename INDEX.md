@@ -16,8 +16,9 @@ Centralized CI gate — versioned `grizzly-gate` image runs per-language checks 
 
 ### GitHub Actions runners
 Org-level ARC v2 in `arc-runners`. `lab-runners` (max 4) is the default CI pool. Jobs can pick a pool by shape: `lab-runners-fast` (NUC only, max 2) for long serial builds, `lab-runners-wide` (quanta/optiplex, max 6) for sharded or parallel work, `lab-runners-light` (no DinD, max 6) for shell-only jobs. `claude-runners` (min 0, max 2) runs `@claude` for this repo; only those pods receive `CLAUDE_CODE_OAUTH_TOKEN`.
-- **Why:** [ADR-017](docs/decisions/017-arc-v2-github-runners.md) (ARC v2), [ADR-078](docs/decisions/078-claude-code-runner-scale-set.md) (Claude scale set), [ADR-081](docs/decisions/081-job-shaped-ci-runner-pools.md) (job-shaped pools).
-- **Code:** `kubernetes/infrastructure/github-runners/`, `.github/workflows/claude.yml`. Token: 1Password item `cicd-claude-code` → ExternalSecret `claude-code-oauth`.
+- **Why:** [ADR-017](docs/decisions/017-arc-v2-github-runners.md) (ARC v2), [ADR-078](docs/decisions/078-claude-code-runner-scale-set.md) (Claude scale set), [ADR-081](docs/decisions/081-job-shaped-ci-runner-pools.md) (job-shaped pools), [ADR-086](docs/decisions/086-runner-image-weekly-rebuild.md) (weekly image rebuild, 30-day runner window).
+- **How:** [runbooks/github-runners.md](docs/runbooks/github-runners.md) (runner version window, recovering an `Outdated` pool, ARC upgrades).
+- **Code:** `kubernetes/infrastructure/github-runners/`, `kubernetes/infrastructure/argo-workflows/build-runner-image*.yaml`, `.github/workflows/claude.yml`. Token: 1Password item `cicd-claude-code` → ExternalSecret `claude-code-oauth`.
 
 ### Secrets (1Password)
 The `grizzly-platform` 1Password vault is the platform secrets source of truth. K8s reads via External Secrets Operator (`onepassword` ClusterSecretStore); Ansible reads via `op` lookups. Three service account tokens reach it and nothing else does.
