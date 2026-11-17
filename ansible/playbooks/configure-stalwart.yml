@@ -67,6 +67,11 @@
     # sends and receives). Provisioned check-then-create — independent of
     # stalwart_fresh_config, so it lands on re-runs against a live server.
     stalwart_claude_local: "claude"
+    # Company mailbox (bank, payment, government, vendor mail) with an `admin`
+    # alias. The alias must stay an alias: the recovery administrator logs in
+    # as `admin`, so no account may carry that name.
+    stalwart_billing_local: "billing"
+    stalwart_billing_alias_local: "admin"
     # Submission account Authentik authenticates as to send enrollment and
     # sign-in one-time codes (ADR-066). Send-only: nothing delivers here, but it
     # is a real mailbox because Stalwart's directory has no send-only principal.
@@ -545,6 +550,154 @@
         SHARE_OWNER_PASSWORD: "{{ vault_stalwart_claude_password }}"
       register: stalwart_claude_share
       changed_when: stalwart_claude_share.stdout.startswith('changed')
+      no_log: true
+
+    # --- billing company mailbox ----------------------------------------------
+    # Company mailbox for bank, payment, government and vendor mail; agents use
+    # it through grizzly-mail with its own credentials. Same check-then-create
+    # shape as the claude mailbox. `admin` is an alias on it, never an account:
+    # Stalwart's recovery administrator logs in as `admin`.
+    - name: Detect whether the billing company mailbox already exists
+      ansible.builtin.command:
+        argv:
+          - docker
+          - run
+          - --rm
+          - -e
+          - STALWART_URL
+          - -e
+          - STALWART_USER
+          - -e
+          - STALWART_PASSWORD
+          - "{{ stalwart_cli_image }}"
+          - -k
+          - query
+          - Account
+          - --where
+          - "name={{ stalwart_billing_local }}"
+          - --json
+      environment: *cli_env
+      register: stalwart_billing_q_before
+      changed_when: false
+      no_log: true
+
+    - name: Create the billing company mailbox account if absent
+      ansible.builtin.command:
+        argv:
+          - docker
+          - run
+          - --rm
+          - -e
+          - STALWART_URL
+          - -e
+          - STALWART_USER
+          - -e
+          - STALWART_PASSWORD
+          - "{{ stalwart_cli_image }}"
+          - -k
+          - create
+          - Account/User
+          - --json
+          - "{{ {'name': stalwart_billing_local, 'domainId': stalwart_domain_id, 'description': 'Company mailbox: bank, payment, government and vendor mail (agents via grizzly-mail; shared read-only with Bear)'} | to_json }}"
+      environment: *cli_env
+      register: stalwart_billing_create
+      when: stalwart_billing_local not in stalwart_billing_q_before.stdout
+      changed_when: "'Created' in stalwart_billing_create.stdout"
+      no_log: true
+
+    - name: Look up the billing company mailbox account id
+      ansible.builtin.command:
+        argv:
+          - docker
+          - run
+          - --rm
+          - -e
+          - STALWART_URL
+          - -e
+          - STALWART_USER
+          - -e
+          - STALWART_PASSWORD
+          - "{{ stalwart_cli_image }}"
+          - -k
+          - query
+          - Account
+          - --where
+          - "name={{ stalwart_billing_local }}"
+          - --json
+      environment: *cli_env
+      register: stalwart_billing_q
+      changed_when: false
+      no_log: true
+
+    - name: Inject the billing mailbox password from 1Password (directory secret)
+      ansible.builtin.command:
+        argv:
+          - docker
+          - run
+          - --rm
+          - -e
+          - STALWART_URL
+          - -e
+          - STALWART_USER
+          - -e
+          - STALWART_PASSWORD
+          - "{{ stalwart_cli_image }}"
+          - -k
+          - update
+          - Account
+          - "{{ (stalwart_billing_q.stdout_lines | select('match', '.+') | first | from_json).id }}"
+          - --field
+          - "credentials/0={{ {'@type': 'Password', 'secret': vault_stalwart_billing_password} | to_json }}"
+      environment: *cli_env
+      register: stalwart_billing_pw
+      changed_when: "'Updated' in stalwart_billing_pw.stdout"
+      no_log: true
+
+    - name: Ensure the admin alias on the billing mailbox
+      ansible.builtin.command:
+        argv:
+          - docker
+          - run
+          - --rm
+          - -e
+          - STALWART_URL
+          - -e
+          - STALWART_USER
+          - -e
+          - STALWART_PASSWORD
+          - "{{ stalwart_cli_image }}"
+          - -k
+          - update
+          - Account
+          - "{{ (stalwart_billing_q.stdout_lines | select('match', '.+') | first | from_json).id }}"
+          - --field
+          - "aliases/0={{ {'name': stalwart_billing_alias_local, 'domainId': stalwart_domain_id} | to_json }}"
+      environment: *cli_env
+      register: stalwart_billing_aliases
+      changed_when: "'Updated' in stalwart_billing_aliases.stdout"
+      no_log: true
+
+    # Share billing's Inbox and Sent Items read-only with the bootstrap mailbox,
+    # so the operator reads the company mail in their own Roundcube session
+    # (Shared Folders). Rights "lr" (see + read) deliberately omit "s": agents
+    # poll for UNSEEN mail, so the operator opening a message must not mark it
+    # seen for them.
+    - name: Share the billing mailbox read-only with the bootstrap mailbox
+      ansible.builtin.command:
+        argv:
+          - python3
+          - -I
+          - "{{ stalwart_plan_dir }}/share-mailbox.py"
+          - "{{ stalwart_tls_san }}"
+          - "{{ stalwart_billing_local }}@{{ stalwart_domain }}"
+          - "{{ stalwart_account_local }}@{{ stalwart_domain }}"
+          - "lr"
+          - INBOX
+          - Sent Items
+      environment:
+        SHARE_OWNER_PASSWORD: "{{ vault_stalwart_billing_password }}"
+      register: stalwart_billing_share
+      changed_when: stalwart_billing_share.stdout.startswith('changed')
       no_log: true
 
     # --- noreply submission account (Authentik one-time codes) ---------------
