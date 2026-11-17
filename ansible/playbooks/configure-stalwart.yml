@@ -546,6 +546,7 @@
           - "lr"
           - INBOX
           - Sent Items
+          - Junk Mail
       environment:
         SHARE_OWNER_PASSWORD: "{{ vault_stalwart_claude_password }}"
       register: stalwart_claude_share
@@ -694,6 +695,7 @@
           - "lr"
           - INBOX
           - Sent Items
+          - Junk Mail
       environment:
         SHARE_OWNER_PASSWORD: "{{ vault_stalwart_billing_password }}"
       register: stalwart_billing_share
