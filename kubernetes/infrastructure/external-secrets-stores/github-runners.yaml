@@ -101,3 +101,9 @@ spec:
     - secretKey: GOOGLE_SERVICE_ACCOUNT_JSON
       remoteRef:
         key: goalaxi-agent/google_service_account_json
+    - secretKey: POSTHOG_API_KEY
+      remoteRef:
+        key: goalaxi-agent/posthog_api_key
+    - secretKey: POSTHOG_PROJECT_ID
+      remoteRef:
+        key: goalaxi-agent/posthog_project_id
