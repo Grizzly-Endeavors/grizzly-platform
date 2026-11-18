@@ -2,6 +2,8 @@
 #   - sccache-s3-credentials (s3-bulk creds for Rust build cache)
 #   - github-runner-pat (org-level PAT for ARC v2)
 #   - claude-code-oauth (Claude Code OAuth token for the claude-runners scale set)
+#   - goalaxi-agent (read-only service credentials for agents working on
+#     Goalaxi, also for the claude-runners scale set)
 # Reconciled from 1Password via ESO. The Claude token is created once in
 # 1Password (item cicd-claude-code, field oauth_token); it is not in git.
 apiVersion: external-secrets.io/v1
@@ -60,3 +62,42 @@ spec:
     - secretKey: token
       remoteRef:
         key: cicd-claude-code/oauth_token
+---
+# Read-only credentials an agent uses to query the services Goalaxi runs on
+# (1Password item goalaxi-agent, minted and documented in the goalaxi repo:
+# docs/design/agent-loops-inventory.md). Each key is the environment variable
+# goalaxi's kit/agent.env names, so kit/scripts/agent-env.sh finds them set and
+# runs its command as it is. A credential that can write or spend does not
+# belong here: every repo's jobs on claude-runners see these.
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: goalaxi-agent
+  namespace: arc-runners
+spec:
+  refreshPolicy: OnChange
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: onepassword
+  target:
+    name: goalaxi-agent
+    creationPolicy: Owner
+  data:
+    - secretKey: STRIPE_API_KEY
+      remoteRef:
+        key: goalaxi-agent/stripe_api_key
+    - secretKey: CLOUDFLARE_API_TOKEN
+      remoteRef:
+        key: goalaxi-agent/cloudflare_api_token
+    - secretKey: CLOUDFLARE_ACCOUNT_ID
+      remoteRef:
+        key: goalaxi-agent/cloudflare_account_id
+    - secretKey: CLOUDFLARE_ZONE_ID
+      remoteRef:
+        key: goalaxi-agent/cloudflare_zone_id
+    - secretKey: BING_WEBMASTER_API_KEY
+      remoteRef:
+        key: goalaxi-agent/bing_webmaster_api_key
+    - secretKey: GOOGLE_SERVICE_ACCOUNT_JSON
+      remoteRef:
+        key: goalaxi-agent/google_service_account_json

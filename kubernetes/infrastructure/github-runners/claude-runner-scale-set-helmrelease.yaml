@@ -1,5 +1,6 @@
 # Claude Code scale set. Separate from lab-runners so CLAUDE_CODE_OAUTH_TOKEN
-# is injected only into pods that run `runs-on: claude-runners`, and so a
+# and the agents' read-only service credentials are injected only into pods
+# that run `runs-on: claude-runners`, and so a
 # Claude session does not consume one of the four CI slots.
 #
 # No DinD sidecar: this pool edits the repo and compiles on the runner. It
@@ -68,6 +69,13 @@ spec:
                   secretKeyRef:
                     name: claude-code-oauth
                     key: token
+            # Read-only service credentials for agents working on Goalaxi, one
+            # variable per key of the secret. Optional, unlike the token above:
+            # a runner without them still runs every other repo's jobs.
+            envFrom:
+              - secretRef:
+                  name: goalaxi-agent
+                  optional: true
             resources:
               limits:
                 cpu: "8"
