@@ -91,6 +91,29 @@ scrape_configs:
           - "/etc/prometheus/targets.d/k8s-kubelet.yml"
         refresh_interval: 30s
 
+  # Per-container CPU for the GitHub Actions runner pods (ADR-087). cAdvisor
+  # exposes thousands of series per node, so everything but the CPU counter
+  # for namespace arc-runners is dropped at scrape time.
+  - job_name: "kubelet-cadvisor"
+    scheme: https
+    metrics_path: /metrics/cadvisor
+    tls_config:
+      ca_file: /etc/prometheus/k8s-auth/ca.crt
+      insecure_skip_verify: true
+    authorization:
+      credentials_file: /etc/prometheus/k8s-auth/token
+    file_sd_configs:
+      - files:
+          - "/etc/prometheus/targets.d/k8s-kubelet.yml"
+        refresh_interval: 30s
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: container_cpu_usage_seconds_total
+        action: keep
+      - source_labels: [namespace]
+        regex: arc-runners
+        action: keep
+
   - job_name: "cilium-agent"
     file_sd_configs:
       - files:

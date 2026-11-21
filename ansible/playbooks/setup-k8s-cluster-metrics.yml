@@ -262,6 +262,12 @@
         return_content: yes
       register: kubelet_check
 
+    - name: Check kubelet cAdvisor targets
+      ansible.builtin.uri:
+        url: "http://localhost:9090/api/v1/query?query=up{job='kubelet-cadvisor'}"
+        return_content: yes
+      register: cadvisor_check
+
     - name: Check Cilium agent targets
       ansible.builtin.uri:
         url: "http://localhost:9090/api/v1/query?query=up{job='cilium-agent'}"
@@ -287,9 +293,10 @@
           - ""
           - "Scrape targets:"
           - "  kubelet:            {{ kubelet_check.json.data.result | length }}/4 nodes responding"
+          - "  kubelet-cadvisor:   {{ cadvisor_check.json.data.result | length }}/4 nodes responding"
           - "  cilium-agent:       {{ cilium_agent_check.json.data.result | length }}/4 nodes responding"
           - "  kube-state-metrics: {{ ksm_check.json.data.result | length }}/1 instances responding"
           - ""
-          - "New scrape jobs: kubelet, cilium-agent, cilium-operator, hubble, kube-state-metrics"
+          - "Scrape jobs: kubelet, kubelet-cadvisor, cilium-agent, cilium-operator, hubble, kube-state-metrics"
           - "New alert rules: NodeNotReady, KubeletDown, CiliumAgentDown"
           - "Grafana dashboard: K8s Cluster (uid: k8s-cluster)"

@@ -52,7 +52,7 @@ Authentik is the central IdP; invitation-gated enrollment via a cookie-bridged i
 
 ### Observability
 Prometheus / Loki / Tempo / Grafana on the R730xd.
-- **Why:** [ADR-004](docs/decisions/004-observability-stack-on-r730xd.md). **How (operate):** [monitoring.md](docs/monitoring.md). **Integrate:** [integration/observability.md](docs/integration/observability.md) (emit logs/metrics/traces from an app). **Code:** `ansible/roles/r730xd-{prometheus,loki,tempo,grafana}/`, `ansible/playbooks/deploy-observability.yml`.
+- **Why:** [ADR-004](docs/decisions/004-observability-stack-on-r730xd.md), [ADR-087](docs/decisions/087-runner-cpu-from-kubelet-cadvisor.md) (runner pod CPU from kubelet cAdvisor). **How (operate):** [monitoring.md](docs/monitoring.md). **Integrate:** [integration/observability.md](docs/integration/observability.md) (emit logs/metrics/traces from an app). **Code:** `ansible/roles/r730xd-{prometheus,loki,tempo,grafana}/`, `ansible/playbooks/deploy-observability.yml`.
 
 ### Notifications (ntfy)
 Self-hosted ntfy — a shared platform push-notification service. Any app publishes to a topic over HTTP; phones/browsers/services subscribe; supports interactive action buttons (approve/deny callbacks). Private (deny-all + tokens), on `ntfy.grizzly-endeavors.com`.
