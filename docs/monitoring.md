@@ -151,6 +151,8 @@ Prometheus + Alertmanager is running (see below); point `alert.sh` at Alertmanag
 
 Prometheus scrapes `node`/`ipmi` targets from `/etc/prometheus/targets.d/*.yml` (file-based service discovery, rendered by the `r730xd-prometheus` role) and evaluates the alert rules below; Alertmanager routes firing alerts.
 
+The `kubelet-cadvisor` job scrapes each kubelet's `/metrics/cadvisor` at the global interval and keeps only `container_cpu_usage_seconds_total` for namespace `arc-runners`, giving per-container CPU history for runner pods ([ADR-087](decisions/087-runner-cpu-from-kubelet-cadvisor.md)). Query it with `sum by (pod, container) (increase(container_cpu_usage_seconds_total{namespace="arc-runners"}[1h]))`.
+
 These are the live Prometheus alerting rules (`ansible/roles/r730xd-prometheus/templates/rules/grizzly-platform.yml.j2`), replicating the cron check logic so the same conditions are covered by both layers:
 
 ```yaml

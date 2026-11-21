@@ -55,6 +55,7 @@ One line per decision, grouped by domain. See [`README.md`](README.md) for what 
 ## Observability
 
 - [004-observability-stack-on-r730xd](004-observability-stack-on-r730xd.md) — Prometheus/Loki/Tempo/Grafana on the R730xd.
+- [087-runner-cpu-from-kubelet-cadvisor](087-runner-cpu-from-kubelet-cadvisor.md) — filtered kubelet cAdvisor scrape keeps CPU history for `arc-runners` pods.
 
 ## CI/CD, registry & builds
 
