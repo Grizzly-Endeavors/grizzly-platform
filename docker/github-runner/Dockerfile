@@ -83,7 +83,7 @@ RUN curl -fsSL https://deb.nodesource.com/setup_24.x | bash - && \
 ARG PLAYWRIGHT_VERSION=1.64.1
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 RUN npx -y playwright@${PLAYWRIGHT_VERSION} install --with-deps chromium && \
-    chmod -R a+rX /ms-playwright && \
+    chown -R runner:runner /ms-playwright && \
     rm -rf /var/lib/apt/lists/* /root/.npm
 
 # Rust toolchain — install as runner user so paths match workflow execution
@@ -96,7 +96,7 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --pr
     rustup target add aarch64-unknown-linux-gnu x86_64-pc-windows-gnu && \
     cargo install cargo-deny --locked
 
-# Prebuilt static release binaries (much faster than cargo install)
+# Prebuilt release binaries
 USER root
 ARG SCCACHE_VERSION=0.20.1
 ARG JUST_VERSION=1.59.0
@@ -120,7 +120,7 @@ RUN for bin in /home/runner/.cargo/bin/*; do \
       ln -sf "$bin" /usr/local/bin/; \
     done
 
-# Cargo linker and compiler-cache config
+# Cargo linker config
 RUN printf '%s\n' \
       '[target.x86_64-pc-windows-gnu]' \
       'linker = "x86_64-w64-mingw32-gcc"' \
@@ -128,9 +128,6 @@ RUN printf '%s\n' \
       '[target.x86_64-unknown-linux-gnu]' \
       'linker = "clang"' \
       'rustflags = ["-C", "link-arg=-fuse-ld=mold"]' \
-      '' \
-      '[build]' \
-      'rustc-wrapper = "sccache"' \
     >> /home/runner/.cargo/config.toml
 
 # Verify all tools are accessible
