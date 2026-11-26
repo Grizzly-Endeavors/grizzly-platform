@@ -13,6 +13,8 @@ USER root
 RUN apt-get update -qq && \
     apt-get install -y -qq --no-install-recommends \
       build-essential \
+      clang \
+      mold \
       pkg-config \
       libssl-dev \
       openssh-client \
@@ -75,6 +77,15 @@ RUN curl -fsSL https://deb.nodesource.com/setup_24.x | bash - && \
     apt-get install -y -qq nodejs && \
     rm -rf /var/lib/apt/lists/*
 
+# Playwright Chromium and its system libraries. The version must match the
+# @playwright/test pin of the repos that run browser tests, or Playwright looks
+# for a different browser revision and fails at launch.
+ARG PLAYWRIGHT_VERSION=1.64.1
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+RUN npx -y playwright@${PLAYWRIGHT_VERSION} install --with-deps chromium && \
+    chmod -R a+rX /ms-playwright && \
+    rm -rf /var/lib/apt/lists/* /root/.npm
+
 # Rust toolchain — install as runner user so paths match workflow execution
 USER runner
 ENV RUSTUP_HOME=/home/runner/.rustup \
@@ -85,13 +96,22 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --pr
     rustup target add aarch64-unknown-linux-gnu x86_64-pc-windows-gnu && \
     cargo install cargo-deny --locked
 
-# sccache — prebuilt static binary (much faster than cargo install)
+# Prebuilt static release binaries (much faster than cargo install)
 USER root
-RUN curl -fsSL https://github.com/mozilla/sccache/releases/download/v0.16.0/sccache-v0.16.0-x86_64-unknown-linux-musl.tar.gz \
-      | tar xz -C /tmp && \
-    mv /tmp/sccache-v0.16.0-x86_64-unknown-linux-musl/sccache /usr/local/bin/sccache && \
-    chmod 755 /usr/local/bin/sccache && \
-    rm -rf /tmp/sccache-*
+ARG SCCACHE_VERSION=0.20.1
+ARG JUST_VERSION=1.59.0
+ARG NEXTEST_VERSION=0.9.152
+ARG GITLEAKS_VERSION=8.30.1
+RUN curl -fsSL "https://github.com/mozilla/sccache/releases/download/v${SCCACHE_VERSION}/sccache-v${SCCACHE_VERSION}-x86_64-unknown-linux-musl.tar.gz" \
+      | tar xz -C /usr/local/bin --strip-components=1 "sccache-v${SCCACHE_VERSION}-x86_64-unknown-linux-musl/sccache" && \
+    curl -fsSL "https://github.com/casey/just/releases/download/${JUST_VERSION}/just-${JUST_VERSION}-x86_64-unknown-linux-musl.tar.gz" \
+      | tar xz -C /usr/local/bin just && \
+    curl -fsSL "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-${NEXTEST_VERSION}/cargo-nextest-${NEXTEST_VERSION}-x86_64-unknown-linux-gnu.tar.gz" \
+      | tar xz -C /usr/local/bin cargo-nextest && \
+    curl -fsSL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+      | tar xz -C /usr/local/bin gitleaks && \
+    chown root:root /usr/local/bin/sccache /usr/local/bin/just /usr/local/bin/cargo-nextest /usr/local/bin/gitleaks && \
+    chmod 755 /usr/local/bin/sccache /usr/local/bin/just /usr/local/bin/cargo-nextest /usr/local/bin/gitleaks
 
 # Symlink Rust binaries into /usr/local/bin so they're on PATH regardless of
 # how the runner spawns shell steps
@@ -100,8 +120,17 @@ RUN for bin in /home/runner/.cargo/bin/*; do \
       ln -sf "$bin" /usr/local/bin/; \
     done
 
-# Cargo linker config for cross-compilation targets
-RUN printf '[target.x86_64-pc-windows-gnu]\nlinker = "x86_64-w64-mingw32-gcc"\n' \
+# Cargo linker and compiler-cache config
+RUN printf '%s\n' \
+      '[target.x86_64-pc-windows-gnu]' \
+      'linker = "x86_64-w64-mingw32-gcc"' \
+      '' \
+      '[target.x86_64-unknown-linux-gnu]' \
+      'linker = "clang"' \
+      'rustflags = ["-C", "link-arg=-fuse-ld=mold"]' \
+      '' \
+      '[build]' \
+      'rustc-wrapper = "sccache"' \
     >> /home/runner/.cargo/config.toml
 
 # Verify all tools are accessible
@@ -111,6 +140,12 @@ RUN helm version && \
     cargo --version && \
     cargo deny --version && \
     sccache --version && \
+    cargo nextest --version && \
+    just --version && \
+    mold --version && \
+    clang --version && \
+    gitleaks version && \
+    find /ms-playwright -path '*/chromium-*/chrome-linux*/chrome' -type f -perm -o+x | grep -q . && \
     node --version && \
     npm --version && \
     gh --version
